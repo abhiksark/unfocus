@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Unfocus">
+  <defs>
+    <linearGradient id="sky" x1="256" y1="24" x2="256" y2="488" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#050d0b" />
+      <stop offset="0.55" stop-color="#0c231d" />
+      <stop offset="1" stop-color="#164434" />
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#d7ecdc" stop-opacity="0.14" />
+      <stop offset="0.6" stop-color="#d7ecdc" stop-opacity="0.04" />
+      <stop offset="1" stop-color="#d7ecdc" stop-opacity="0" />
+    </radialGradient>
+    <mask id="crescent">
+      <circle cx="368" cy="140" r="42" fill="#fff" />
+      <circle cx="352" cy="129" r="38" fill="#000" />
+    </mask>
+    <clipPath id="frame">
+      <rect x="24" y="24" width="464" height="464" rx="124" />
+    </clipPath>
+  </defs>
+
+  <rect x="24" y="24" width="464" height="464" rx="124" fill="url(#sky)" />
+
+  <g clip-path="url(#frame)">
+    <circle cx="368" cy="140" r="120" fill="url(#halo)" />
+    <circle cx="368" cy="140" r="42" fill="#d7ecdc" opacity="0.9" mask="url(#crescent)" />
+    <path
+      d="M24 356 C70 340 106 236 158 212 C200 192 238 280 296 312 C360 347 440 344 488 328 L488 488 L24 488 Z"
+      fill="#23493b"
+    />
+    <path
+      d="M24 404 C90 384 150 398 224 408 C310 420 400 400 488 384 L488 488 L24 488 Z"
+      fill="#0e2620"
+    />
+    <path
+      d="M24 448 C110 436 220 448 310 444 C380 441 450 448 488 444 L488 488 L24 488 Z"
+      fill="#060e0b"
+    />
+  </g>
+</svg>
