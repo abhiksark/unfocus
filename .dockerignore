@@ -1,0 +1,6 @@
+.git
+.svelte-kit
+build
+node_modules
+.vscode
+src-tauri/target
