@@ -1,31 +1,47 @@
 # Unfocus
 
-Cross-platform eye-break reminder. Tauri 2: Rust core (`src-tauri/`), SvelteKit
-frontend (`src/`), Bun for JS tooling.
+Cross-platform eye-break reminder. Tauri 2 (Rust core) + SvelteKit 2 with
+Svelte 5 runes, built with Bun.
+
+```
+src/         SvelteKit frontend: dashboard + break overlay (see src/AGENTS.md)
+src-tauri/   Rust core: tray, windows, probes (see src-tauri/AGENTS.md)
+scripts/     gen-scene.js (scene generator) and the container runner
+static/      icon SVG and vendored fonts
+```
 
 ## Commands
 
+Use Bun for all JS tooling. npm, npx, and pnpm are not used in this repo.
+
 - `bun install` — install JS dependencies
-- `bun run check` — svelte-check; must stay at 0 errors, 0 warnings
+- `bun run check` — svelte-check
 - `bun run build` — production frontend build
 - `cargo test --manifest-path src-tauri/Cargo.toml` — Rust tests
-- `cargo fmt --check` and `cargo clippy` (warnings denied) before committing Rust
-- `bun run tauri dev` — requires native prerequisites (webkit2gtk-4.1, appindicator, xdo)
-- `./scripts/run-linux-spike-container.sh` — containerized build/run against the
-  host X11 display when native headers are not installed
+- `bun run tauri dev` — run the app; needs native prerequisites
+  (webkit2gtk-4.1, libayatana-appindicator3, libxdo)
+- `./scripts/run-linux-spike-container.sh` — build and run in a container
+  against the host X11 display when native headers are not installed
+
+Before claiming a change done, run the checks for the area you touched:
+frontend changes need `bun run check` and `bun run build` at 0 errors and
+0 warnings; Rust changes need `cargo fmt --check`, `cargo clippy` with
+warnings denied, and `cargo test`.
 
 ## Ground rules
 
-- Linux X11 is the first qualified backend. Wayland is unsupported until it has
-  its own acceptance run; on Wayland, probes report errors instead of guessing.
-- A failing OS probe must never crash or alter the break timer. Degrade, log
-  once, keep ticking.
-- Do not state a memory footprint anywhere. The early 10-30 MB assumption was
-  wrong (a release build measured ~203 MiB PSS); re-measure packaged builds
-  before making any claim.
-- No mascots or characters. Scene lighting carries state: cool green while
-  resting, amber dawn while returning/complete.
-- Local-first. No telemetry, accounts, or network calls at runtime.
-- `plans/` and other notes are untracked working files. The only markdown that
-  belongs in git is CLAUDE.md and AGENTS.md.
-- Commit messages: plain imperative summaries, no tool attributions or emoji.
+- Linux X11 is the first qualified backend. Wayland is unsupported until it
+  has its own acceptance run; on Wayland, probes report errors instead of
+  guessing.
+- IMPORTANT: a failing OS probe must never crash or alter the break timer.
+  Degrade, log once, keep ticking.
+- IMPORTANT: never state a memory footprint in code, docs, or commits. The
+  early 10-30 MB assumption was measured wrong (~203 MiB PSS); packaged
+  builds must be re-measured before any claim.
+- No mascots or characters anywhere in the product. Scene lighting carries
+  state: cool green while resting, amber dawn while returning or complete.
+- Local-first. No telemetry, accounts, or runtime network calls.
+- `plans/` and other notes are untracked working files. Tracked markdown is
+  README.md plus the CLAUDE.md/AGENTS.md set, nothing else.
+- Commit messages: plain imperative summaries. No tool attributions, no
+  emoji.

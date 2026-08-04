@@ -1,9 +1,13 @@
 # Frontend
 
-SvelteKit 2 + Svelte 5 runes, static adapter. Window labels route rendering:
+SvelteKit 2 + Svelte 5 runes, static adapter. Write runes syntax
+(`$props()`, `$state()`, `$derived()`); do not write Svelte 4 patterns
+(`export let`, `$:` reactive statements).
+
+Window labels route rendering:
 `overlay-<run>-<index>-<count>-<duration>-<deadline>` renders `BreakOverlay`,
 anything else the dashboard. The label is the only channel for overlay
-parameters, so both sides must agree on its format.
+parameters, so the format must stay in sync with the Rust side.
 
 ## Break scene
 
