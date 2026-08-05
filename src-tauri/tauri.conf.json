@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Unfocus — Linux feasibility spike",
+        "title": "Unfocus",
         "width": 920,
         "height": 700,
         "minWidth": 760,
