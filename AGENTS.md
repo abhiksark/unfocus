@@ -18,8 +18,9 @@ Use Bun for all JS tooling. npm, npx, and pnpm are not used in this repo.
 - `bun run check` — svelte-check
 - `bun run build` — production frontend build
 - `cargo test --manifest-path src-tauri/Cargo.toml` — Rust tests
-- `bun run tauri dev` — run the app; needs native prerequisites
-  (webkit2gtk-4.1, libayatana-appindicator3, libxdo)
+- `bun run tauri dev` — run the app; on Linux needs native prerequisites
+  (webkit2gtk-4.1, libayatana-appindicator3, libxdo), on macOS needs only
+  the Xcode command line tools
 - `./scripts/run-linux-spike-container.sh` — build and run in a container
   against the host X11 display when native headers are not installed
 
@@ -30,9 +31,11 @@ warnings denied, and `cargo test`.
 
 ## Ground rules
 
-- Linux X11 is the first qualified backend. Wayland is unsupported until it
-  has its own acceptance run; on Wayland, probes report errors instead of
-  guessing.
+- Linux X11 is the qualified backend. macOS reads idle and fullscreen
+  through Quartz and has been verified interactively, but not through a
+  multi-monitor acceptance run — do not describe it as qualified until it
+  has one. Wayland and Windows have no probes at all. Any platform without a
+  probe reports an error per poll instead of guessing.
 - IMPORTANT: a failing OS probe must never crash or alter the break timer.
   Degrade, log once, keep ticking.
 - IMPORTANT: never state a memory footprint in code, docs, or commits. The
