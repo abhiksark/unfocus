@@ -6,6 +6,19 @@ on:
   pull_request:
 
 jobs:
+  # Separate job on purpose: it needs no apt packages and no Rust toolchain, so
+  # it answers in seconds instead of queueing behind the full install.
+  versions:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      # No bun install — the script imports only node builtins.
+      - name: Version declarations agree
+        run: bun run version:check
+
   check:
     runs-on: ubuntu-22.04
     steps:
