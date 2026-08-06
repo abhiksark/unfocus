@@ -1,0 +1,173 @@
+name: Bug report
+description: Unfocus misbehaves on a platform it claims to support
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Read this first
+
+        Platform support is deliberately uneven. Find your row before you file:
+
+        | Platform | Overlays and tray | Idle and fullscreen probes |
+        | --- | --- | --- |
+        | Linux X11 | Qualified | Working — XScreenSaver and EWMH |
+        | macOS | Working — but no multi-monitor acceptance run yet | Working — Quartz |
+        | Windows | Working | **None, by design** — reported as unavailable |
+        | Linux Wayland | **Unsupported** | Reports an error, by design |
+
+        A dash under **Idle time** or **Active fullscreen** on Windows is
+        correct behaviour, not a bug. So is a probe error string on Wayland.
+        Issues about either get closed as `by-design`.
+
+        Unfocus has no telemetry, no account and makes no network calls, so
+        nothing reaches a maintainer automatically. What you paste below is the
+        entire diagnostic surface anyone gets. Please do not skip it.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched open and closed issues and this is not a duplicate.
+          required: true
+        - label: I read the table above and this is not expected behaviour on my platform.
+          required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Where you saw it. Session type matters more than distribution.
+      options:
+        - "Linux — X11 (the qualified backend)"
+        - "Linux — Wayland (unsupported)"
+        - "macOS — Apple silicon"
+        - "macOS — Intel"
+        - "Windows"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version and desktop
+      description: >-
+        The dashboard reports the OS name but never its version. On Linux add
+        the desktop environment or window manager.
+      placeholder: "Ubuntu 24.04, GNOME 46 on X11"
+    validations:
+      required: true
+
+  - type: input
+    id: build
+    attributes:
+      label: Unfocus version and build
+      description: >-
+        No release has been tagged yet, so nearly everyone is on a source
+        build. Give the short commit from `git rev-parse --short HEAD` and say
+        whether you ran `bun run tauri dev`, a bundled build, or the container
+        runner script.
+      placeholder: "0.1.0 — source build at 5106c6a — bun run tauri dev"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - "Break overlay — coverage or dismissal"
+        - "Multi-monitor sync or topology"
+        - "Break scene — visuals or animation"
+        - "Idle or fullscreen probe"
+        - "Diagnostics dashboard"
+        - "Tray icon or app lifecycle"
+        - "Building or installing"
+        - "Something else"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: >-
+        What you saw, and what you expected instead. If more than one display
+        is involved, say which display did what.
+      placeholder: |
+        The overlay covered my laptop screen immediately, but the external
+        monitor kept showing my desktop for about a second before it went
+        dark. I expected both to cover at the same moment.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: >-
+        Number them. Say how the break started — the **Run overlay test**
+        button on the dashboard, the tray menu item, or a scheduled break —
+        because those take different paths through the Rust side.
+      placeholder: |
+        1. Start `bun run tauri dev` with both monitors connected.
+        2. Click "Run overlay test" on the dashboard.
+        3. Watch the external monitor.
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics tiles
+      description: >-
+        Open the Unfocus window (tray menu → **Open Unfocus**). Copy the four
+        tiles across the top — **Session**, **Displays**, **Idle time**,
+        **Active fullscreen** — and include the small grey caption under each
+        one. The captions carry the probe error strings and the OS name, so
+        they matter more than the big values. If a red banner is showing above
+        the tiles, paste that too.
+      placeholder: |
+        Session: X11 — GNOME
+        Displays: 2 — :0
+        Idle time: 4s — XScreenSaver extension
+        Active fullscreen: No — EWMH window state
+    validations:
+      required: true
+
+  - type: textarea
+    id: monitors
+    attributes:
+      label: Monitor topology
+      description: >-
+        From the **Monitor topology** panel lower down the dashboard: one line
+        per display with the name, the pixel size, and the `x, y · scale×` text
+        on the right. Only one display? Say so and paste the single row.
+        Topology is the first thing anyone looks at for almost every bug in
+        this app.
+      placeholder: |
+        1  eDP-1   1920 × 1200 px   0, 0 · 1.175×
+        2  DP-3    2560 × 1440 px   1920, -300 · 1×
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal output
+      description: >-
+        Optional. If you launched from a terminal, paste anything Unfocus
+        printed. Overlay lifecycle lines begin with `opened overlay run` or
+        `closing overlay` and are the fastest way to tell whether the Rust side
+        did what you saw on screen.
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: >-
+        Optional. Screenshots or a few seconds of screen recording are worth a
+        lot for scene and multi-display sync bugs — drag them in here.

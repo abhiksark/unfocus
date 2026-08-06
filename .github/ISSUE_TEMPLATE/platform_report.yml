@@ -1,0 +1,110 @@
+name: Platform report
+description: Report how Unfocus behaves on a platform or monitor setup that has not been qualified
+title: "Platform report: "
+labels: ["platform-report", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Why this form exists
+
+        Linux X11 is the only backend that has had an acceptance run. macOS
+        reads idle and fullscreen through Quartz but has **never been run
+        against multiple displays**. Windows has no probes at all. Wayland is
+        unsupported.
+
+        If you ran Unfocus outside the qualified path — especially macOS with
+        two or more displays, or any setup with mixed scale factors — this form
+        turns your session into evidence. **A report that everything worked is
+        just as valuable as one that did not.** It is the only way this project
+        gets acceptance data, because nothing is collected automatically.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - "macOS — Apple silicon"
+        - "macOS — Intel"
+        - "Windows"
+        - "Linux — X11 on an unusual window manager"
+        - "Linux — Wayland"
+        - "Something else"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS version and desktop
+      description: On Linux include the window manager or compositor. On macOS the version number is enough.
+      placeholder: "macOS 15.3"
+    validations:
+      required: true
+
+  - type: input
+    id: build
+    attributes:
+      label: Unfocus build
+      description: Short commit from `git rev-parse --short HEAD`, and how you launched it.
+      placeholder: "5106c6a — bun run tauri dev"
+    validations:
+      required: true
+
+  - type: textarea
+    id: monitors
+    attributes:
+      label: Monitor topology
+      description: >-
+        From the **Monitor topology** panel on the dashboard — one line per
+        display with the name, the pixel size, and the `x, y · scale×` text.
+        Mixed scale factors and negative origins are the interesting cases.
+      placeholder: |
+        1  Built-in Retina Display   3024 × 1964 px   0, 0 · 2×
+        2  LG UltraFine              3840 × 2160 px   -3840, -400 · 2×
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics tiles
+      description: >-
+        The four tiles across the top of the dashboard — **Session**,
+        **Displays**, **Idle time**, **Active fullscreen** — with the small
+        grey caption under each one.
+      placeholder: |
+        Session: QUARTZ — Aqua
+        Displays: 2 — Quartz Compositor
+        Idle time: 11s — Quartz event source
+        Active fullscreen: No — Quartz window list
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: observed
+    attributes:
+      label: What worked
+      description: >-
+        Tick everything you confirmed. Leave anything that failed unticked and
+        describe it below. Do not tick things you did not try.
+      options:
+        - label: The tray icon appeared and its menu worked (Open / Test overlays / Quit).
+        - label: The overlay covered every display edge to edge — no gaps, no leftover window, no visible desktop.
+        - label: The scene filled each display correctly, including HiDPI ones — no black band, no wrongly scaled scene.
+        - label: Every display showed the same countdown value at the same moment.
+        - label: Escape dismissed the overlay on every display at once, not just the focused one.
+        - label: Clicking once dismissed the overlay on every display at once.
+        - label: Idle seconds on the dashboard climbed while I kept my hands off, and reset when I typed.
+        - label: Active fullscreen flipped to Yes when another app went fullscreen — and did not read Yes merely because an Unfocus overlay was up.
+        - label: Turning on the system reduce-motion setting stopped every animation in the scene.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: What failed or looked wrong
+      description: >-
+        Anything you left unticked above, plus anything surprising. If the
+        whole list passed, say so plainly — that is the report.
+    validations:
+      required: true

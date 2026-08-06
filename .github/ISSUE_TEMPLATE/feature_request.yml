@@ -1,0 +1,97 @@
+name: Feature request
+description: Suggest something Unfocus should do
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## What Unfocus will not do
+
+        Unfocus is deliberately small and deliberately boring. Some things are
+        settled:
+
+        - **No mascots or characters.** Nothing on screen that asks to be
+          watched, ever.
+        - **No gamification.** No streaks, no badges, no scores, no history to
+          chase.
+        - **The break screen has to lose a staring contest.** The scene runs on
+          a strict animation budget — full-viewport layers stay static and
+          motion is stepped so repaints land seconds apart. "Make the scene
+          richer" is a no.
+        - **`prefers-reduced-motion` stops every animation.** Any proposal has
+          to survive that setting.
+        - **Local-first.** No accounts, no telemetry, no network calls — so no
+          cloud sync, no leaderboards, no sharing.
+
+        A request that needs one of those to change gets closed as
+        `by-design`. Everything else is genuinely open.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched open and closed issues and this is not already proposed.
+          required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Product constraints
+      description: All four have to hold. If one does not, this is not the project for the idea.
+      options:
+        - label: It adds no mascot, character, or anything else to look at during a break.
+          required: true
+        - label: It adds no streaks, badges, scores, or other gamification.
+          required: true
+        - label: It keeps the break screen boring and does not raise the animation budget.
+          required: true
+        - label: It works fully offline with no account, no telemetry, and no network calls.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - "Break timing and scheduling"
+        - "Break overlay and scene"
+        - "Multi-monitor behaviour"
+        - "Idle or fullscreen suppression"
+        - "Settings and persistence"
+        - "Tray and app lifecycle"
+        - "Accessibility"
+        - "Packaging and distribution"
+        - "Something else"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        What goes wrong in your day right now? Describe the situation, not the
+        solution — the fix often turns out to be something other than what you
+        first pictured.
+      placeholder: >-
+        Breaks fire in the middle of screen shares. I end up quitting the app
+        before every call and forgetting to start it again afterwards.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What Unfocus should do instead
+      description: Concrete behaviour. What appears, when, and what the user does about it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today
+      description: >-
+        Optional but useful. Workarounds, other tools that get it right, or
+        settings you expected to find and did not.
