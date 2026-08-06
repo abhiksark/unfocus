@@ -7,22 +7,99 @@ on:
 permissions:
   contents: write
 
+# Deleting and re-pushing a tag is the normal response to a botched release.
+# Without this, the old run and the new one race against the same release.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  # Creates the draft release exactly once, before any build starts, so the
+  # four matrix jobs upload into one release instead of racing to create four.
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      release_id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+
+      # tauri-action names the release from the tag but bundles from
+      # tauri.conf.json. Without this, v0.2.0 can ship Unfocus_0.1.0_*.dmg
+      # with no error. Fail before anything is built.
+      - name: Tag matches the declared version
+        run: bun run scripts/version.js check --expect "${{ github.ref_name }}"
+
+      - name: Compose release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          PREV=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
+          if [ -n "$PREV" ]; then RANGE="$PREV..$TAG"; else RANGE="$TAG"; fi
+
+          {
+            echo "Binaries are not code-signed or notarized."
+            echo
+            echo "- **Linux**: install the \`.deb\`, or \`chmod +x\` the \`.AppImage\` and run it."
+            echo "  X11 only; Wayland is not supported."
+            echo "- **macOS**: right-click the app and choose Open the first time."
+            echo "  Multi-monitor behaviour has not had an acceptance run yet."
+            echo "- **Windows**: if SmartScreen appears, choose \"More info\", then \"Run anyway\"."
+            echo "  Idle and fullscreen probes report as unavailable on Windows."
+            echo
+            echo "## Changes"
+            echo
+            git log --no-merges --pretty=format:'- %s' $RANGE
+            echo
+          } > notes.md
+
+          cat notes.md
+
+      - name: Create or reuse the draft release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ID=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+                 -q ".[] | select(.tag_name==\"$TAG\") | .id" | head -n1)
+
+          if [ -z "$ID" ]; then
+            ID=$(jq -n --arg tag "$TAG" --arg name "Unfocus $TAG" --rawfile body notes.md \
+                   '{tag_name:$tag, name:$name, body:$body, draft:true, prerelease:false}' \
+                 | gh api "repos/$GITHUB_REPOSITORY/releases" -X POST --input - -q .id)
+            echo "created draft release $ID"
+          else
+            echo "reusing existing release $ID"
+          fi
+
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Kept deliberately at 22.04: the oldest supported image gives the
+          # .deb and .AppImage the lowest glibc floor and widest compatibility.
           - platform: ubuntu-22.04
             target: ""
             args: ""
           - platform: windows-latest
             target: ""
             args: ""
-          - platform: macos-latest
+          # Pinned rather than macos-latest, which now resolves to macOS 26.
+          - platform: macos-15
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
-          - platform: macos-13
+          # macos-13 was removed by GitHub; this is the Intel replacement.
+          - platform: macos-15-intel
             target: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
     runs-on: ${{ matrix.platform }}
@@ -36,6 +113,9 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
 
       - uses: oven-sh/setup-bun@v2
+        with:
+          # Pinned: Bun builds the frontend that ships to users.
+          bun-version: 1.3.5
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -47,17 +127,13 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Unfocus ${{ github.ref_name }}"
+          releaseId: ${{ needs.prepare.outputs.release_id }}
           releaseDraft: true
+          # No updater plugin and no signing key, so nothing should try to
+          # assemble a latest.json.
+          uploadUpdaterJson: false
           args: ${{ matrix.args }}
-          releaseBody: |
-            Early build. Binaries are not code-signed yet:
-
-            - **Linux**: install the `.deb`, or `chmod +x` the `.AppImage` and run it. X11 only; Wayland is not supported yet.
-            - **macOS**: right-click the app and choose Open the first time.
-            - **Windows**: if SmartScreen appears, choose "More info", then "Run anyway".
