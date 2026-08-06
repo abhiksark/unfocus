@@ -66,6 +66,26 @@
     return value instanceof Error ? value.message : String(value);
   }
 
+  const isMac = $derived(report?.operatingSystem === "macos");
+
+  // A field the running platform simply does not report is not a pending
+  // read, so say so rather than implying data is still on its way.
+  function caption(value: string | null | undefined): string {
+    if (!report) return "Connecting…";
+    return value ?? `Not reported on ${report.operatingSystem}`;
+  }
+
+  const desktopCaption = $derived(caption(report?.desktop));
+  const displayCaption = $derived(caption(report?.display));
+  const idleCaption = $derived(
+    report?.idleError ??
+      (report ? (isMac ? "Quartz event source" : "XScreenSaver extension") : "Connecting…")
+  );
+  const fullscreenCaption = $derived(
+    report?.fullscreenError ??
+      (report ? (isMac ? "Quartz window list" : "EWMH window state") : "Connecting…")
+  );
+
   async function refresh() {
     if (refreshing) return;
     refreshing = true;
@@ -107,7 +127,7 @@
 <svelte:head>
   <meta
     name="description"
-    content="Linux feasibility dashboard for the Unfocus Tauri desktop app"
+    content="Platform diagnostics dashboard for the Unfocus Tauri desktop app"
   />
 </svelte:head>
 
@@ -151,7 +171,7 @@
           <p class="eyebrow">Unfocus · feasibility build</p>
           <h1>The shell is alive.</h1>
           <p class="lede">
-            Live evidence from Tauri, GNOME, and X11—not mocked browser data.
+            Live evidence from Tauri and {isMac ? "Quartz" : "X11"}—not mocked browser data.
           </p>
         </div>
       </div>
@@ -164,26 +184,30 @@
       <div class="error" role="alert">{error}</div>
     {/if}
 
-    <section class="summary-grid" aria-label="Linux probe summary">
+    <section class="summary-grid" aria-label="Platform probe summary">
       <article>
         <span>Session</span>
         <strong>{report?.sessionType?.toUpperCase() ?? "—"}</strong>
-        <small>{report?.desktop ?? "Waiting for desktop"}</small>
+        <small>{desktopCaption}</small>
       </article>
       <article>
         <span>Displays</span>
         <strong>{report?.monitors.length ?? "—"}</strong>
-        <small>{report?.display ?? "Waiting for display"}</small>
+        <small>{displayCaption}</small>
       </article>
       <article>
         <span>Idle time</span>
-        <strong>{report?.idleSeconds ?? "—"}<i>{report?.idleSeconds !== null ? "s" : ""}</i></strong>
-        <small>{report?.idleError ?? "XScreenSaver extension"}</small>
+        <strong
+          >{report?.idleSeconds ?? "—"}<i
+            >{typeof report?.idleSeconds === "number" ? "s" : ""}</i
+          ></strong
+        >
+        <small>{idleCaption}</small>
       </article>
       <article>
         <span>Active fullscreen</span>
         <strong>{report?.activeWindowFullscreen === true ? "Yes" : report?.activeWindowFullscreen === false ? "No" : "—"}</strong>
-        <small>{report?.fullscreenError ?? "EWMH window state"}</small>
+        <small>{fullscreenCaption}</small>
       </article>
     </section>
 
