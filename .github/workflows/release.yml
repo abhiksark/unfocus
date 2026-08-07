@@ -268,40 +268,87 @@ jobs:
           verify_remote_tag
           lookup_release
 
+          # Both writes return the release they wrote, so take the id from the
+          # response. The releases listing is cached and lagged the create by
+          # a few hundred milliseconds, so reading back to learn the id raced
+          # and failed; nothing below depends on the listing settling.
+          CREATED=false
           if [ -z "$RELEASE" ]; then
-            gh release create "$TAG" --verify-tag --draft --prerelease \
-              --title "Unfocus $TAG" --notes-file notes.md
+            CREATED=true
+            RELEASE=$(jq -n --arg tag "$TAG" --arg sha "$EVENT_SHA" \
+              --arg name "Unfocus $TAG" --rawfile body notes.md \
+              '{tag_name:$tag, target_commitish:$sha, name:$name, body:$body, draft:true, prerelease:true}' \
+              | gh api "repos/$GITHUB_REPOSITORY/releases" -X POST --input -)
           elif [ "$(jq -r .draft <<<"$RELEASE")" = "true" ]; then
             ID=$(jq -r .id <<<"$RELEASE")
-            jq -n --arg name "Unfocus $TAG" --rawfile body notes.md \
+            RELEASE=$(jq -n --arg name "Unfocus $TAG" --rawfile body notes.md \
               '{name:$name, body:$body, draft:true, prerelease:true}' \
-              | gh api "repos/$GITHUB_REPOSITORY/releases/$ID" -X PATCH --input - >/dev/null
+              | gh api "repos/$GITHUB_REPOSITORY/releases/$ID" -X PATCH --input -)
           else
             echo "Refusing to alter the published release for $TAG." >&2
             exit 1
           fi
 
-          lookup_release
-          if [ -z "$RELEASE" ]; then
-            echo "The release for $TAG could not be read back after creation." >&2
-            exit 1
-          fi
           if [ "$(jq -r .draft <<<"$RELEASE")" != "true" ]; then
             echo "The release was published before its asset set could be reconciled." >&2
             exit 1
           fi
           ID=$(jq -r .id <<<"$RELEASE")
-          ASSET_IDS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$ID/assets?per_page=100" --jq '.[].id')
-          if [ -n "$ASSET_IDS" ]; then
-            while IFS= read -r ASSET_ID; do
-              [[ "$ASSET_ID" =~ ^[0-9]+$ ]] || {
-                echo "GitHub returned an invalid release asset ID." >&2
-                exit 1
-              }
-              gh api "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID" -X DELETE
-            done <<<"$ASSET_IDS"
+          [[ "$ID" =~ ^[0-9]+$ ]] || {
+            echo "GitHub did not return a release id." >&2
+            exit 1
+          }
+
+          # Only a reused draft can already hold assets, and only its id has
+          # been readable long enough to list against.
+          if [ "$CREATED" = "false" ]; then
+            ASSET_IDS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$ID/assets?per_page=100" --jq '.[].id')
+            if [ -n "$ASSET_IDS" ]; then
+              while IFS= read -r ASSET_ID; do
+                [[ "$ASSET_ID" =~ ^[0-9]+$ ]] || {
+                  echo "GitHub returned an invalid release asset ID." >&2
+                  exit 1
+                }
+                gh api "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID" -X DELETE
+              done <<<"$ASSET_IDS"
+            fi
           fi
 
           verify_remote_tag
-          mapfile -d '' ASSETS < <(find release-assets -maxdepth 1 -type f -print0)
-          gh release upload "$TAG" "${ASSETS[@]}"
+          # Uploaded by release id rather than `gh release upload "$TAG"`,
+          # which would resolve the tag through that same lagging listing.
+          UPLOADED=0
+          for ASSET in release-assets/*; do
+            [ -f "$ASSET" ] || continue
+            NAME=$(basename "$ASSET")
+            ENCODED=$(jq -rn --arg name "$NAME" '$name | @uri')
+            echo "uploading $NAME"
+            RESPONSE=$(curl --fail-with-body --silent --show-error \
+              -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              --data-binary @"$ASSET" \
+              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$ID/assets?name=$ENCODED") || {
+                echo "$RESPONSE" >&2
+                echo "upload failed for $NAME" >&2
+                exit 1
+              }
+            STATE=$(jq -r '.state // "missing"' <<<"$RESPONSE")
+            if [ "$STATE" != "uploaded" ]; then
+              echo "$NAME finished in state $STATE rather than uploaded." >&2
+              exit 1
+            fi
+            UPLOADED=$((UPLOADED + 1))
+          done
+
+          # Counted from the upload responses, not from a fresh listing: the
+          # per-asset state above is the authoritative confirmation and needs
+          # no second read. `find` sees dotfiles the glob skips, so a staged
+          # file that was never offered for upload still fails here.
+          EXPECTED=$(find release-assets -maxdepth 1 -type f | wc -l)
+          if [ "$UPLOADED" -ne "$EXPECTED" ]; then
+            echo "Uploaded $UPLOADED assets but staged $EXPECTED." >&2
+            exit 1
+          fi
+          echo "uploaded $UPLOADED assets to release $ID"
