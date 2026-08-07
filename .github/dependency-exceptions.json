@@ -1,0 +1,16 @@
+{
+  "exceptions": [
+    {
+      "id": "GHSA-pxg6-pf52-xh8x",
+      "ecosystem": "javascript",
+      "expires": "2026-11-06",
+      "reason": "The affected cookie parser is transitive through SvelteKit and is not used by the packaged static frontend. Compatible direct updates do not replace it yet."
+    },
+    {
+      "id": "RUSTSEC-2024-0429",
+      "ecosystem": "rust",
+      "expires": "2026-11-06",
+      "reason": "Tauri's Linux GTK3 stack still selects glib 0.18. The application and locked Tauri/Wry sources do not call the affected VariantStrIter methods."
+    }
+  ]
+}

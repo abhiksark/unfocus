@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CRATE = "unfocus";
-const SEMVER = /^\d+\.\d+\.\d+$/;
+const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 const FILES = {
   packageJson: join(ROOT, "package.json"),
@@ -192,7 +192,15 @@ async function check(expect) {
   }
 
   if (expect !== undefined) {
-    const wanted = expect.startsWith("v") ? expect.slice(1) : expect;
+    if (!expect.startsWith("v")) {
+      console.error(`expected tag ${expect} is not vX.Y.Z`);
+      process.exit(1);
+    }
+    const wanted = expect.slice(1);
+    if (!SEMVER.test(wanted)) {
+      console.error(`expected tag ${expect} is not vX.Y.Z`);
+      process.exit(1);
+    }
     if (wanted !== declared) {
       console.error(`tag ${expect} does not match the declared version ${declared}`);
       report(state);
@@ -254,10 +262,15 @@ const [command, ...rest] = process.argv.slice(2);
 
 try {
   if (command === "check") {
-    const index = rest.indexOf("--expect");
-    await check(index === -1 ? undefined : rest[index + 1]);
+    if (rest.length === 0) {
+      await check(undefined);
+    } else if (rest.length === 2 && rest[0] === "--expect" && rest[1]) {
+      await check(rest[1]);
+    } else {
+      throw new Error("usage: version.js check [--expect vX.Y.Z]");
+    }
   } else if (command === "set") {
-    if (!rest[0]) throw new Error("usage: version.js set <X.Y.Z>");
+    if (rest.length !== 1 || !rest[0]) throw new Error("usage: version.js set <X.Y.Z>");
     await set(rest[0]);
   } else {
     console.error("usage: version.js check [--expect vX.Y.Z] | version.js set <X.Y.Z>");
