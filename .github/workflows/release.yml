@@ -51,9 +51,16 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>/dev/null || true)
-          if [ -n "$RELEASE" ] && [ "$(jq -r .draft <<<"$RELEASE")" != "true" ]; then
-            echo "A published release already exists for $TAG; publish a new version instead." >&2
+          # Only a 404 means "no release yet". Any other failure leaves the
+          # answer unknown, and an unknown answer must not read as absent.
+          if RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>"$RUNNER_TEMP/gh-error"); then
+            if [ "$(jq -r .draft <<<"$RELEASE")" != "true" ]; then
+              echo "A published release already exists for $TAG; publish a new version instead." >&2
+              exit 1
+            fi
+          elif ! grep -q 'HTTP 404' "$RUNNER_TEMP/gh-error"; then
+            cat "$RUNNER_TEMP/gh-error" >&2
+            echo "Could not determine whether $TAG already has a release." >&2
             exit 1
           fi
 
@@ -173,21 +180,39 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Downloaded per artifact rather than merged: merge-multiple flattens
+      # every job into one directory and a same-named asset from two platforms
+      # would overwrite silently instead of failing.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: release-*
-          path: release-assets
-          merge-multiple: true
+          path: release-downloads
 
-      - name: Generate checksums
+      - name: Collect assets and reject name collisions
         run: |
           set -euo pipefail
-          find release-assets -maxdepth 1 -type f ! -name SHA256SUMS -print0 \
+          mkdir -p release-assets
+          while IFS= read -r -d '' SOURCE; do
+            NAME=$(basename "$SOURCE")
+            if [ -e "release-assets/$NAME" ]; then
+              echo "Two build jobs produced an asset named $NAME." >&2
+              exit 1
+            fi
+            mv "$SOURCE" "release-assets/$NAME"
+          done < <(find release-downloads -type f -print0 | sort -z)
+          test -n "$(ls -A release-assets)"
+          ls -1 release-assets
+
+      - name: Generate and verify checksums
+        working-directory: release-assets
+        run: |
+          set -euo pipefail
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' \
             | sort -z \
-            | xargs -0 sha256sum \
-            | sed 's#release-assets/##' > release-assets/SHA256SUMS
-          test -s release-assets/SHA256SUMS
-          cat release-assets/SHA256SUMS
+            | xargs -0 sha256sum > SHA256SUMS
+          test -s SHA256SUMS
+          sha256sum --check --strict SHA256SUMS
+          cat SHA256SUMS
 
       - name: Attest release assets
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
@@ -233,8 +258,24 @@ jobs:
             fi
           }
 
+          # Only a 404 may be read as "not created yet"; any other failure
+          # would otherwise send this down the create path against a release
+          # that already exists.
+          lookup_release() {
+            if RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>"$RUNNER_TEMP/gh-error"); then
+              return 0
+            fi
+            if grep -q 'HTTP 404' "$RUNNER_TEMP/gh-error"; then
+              RELEASE=""
+              return 0
+            fi
+            cat "$RUNNER_TEMP/gh-error" >&2
+            echo "Could not read the release for $TAG." >&2
+            exit 1
+          }
+
           verify_remote_tag
-          RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>/dev/null || true)
+          lookup_release
 
           if [ -z "$RELEASE" ]; then
             gh release create "$TAG" --verify-tag --draft --prerelease \

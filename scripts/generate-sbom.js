@@ -103,15 +103,24 @@ for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     throw new Error(`bun.lock contains invalid metadata for ${entry[0]}`);
   }
+  // An absent or incomplete node_modules leaves `manifest` undefined, which
+  // would emit a component with no `licenses` and silently drop license data
+  // from the SBOM. Refuse to publish an SBOM that cannot see what it declares.
+  const declaredLicense =
+    typeof manifest?.license === "string" ? manifest.license : platformLicense;
+  if (typeof declaredLicense !== "string" || declaredLicense.trim() === "") {
+    throw new Error(
+      `no license metadata for ${name}@${version}; run \`bun install\` before generating the SBOM`
+    );
+  }
+
   components.push({
     type: "library",
     "bom-ref": purl,
     name,
     version,
     purl,
-    licenses: licenseEntry(
-      typeof manifest?.license === "string" ? manifest.license : platformLicense
-    ),
+    licenses: licenseEntry(declaredLicense),
     hashes: integrity
       ? [{ alg: "SHA-512", content: Buffer.from(integrity[1], "base64").toString("hex") }]
       : undefined,
