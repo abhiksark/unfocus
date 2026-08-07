@@ -54,13 +54,17 @@ rechecked against the declared version before anything is packaged, and the
 publisher creates a draft pre-release; published releases are never
 overwritten.
 
-A tag may carry a prerelease label (`v0.1.0-rc1`) that the declared version
-cannot: a Windows MSI ProductVersion has no way to express one, so `version:set`
-still refuses anything but `X.Y.Z`. The tag's numeric core is compared exactly,
-so `v0.2.0-rc1` is rejected against a declared `0.1.0` just as `v0.2.0` is.
-Packages built under a prerelease tag are named for the declared version, so
-`v0.1.0-rc1` and a later `v0.1.0` produce identically named files — tell them
-apart by the release they hang off, not the filename.
+The declared version may carry a prerelease label (`0.1.0-alpha.1`), and the
+tag must equal it exactly. A Windows MSI ProductVersion is numeric-only and
+cannot express a label, so `bundle.windows.wix.version` in `tauri.conf.json`
+carries the numeric core instead and is a fifth declaration `version:check`
+keeps pinned to it. Set every version through `version:set`; editing the wix
+version by hand fails the check.
+
+That is what makes artifacts self-identifying: a build of `0.1.0-alpha.1` is
+named `Unfocus_0.1.0-alpha.1_*`, so a candidate and a later final release never
+produce identically named files. Only the MSI's internal ProductVersion reads
+`0.1.0`.
 
 ## Ground rules
 
