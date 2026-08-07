@@ -5,7 +5,7 @@ contact_links:
     about: Check what is qualified before filing. Windows has no OS probes and Wayland is unsupported, both by design.
   - name: Build prerequisites and the check commands
     url: https://github.com/abhiksark/unfocus#build-from-source
-    about: Native prerequisites, the container runner for machines without X11 headers, and the five checks a change has to pass.
+    about: Native prerequisites, the container runner for machines without X11 headers, and the checks a change has to pass.
   - name: Report a security or privacy problem privately
     url: https://github.com/abhiksark/unfocus/security/advisories/new
     about: Unfocus is local-first. If you found something that leaks off the machine, report it here instead of in a public issue.
