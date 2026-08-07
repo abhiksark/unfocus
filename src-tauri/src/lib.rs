@@ -12,8 +12,8 @@ use std::{
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl, WebviewWindow,
-    WebviewWindowBuilder,
+    AppHandle, Emitter, EventTarget, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl,
+    WebviewWindow, WebviewWindowBuilder,
 };
 
 static OVERLAY_RUN_ID: AtomicU64 = AtomicU64::new(1);
@@ -1077,9 +1077,16 @@ fn emit_overlay_event<T: Clone + Serialize>(
     event: &str,
     payload: T,
 ) {
-    for (label, window) in app.webview_windows() {
+    // `Emitter::emit` delivers to every target regardless of the receiver, so
+    // emitting from each window would broadcast the event once per window in
+    // the run. Address the windows explicitly instead.
+    for label in app.webview_windows().into_keys() {
         if label.starts_with(prefix) {
-            if let Err(error) = window.emit(event, payload.clone()) {
+            if let Err(error) = app.emit_to(
+                EventTarget::webview_window(label.clone()),
+                event,
+                payload.clone(),
+            ) {
                 eprintln!("could not emit {event} to overlay {label}: {error}");
             }
         }

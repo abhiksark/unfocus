@@ -27,6 +27,13 @@ parameters, so the format must stay in sync with the Rust side.
 - Type: Fraunces (vendored, `static/fonts/`, OFL) for display copy; monospace
   for eyebrows and digits. No font or asset CDNs.
 
+## Native events
+
+Overlay events carry a `runId`. Filter on it in every handler: an untargeted
+`listen()` receives events from every run, and the Rust side can only scope
+delivery if the subscription passes its own window label as `target`.
+
 ## Checks
 
-`bun run check` and `bun run build` must pass before committing.
+`bun run test`, `bun run check`, and `bun run build` must pass before
+committing.

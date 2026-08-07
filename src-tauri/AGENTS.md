@@ -29,5 +29,12 @@ diagnostics.
   its siblings; window-manager close of a single overlay must not strand the
   rest.
 - Keep timing logic pure and clock-injected so tests run without real waits.
-- Gate before committing: `cargo fmt --check`, `cargo clippy` with warnings
-  denied, `cargo test`.
+- `Emitter::emit` delivers to every target regardless of which window it is
+  called on, and a JS `listen()` with no `target` option subscribes to all of
+  them. Overlay events therefore go out per window through
+  `emit_to(EventTarget::webview_window(..))`, and the overlay subscribes with
+  its own label. Both halves are required: either one alone leaves every
+  overlay receiving every run's events.
+- Gate before committing: `cargo fmt --check`, then `cargo clippy` and
+  `cargo test` with `--all-targets --all-features --locked` and warnings
+  denied.

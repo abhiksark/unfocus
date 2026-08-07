@@ -8,6 +8,7 @@
     type OverlayClockAnchor
   } from "$lib/overlay-clock";
   import { listen } from "@tauri-apps/api/event";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import scene from "$lib/scene.svg?raw";
 
@@ -21,7 +22,7 @@
   };
 
   type OverlayTick = { runId: number; remainingMs: number };
-  type OverlayComplete = { runId: number };
+  type OverlayRunEvent = { runId: number };
 
   let { runId, monitorIndex, monitorCount, durationSeconds, deadlineMs, onClose }: Props = $props();
 
@@ -125,8 +126,12 @@
 
     tick();
 
+    // Tauri delivers an untargeted listener every emit regardless of the
+    // emitting window, so scope the subscription to this window's label.
+    const ownLabel = getCurrentWindow().label;
+
     function register<T>(eventName: string, handler: (payload: T) => void) {
-      void listen<T>(eventName, (event) => handler(event.payload))
+      void listen<T>(eventName, (event) => handler(event.payload), { target: ownLabel })
         .then((stopListening) => {
           if (disposed) stopListening();
           else unlisteners.push(stopListening);
@@ -142,13 +147,16 @@
       nativeClock = anchorFromRemaining(durationMs, payload.remainingMs, sampledAt);
       monotonicNowMs = sampledAt;
     });
-    register<OverlayComplete>("unfocus-overlay-complete", (payload) => {
+    register<OverlayRunEvent>("unfocus-overlay-complete", (payload) => {
       if (payload.runId !== runId) return;
       const sampledAt = performance.now();
       nativeClock = anchorFromRemaining(durationMs, 0, sampledAt);
       monotonicNowMs = sampledAt;
     });
-    register<undefined>("unfocus-overlay-closing", () => beginDismissing());
+    register<OverlayRunEvent>("unfocus-overlay-closing", (payload) => {
+      if (payload.runId !== runId) return;
+      beginDismissing();
+    });
 
     return () => {
       disposed = true;
