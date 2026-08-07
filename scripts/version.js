@@ -20,6 +20,13 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CRATE = "unfocus";
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
+// A release tag may carry a prerelease label that the declared version cannot:
+// a Windows MSI ProductVersion has no way to express one, so packages stay
+// X.Y.Z while the tag marks the candidate. The numeric core is still compared
+// exactly, so a v0.2.0 tag can never ship 0.1.0 artifacts.
+const TAG =
+  /^v(?<core>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))(?:-(?<prerelease>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+
 const FILES = {
   packageJson: join(ROOT, "package.json"),
   tauriConf: join(ROOT, "src-tauri", "tauri.conf.json"),
@@ -192,22 +199,27 @@ async function check(expect) {
   }
 
   if (expect !== undefined) {
-    if (!expect.startsWith("v")) {
-      console.error(`expected tag ${expect} is not vX.Y.Z`);
+    const tag = TAG.exec(expect);
+    if (!tag) {
+      console.error(`expected tag ${expect} is not vX.Y.Z or vX.Y.Z-prerelease`);
       process.exit(1);
     }
-    const wanted = expect.slice(1);
-    if (!SEMVER.test(wanted)) {
-      console.error(`expected tag ${expect} is not vX.Y.Z`);
-      process.exit(1);
-    }
-    if (wanted !== declared) {
+    const { core, prerelease } = tag.groups;
+    if (core !== declared) {
       console.error(`tag ${expect} does not match the declared version ${declared}`);
       report(state);
-      console.error(`\nthe tag must be v${declared}, or the declared version must be ${wanted}`);
+      console.error(
+        `\nthe tag must be v${declared} or v${declared}-<prerelease>, or the declared version must be ${core}`
+      );
       process.exit(1);
     }
-    console.log(`ok: ${expect} matches all four declarations (${declared})`);
+    if (prerelease) {
+      console.log(
+        `ok: ${expect} is a prerelease of all four declarations (${declared}); packages ship as ${declared}`
+      );
+    } else {
+      console.log(`ok: ${expect} matches all four declarations (${declared})`);
+    }
     return;
   }
 
