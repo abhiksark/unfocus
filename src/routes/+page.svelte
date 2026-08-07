@@ -200,7 +200,7 @@
       </article>
       <article>
         <span>Displays</span>
-        <strong>{report?.monitors.length ?? "—"}</strong>
+        <strong>{report && !report.monitorError ? report.monitors.length : "—"}</strong>
         <small>{report?.monitorError ?? displayCaption}</small>
       </article>
       <article>
