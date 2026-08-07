@@ -130,11 +130,6 @@ const svg = `<svg class="scene" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMi
       <stop offset="0.7" stop-color="#e4c088" stop-opacity="0.18"/>
       <stop offset="1" stop-color="#e4c088" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#d7ecdc" stop-opacity="0.08"/>
-      <stop offset="0.6" stop-color="#d7ecdc" stop-opacity="0.025"/>
-      <stop offset="1" stop-color="#d7ecdc" stop-opacity="0"/>
-    </radialGradient>
     <radialGradient id="dawn" cx="0.5" cy="0.5" r="0.5">
       <stop offset="0" stop-color="#e8c489" stop-opacity="0.5"/>
       <stop offset="0.45" stop-color="#dcb87a" stop-opacity="0.2"/>
@@ -149,7 +144,6 @@ const svg = `<svg class="scene" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMi
   <rect width="${W}" height="${H}" fill="url(#sky)"/>
   <g class="stars">
 ${stars(99, 12)}  </g>
-  <circle class="halo" cx="1178" cy="162" r="100" fill="url(#halo)"/>
   <circle class="moonbody" cx="1178" cy="162" r="30" fill="#d7ecdc" opacity="0.85" mask="url(#crescent)"/>
 
   <!-- moonlit haze gathers behind the far summit; swaps warm at dawn -->
