@@ -36,7 +36,11 @@ if docker container inspect "${container_name}" >/dev/null 2>&1; then
 fi
 
 cd "${project_dir}"
+echo "Warning: this development container can access your X11 session and session bus." >&2
+echo "Run it only from a revision you trust; it is not a desktop security sandbox." >&2
 bun run build
+mkdir -p src-tauri/target src-tauri/gen
+
 docker build \
   --build-arg "HOST_UID=${host_uid}" \
   --build-arg "HOST_GID=${host_gid}" \
@@ -59,5 +63,7 @@ exec docker run --rm \
   --volume "/tmp/.X11-unix:/tmp/.X11-unix:rw" \
   --volume "${xauthority_file}:/tmp/unfocus.Xauthority:ro" \
   --volume "${runtime_dir}/bus:${runtime_dir}/bus" \
-  --volume "${project_dir}:/workspace" \
+  --volume "${project_dir}:/workspace:ro" \
+  --volume "${project_dir}/src-tauri/target:/workspace/src-tauri/target:rw" \
+  --volume "${project_dir}/src-tauri/gen:/workspace/src-tauri/gen:rw" \
   unfocus-linux-spike

@@ -1,4 +1,4 @@
-FROM rust:1.95-bookworm
+FROM rust:1.97.1-bookworm
 
 ARG HOST_UID=1000
 ARG HOST_GID=1000
@@ -23,4 +23,4 @@ RUN rustup component add clippy rustfmt
 USER spike
 WORKDIR /workspace
 
-CMD ["cargo", "run", "--features", "tauri/custom-protocol", "--manifest-path", "src-tauri/Cargo.toml"]
+CMD ["cargo", "run", "--locked", "--features", "tauri/custom-protocol", "--manifest-path", "src-tauri/Cargo.toml"]

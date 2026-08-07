@@ -4,3 +4,7 @@ build
 node_modules
 .vscode
 src-tauri/target
+.env
+.env.*
+plans
+*.md
