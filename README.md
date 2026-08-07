@@ -44,23 +44,28 @@ is not supported yet.
 
 ## Builds
 
-CI runs on every push to `main` and every pull request. It builds on Ubuntu
-22.04 and gates on five checks: `svelte-check`, the production frontend
-build, `cargo fmt --check`, `cargo clippy` with warnings denied, and
-`cargo test`. The badge above reflects that run.
+CI runs on every push to `main`, every pull request, and a weekly schedule. It
+gates on frontend unit tests, `svelte-check`, the production frontend build,
+dependency policy, `cargo fmt --check`, `cargo clippy` with warnings denied,
+and `cargo test`. macOS and Windows also receive a compile check before code is
+merged. The badge above reflects that run.
 
-Releases are cut by pushing a `v*` tag, which fans out to four targets —
-Linux (`.deb`, `.AppImage`), Windows, macOS arm64, and macOS x86_64 — and
-opens a draft GitHub release. **No tagged release exists yet**, so the
-Release badge will read "no status" until the first one. Artifacts are not
-code-signed or notarized; see the release notes for the per-platform
-first-launch steps.
+Releases are cut from a tagged commit already contained in `main`. The tag is
+rechecked with the complete quality gate before packaging fans out to Linux
+(`.deb`, `.rpm`, `.AppImage`), Windows, macOS arm64, and macOS x86_64. A
+credential-isolated publisher then creates a draft pre-release with checksums
+and build-provenance attestations, a CycloneDX SBOM, and third-party notices.
+Published releases are never overwritten.
+**No tagged release exists yet**, so the Release badge will read "no status"
+until the first one. Artifacts are not code-signed or notarized; see the
+release notes for platform support and download-verification details.
 
 ## Build from source
 
 Install the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
 for your platform — the listed system libraries on Linux, the Xcode command
-line tools on macOS — plus [Bun](https://bun.sh), then:
+line tools on macOS — plus the Bun and Rust versions declared in
+`.bun-version` and `rust-toolchain.toml`, then:
 
 ```sh
 bun install
@@ -74,14 +79,24 @@ builds and runs against your real display and session bus:
 ./scripts/run-linux-spike-container.sh
 ```
 
+That runner is a development convenience, not a sandbox: it can access the
+host X11 display and session bus. Run it only from a revision you trust. The
+repository is mounted read-only except for ignored `src-tauri/target` and
+`src-tauri/gen` build directories, which are bind-mounted read-write. The
+frontend build also runs on the host before the container starts.
+
 Before sending changes, run the checks:
 
 ```sh
 bun run check
 bun run build
+bun run test
+bun run toolchains:check
+bun run dependencies:check
+bun run notices:check
 cargo fmt --check --manifest-path src-tauri/Cargo.toml
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml --all-features --locked
 ```
 
 ## Design
@@ -95,4 +110,7 @@ touching the SVG by hand.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). The vendored Fraunces font remains under the
+[SIL Open Font License 1.1](static/fonts/OFL.txt). Generated dependency license
+texts and notices are bundled with every package and tracked in
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
