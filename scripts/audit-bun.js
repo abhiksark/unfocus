@@ -17,6 +17,12 @@ try {
   throw new Error(`bun audit did not return JSON${stderr ? `: ${stderr}` : ""}`);
 }
 
+// A scalar, null, or array report would iterate as zero advisories and pass
+// silently. Only a package-keyed object can be audited.
+if (report === null || typeof report !== "object" || Array.isArray(report)) {
+  throw new Error(`bun audit did not return an advisory object${stderr ? `: ${stderr}` : ""}`);
+}
+
 const advisories = Object.entries(report).flatMap(([packageName, entries]) => {
   if (!Array.isArray(entries)) throw new Error(`bun audit returned invalid entries for ${packageName}`);
   return entries.map((entry) => {

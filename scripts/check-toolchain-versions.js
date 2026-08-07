@@ -32,6 +32,20 @@ for (const workflow of [".github/workflows/ci.yml", ".github/workflows/release.y
   if (/^\s*bun-version:\s*/m.test(contents)) {
     throw new Error(`${workflow} must use bun-version-file instead of a second Bun pin`);
   }
+
+  // Rejecting a literal pin is not enough: dropping the `with:` block entirely
+  // would leave the job on whatever Bun the action defaults to. Require every
+  // Bun setup to name the file.
+  const setups = contents.match(/uses:\s*oven-sh\/setup-bun@/g)?.length ?? 0;
+  const pins = contents.match(/^\s*bun-version-file:\s*\.bun-version\s*$/gm)?.length ?? 0;
+  if (setups === 0) {
+    throw new Error(`${workflow} must set up Bun`);
+  }
+  if (pins !== setups) {
+    throw new Error(
+      `${workflow} has ${setups} Bun setup(s) but ${pins} pinned with bun-version-file: .bun-version`
+    );
+  }
 }
 
 const dockerfile = read("Dockerfile.linux-spike");

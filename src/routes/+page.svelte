@@ -87,6 +87,15 @@
     }
   }
 
+  // Safe mode replaces a break window that would otherwise be dismissable with
+  // Escape, so it has to honour the same key. `<svelte:window>` has to sit at
+  // the top level, so the route check lives here rather than in the markup.
+  function handleSafeModeKeydown(event: KeyboardEvent) {
+    if (windowRoute.kind !== "invalid-overlay" || event.key !== "Escape") return;
+    event.preventDefault();
+    void closeInvalidOverlay();
+  }
+
   onMount(() => {
     if (windowRoute.kind !== "dashboard") return;
 
@@ -118,6 +127,8 @@
   />
 </svelte:head>
 
+<svelte:window onkeydown={handleSafeModeKeydown} />
+
 {#if overlayParameters}
   <BreakOverlay
     runId={overlayParameters.runId}
@@ -134,6 +145,7 @@
     <p>The native window label was invalid, so Unfocus did not render a blocking break.</p>
     <code>{windowRoute.reason}</code>
     <button class="secondary" type="button" onclick={closeInvalidOverlay}>Close this window</button>
+    <p class="shortcut-hint">Press <kbd>Esc</kbd> to close.</p>
     {#if invalidOverlayCloseError}
       <p class="error">Could not close the window: {invalidOverlayCloseError}</p>
     {/if}
@@ -620,6 +632,23 @@
   .invalid-overlay p {
     max-width: 680px;
     margin-bottom: 0;
+  }
+
+  .invalid-overlay .shortcut-hint {
+    color: #9ca69e;
+    font-size: 0.72rem;
+  }
+
+  .invalid-overlay kbd {
+    display: inline-block;
+    min-width: 25px;
+    border: 1px solid rgba(226, 240, 231, 0.38);
+    border-radius: 5px;
+    padding: 2px 5px;
+    color: #edf7f0;
+    background: rgba(255, 255, 255, 0.08);
+    font: inherit;
+    text-align: center;
   }
 
   .invalid-overlay code {
