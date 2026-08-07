@@ -51,16 +51,14 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # Only a 404 means "no release yet". Any other failure leaves the
-          # answer unknown, and an unknown answer must not read as absent.
-          if RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>"$RUNNER_TEMP/gh-error"); then
-            if [ "$(jq -r .draft <<<"$RELEASE")" != "true" ]; then
-              echo "A published release already exists for $TAG; publish a new version instead." >&2
-              exit 1
-            fi
-          elif ! grep -q 'HTTP 404' "$RUNNER_TEMP/gh-error"; then
-            cat "$RUNNER_TEMP/gh-error" >&2
-            echo "Could not determine whether $TAG already has a release." >&2
+          # Listed rather than read from /releases/tags/$TAG: GitHub does not
+          # attach a tag to a draft release until it is published, so the tag
+          # endpoint 404s on drafts. Listing reports them, and any API failure
+          # fails the step instead of reading as "no release".
+          RELEASE=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq -s -c --arg tag "$TAG" 'flatten(1) | map(select(.tag_name == $tag)) | first // empty')
+          if [ -n "$RELEASE" ] && [ "$(jq -r .draft <<<"$RELEASE")" != "true" ]; then
+            echo "A published release already exists for $TAG; publish a new version instead." >&2
             exit 1
           fi
 
@@ -258,20 +256,13 @@ jobs:
             fi
           }
 
-          # Only a 404 may be read as "not created yet"; any other failure
-          # would otherwise send this down the create path against a release
-          # that already exists.
+          # A draft release carries no tag association until it is published,
+          # so /releases/tags/$TAG 404s on exactly the release this job just
+          # created. List instead, and let any API failure fail the step
+          # rather than read as "not created yet".
           lookup_release() {
-            if RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>"$RUNNER_TEMP/gh-error"); then
-              return 0
-            fi
-            if grep -q 'HTTP 404' "$RUNNER_TEMP/gh-error"; then
-              RELEASE=""
-              return 0
-            fi
-            cat "$RUNNER_TEMP/gh-error" >&2
-            echo "Could not read the release for $TAG." >&2
-            exit 1
+            RELEASE=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              | jq -s -c --arg tag "$TAG" 'flatten(1) | map(select(.tag_name == $tag)) | first // empty')
           }
 
           verify_remote_tag
@@ -290,7 +281,11 @@ jobs:
             exit 1
           fi
 
-          RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG")
+          lookup_release
+          if [ -z "$RELEASE" ]; then
+            echo "The release for $TAG could not be read back after creation." >&2
+            exit 1
+          fi
           if [ "$(jq -r .draft <<<"$RELEASE")" != "true" ]; then
             echo "The release was published before its asset set could be reconciled." >&2
             exit 1
