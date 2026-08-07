@@ -1,9 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main", "overlay-*"],
-  "permissions": [
-    "core:default"
-  ]
+  "description": "Minimal capability for the diagnostics dashboard",
+  "windows": ["main"],
+  "permissions": []
 }
