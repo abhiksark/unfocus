@@ -10,6 +10,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     AppHandle, Emitter, EventTarget, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl,
@@ -1442,13 +1443,18 @@ fn install_tray(app: &tauri::App) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &overlay, &quit])?;
 
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .ok_or_else(|| io::Error::other("the application bundle does not contain a tray icon"))?;
+    // macOS recolours a template image to match the menubar theme; every
+    // other platform gets a fixed light glyph for their (dark) panels.
+    #[cfg(target_os = "macos")]
+    const TRAY_ICON: &[u8] = include_bytes!("../icons/tray/tray-template.png");
+    #[cfg(not(target_os = "macos"))]
+    const TRAY_ICON: &[u8] = include_bytes!("../icons/tray/tray-light.png");
+
+    let icon = Image::from_bytes(TRAY_ICON)?;
 
     TrayIconBuilder::new()
         .icon(icon)
+        .icon_as_template(cfg!(target_os = "macos"))
         .tooltip("Unfocus eye-break reminder")
         .menu(&menu)
         .show_menu_on_left_click(false)
