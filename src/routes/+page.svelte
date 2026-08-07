@@ -1,64 +1,23 @@
 <script lang="ts">
   import BreakOverlay from "$lib/BreakOverlay.svelte";
+  import {
+    diagnosticsHealth,
+    diagnosticsHealthLabel,
+    probeBackend,
+    type DiagnosticsReport
+  } from "$lib/diagnostics";
+  import { parseWindowLabel } from "$lib/overlay-label";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
 
-  type MonitorReport = {
-    name: string | null;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    scaleFactor: number;
-  };
-
-  type DiagnosticsReport = {
-    operatingSystem: string;
-    sessionType: string | null;
-    desktop: string | null;
-    display: string | null;
-    monitors: MonitorReport[];
-    idleSeconds: number | null;
-    idleError: string | null;
-    activeWindowFullscreen: boolean | null;
-    fullscreenError: string | null;
-  };
-
-  function boundedInteger(
-    value: string | undefined,
-    minimum: number,
-    maximum: number,
-    fallback: number
-  ): number {
-    const parsed = Number(value);
-    return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum
-      ? parsed
-      : fallback;
-  }
-
-  const windowLabel = getCurrentWindow().label;
-  const labelParts = windowLabel.split("-");
-  const isOverlay = windowLabel.startsWith("overlay-");
-  const overlayRunId = isOverlay
-    ? boundedInteger(labelParts[1], 1, Number.MAX_SAFE_INTEGER, 0)
-    : 0;
-  const overlayTotal = isOverlay ? boundedInteger(labelParts[3], 1, 64, 1) : 1;
-  const overlayNumber = isOverlay
-    ? boundedInteger(labelParts[2], 0, overlayTotal - 1, 0)
-    : 0;
-  const overlayDuration = isOverlay ? boundedInteger(labelParts[4], 3, 30, 8) : 8;
-  const overlayDeadline = isOverlay
-    ? boundedInteger(
-        labelParts[5],
-        0,
-        Number.MAX_SAFE_INTEGER,
-        Date.now() + overlayDuration * 1_000
-      )
-    : 0;
+  const windowRoute = parseWindowLabel(getCurrentWindow().label);
+  const overlayParameters = windowRoute.kind === "overlay" ? windowRoute.parameters : null;
 
   let report = $state<DiagnosticsReport | null>(null);
-  let error = $state<string | null>(null);
+  let diagnosticsError = $state<string | null>(null);
+  let overlayError = $state<string | null>(null);
+  let invalidOverlayCloseError = $state<string | null>(null);
   let refreshing = $state(false);
   let overlayRunning = $state(false);
 
@@ -67,6 +26,9 @@
   }
 
   const isMac = $derived(report?.operatingSystem === "macos");
+  const health = $derived(diagnosticsHealth(report, diagnosticsError));
+  const healthLabel = $derived(diagnosticsHealthLabel(health));
+  const backend = $derived(probeBackend(report));
 
   // A field the running platform simply does not report is not a pending
   // read, so say so rather than implying data is still on its way.
@@ -91,9 +53,9 @@
     refreshing = true;
     try {
       report = await invoke<DiagnosticsReport>("get_diagnostics");
-      error = null;
+      diagnosticsError = null;
     } catch (value) {
-      error = errorMessage(value);
+      diagnosticsError = errorMessage(value);
     } finally {
       refreshing = false;
     }
@@ -101,26 +63,51 @@
 
   async function runOverlayTest() {
     overlayRunning = true;
+    overlayError = null;
     try {
       await invoke("show_overlay_test", { durationSeconds: 8 });
-      error = null;
     } catch (value) {
-      error = errorMessage(value);
+      overlayError = errorMessage(value);
     } finally {
       overlayRunning = false;
     }
   }
 
   async function closeOverlays() {
-    await invoke("close_overlay_test", { runId: overlayRunId });
+    if (!overlayParameters) throw new Error("Overlay parameters are unavailable");
+    await invoke("close_overlay_test", { runId: overlayParameters.runId });
+  }
+
+  async function closeInvalidOverlay() {
+    invalidOverlayCloseError = null;
+    try {
+      await getCurrentWindow().close();
+    } catch (value) {
+      invalidOverlayCloseError = errorMessage(value);
+    }
   }
 
   onMount(() => {
-    if (isOverlay) return;
+    if (windowRoute.kind !== "dashboard") return;
 
-    refresh();
-    const timer = window.setInterval(refresh, 2_000);
-    return () => window.clearInterval(timer);
+    let timer: number | undefined;
+    const stopPolling = () => {
+      if (timer !== undefined) window.clearInterval(timer);
+      timer = undefined;
+    };
+    const updatePolling = () => {
+      stopPolling();
+      if (document.visibilityState !== "visible") return;
+      void refresh();
+      timer = window.setInterval(refresh, 2_000);
+    };
+
+    updatePolling();
+    document.addEventListener("visibilitychange", updatePolling);
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", updatePolling);
+    };
   });
 </script>
 
@@ -131,19 +118,31 @@
   />
 </svelte:head>
 
-{#if isOverlay}
+{#if overlayParameters}
   <BreakOverlay
-    monitorIndex={overlayNumber}
-    monitorCount={overlayTotal}
-    durationSeconds={overlayDuration}
-    deadlineMs={overlayDeadline}
+    runId={overlayParameters.runId}
+    monitorIndex={overlayParameters.monitorIndex}
+    monitorCount={overlayParameters.monitorCount}
+    durationSeconds={overlayParameters.durationSeconds}
+    deadlineMs={overlayParameters.deadlineMs}
     onClose={closeOverlays}
   />
+{:else if windowRoute.kind === "invalid-overlay"}
+  <main class="invalid-overlay" role="alert" aria-labelledby="invalid-overlay-title">
+    <p class="eyebrow">Safe mode</p>
+    <h1 id="invalid-overlay-title">This break window could not start.</h1>
+    <p>The native window label was invalid, so Unfocus did not render a blocking break.</p>
+    <code>{windowRoute.reason}</code>
+    <button class="secondary" type="button" onclick={closeInvalidOverlay}>Close this window</button>
+    {#if invalidOverlayCloseError}
+      <p class="error">Could not close the window: {invalidOverlayCloseError}</p>
+    {/if}
+  </main>
 {:else}
   <main class="dashboard">
     <header>
       <div class="brand-lockup">
-        <div class="scene-swatch" class:degraded={error !== null} aria-hidden="true">
+        <div class="scene-swatch" class:degraded={health !== "healthy"} aria-hidden="true">
           <svg viewBox="0 0 56 56">
             <defs>
               <linearGradient id="sw-sky" x1="0" y1="0" x2="0" y2="56" gradientUnits="userSpaceOnUse">
@@ -168,20 +167,29 @@
           </svg>
         </div>
         <div>
-          <p class="eyebrow">Unfocus · feasibility build</p>
-          <h1>The shell is alive.</h1>
+          <p class="eyebrow">Unfocus · local reminder</p>
+          <h1>Your timer is running.</h1>
           <p class="lede">
-            Live evidence from Tauri and {isMac ? "Quartz" : "X11"}—not mocked browser data.
+            Native evidence from Tauri and {backend}—not mocked browser data.
           </p>
         </div>
       </div>
-      <div class="status-pill" class:healthy={report !== null && error === null}>
-        <span></span>{report ? "Live" : "Connecting"}
+      <div
+        class="status-pill"
+        class:healthy={health === "healthy"}
+        class:degraded={health === "degraded"}
+        class:unavailable={health === "unavailable"}
+      >
+        <span></span>{healthLabel}
       </div>
     </header>
 
-    {#if error}
-      <div class="error" role="alert">{error}</div>
+    {#if diagnosticsError}
+      <div class="error" role="alert">Diagnostics unavailable: {diagnosticsError}</div>
+    {/if}
+
+    {#if overlayError}
+      <div class="error" role="alert">Could not open the overlay: {overlayError}</div>
     {/if}
 
     <section class="summary-grid" aria-label="Platform probe summary">
@@ -193,7 +201,7 @@
       <article>
         <span>Displays</span>
         <strong>{report?.monitors.length ?? "—"}</strong>
-        <small>{displayCaption}</small>
+        <small>{report?.monitorError ?? displayCaption}</small>
       </article>
       <article>
         <span>Idle time</span>
@@ -334,7 +342,6 @@
 
   .scene-swatch.degraded {
     border-color: #d9bb7d;
-    box-shadow: 0 0 0 1px rgba(217, 187, 125, 0.35);
   }
 
   h1,
@@ -371,7 +378,7 @@
   .lede,
   .test-panel p {
     margin-bottom: 0;
-    color: #98a29a;
+    color: #abb5ad;
     line-height: 1.55;
   }
 
@@ -400,7 +407,24 @@
 
   .status-pill.healthy span {
     background: #66d184;
-    box-shadow: 0 0 14px #66d184;
+  }
+
+  .status-pill.degraded {
+    border-color: #78633a;
+    color: #ecd5a5;
+  }
+
+  .status-pill.degraded span {
+    background: #d9bb7d;
+  }
+
+  .status-pill.unavailable {
+    border-color: #6e3434;
+    color: #ffc4c4;
+  }
+
+  .status-pill.unavailable span {
+    background: #d67878;
   }
 
   .error {
@@ -411,6 +435,7 @@
     color: #ffc4c4;
     background: #2a1717;
     font-size: 0.83rem;
+    overflow-wrap: anywhere;
   }
 
   .summary-grid {
@@ -437,7 +462,7 @@
   }
 
   .summary-grid span {
-    color: #7f8981;
+    color: #a0aaa2;
     font-size: 0.72rem;
   }
 
@@ -452,17 +477,16 @@
 
   .summary-grid i {
     margin-left: 2px;
-    color: #7e8880;
+    color: #a0aaa2;
     font-size: 0.8rem;
     font-style: normal;
   }
 
   .summary-grid small {
-    overflow: hidden;
-    color: #5f6861;
+    color: #a4aea6;
     font-size: 0.65rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
   }
 
   .panel {
@@ -536,7 +560,7 @@
   .monitor span,
   .monitor code,
   .empty {
-    color: #6f7971;
+    color: #9ca69e;
     font-size: 0.68rem;
   }
 
@@ -567,7 +591,6 @@
     flex: 0 0 auto;
     color: #0a140d;
     background: #75d38e;
-    box-shadow: 0 8px 28px rgba(86, 181, 112, 0.18);
   }
 
   .primary:hover {
@@ -576,9 +599,36 @@
 
   footer {
     margin-top: 20px;
-    color: #59625b;
+    color: #929c94;
     font-size: 0.68rem;
     text-align: center;
+  }
+
+  .invalid-overlay {
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 16px;
+    padding: clamp(28px, 8vw, 72px);
+    color: #edf5ef;
+    background: #0d110e;
+  }
+
+  .invalid-overlay h1,
+  .invalid-overlay p {
+    max-width: 680px;
+    margin-bottom: 0;
+  }
+
+  .invalid-overlay code {
+    max-width: 100%;
+    border-radius: 8px;
+    padding: 9px 11px;
+    color: #ffc4c4;
+    background: #2a1717;
+    overflow-wrap: anywhere;
   }
 
   @media (max-width: 760px) {

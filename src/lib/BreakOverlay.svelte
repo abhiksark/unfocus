@@ -1,9 +1,18 @@
 <script lang="ts">
+  import {
+    anchorFromRemaining,
+    createOverlayClock,
+    formatCountdown,
+    presentationOffset,
+    remainingAt,
+    type OverlayClockAnchor
+  } from "$lib/overlay-clock";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import scene from "$lib/scene.svg?raw";
 
   type Props = {
+    runId: number;
     monitorIndex: number;
     monitorCount: number;
     durationSeconds: number;
@@ -11,25 +20,36 @@
     onClose: () => Promise<void>;
   };
 
-  let { monitorIndex, monitorCount, durationSeconds, deadlineMs, onClose }: Props = $props();
+  type OverlayTick = { runId: number; remainingMs: number };
+  type OverlayComplete = { runId: number };
+
+  let { runId, monitorIndex, monitorCount, durationSeconds, deadlineMs, onClose }: Props = $props();
 
   const messages = [
     "Find the farthest point you can see.",
     "Let your eyes soften at the edges.",
     "Notice the room beyond the screen."
   ];
-  let presentationOffsetMs = $derived(
-    Math.max(0, Date.now() - (deadlineMs - durationSeconds * 1_000))
+  const initialMonotonicMs = performance.now();
+  const initialWallMs = Date.now();
+  let fallbackClock = $derived(
+    createOverlayClock(durationSeconds, deadlineMs, initialWallMs, initialMonotonicMs)
   );
+
+  let presentationOffsetMs = $derived(presentationOffset(fallbackClock));
   let presentationStyle = $derived(`--presentation-offset: ${presentationOffsetMs}ms`);
 
-  let now = $state(Date.now());
+  let monotonicNowMs = $state(initialMonotonicMs);
+  let wallNowMs = $state(Date.now());
+  let nativeClock = $state<OverlayClockAnchor | null>(null);
   let dismissing = $state(false);
   let actionPending = $state(false);
   let actionError = $state<string | null>(null);
+  let syncError = $state<string | null>(null);
+  let recoveryTimer: number | undefined;
 
   let durationMs = $derived(Math.max(1_000, durationSeconds * 1_000));
-  let remainingMs = $derived(Math.max(0, deadlineMs - now));
+  let remainingMs = $derived(remainingAt(nativeClock ?? fallbackClock, monotonicNowMs));
   let elapsedMs = $derived(Math.max(0, durationMs - remainingMs));
   let secondsLeft = $derived(Math.ceil(remainingMs / 1_000));
   let remainingFraction = $derived(Math.min(1, Math.max(0, remainingMs / durationMs)));
@@ -46,7 +66,7 @@
   );
   let countdown = $derived(formatCountdown(secondsLeft));
   let clock = $derived(
-    new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit" }).format(now)
+    new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit" }).format(wallNowMs)
   );
   let announcement = $derived(
     complete
@@ -56,25 +76,30 @@
         : ""
   );
 
-  function formatCountdown(totalSeconds: number): string {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-  }
-
   function errorMessage(value: unknown): string {
     return value instanceof Error ? value.message : String(value);
   }
 
+  function beginDismissing() {
+    dismissing = true;
+    if (recoveryTimer !== undefined) window.clearTimeout(recoveryTimer);
+    recoveryTimer = window.setTimeout(() => {
+      dismissing = false;
+      actionError ??= "The native window did not close. Press Escape to try again.";
+    }, 2_500);
+  }
+
   async function closePreview() {
-    if (actionPending || dismissing || complete) return;
+    if (actionPending) return;
 
     actionPending = true;
-    dismissing = true;
+    actionError = null;
+    beginDismissing();
     try {
       await onClose();
     } catch (value) {
       dismissing = false;
+      if (recoveryTimer !== undefined) window.clearTimeout(recoveryTimer);
       actionError = errorMessage(value);
     } finally {
       actionPending = false;
@@ -89,35 +114,47 @@
 
   onMount(() => {
     let disposed = false;
-    let unlisten: (() => void) | undefined;
+    const unlisteners: Array<() => void> = [];
     let timer: number | undefined;
 
     const tick = () => {
-      now = Date.now();
-      const millisecondsLeft = Math.max(0, deadlineMs - now);
-      if (millisecondsLeft === 0) return;
-
-      const boundaryRemainder = millisecondsLeft % 1_000;
-      const delay = boundaryRemainder === 0 ? 1_000 : boundaryRemainder + 16;
-      timer = window.setTimeout(tick, Math.min(delay, 1_000));
+      monotonicNowMs = performance.now();
+      wallNowMs = Date.now();
+      timer = window.setTimeout(tick, 250);
     };
 
     tick();
 
-    void listen("unfocus-overlay-closing", () => {
-      dismissing = true;
-    }).then((stopListening) => {
-      if (disposed) {
-        stopListening();
-      } else {
-        unlisten = stopListening;
-      }
+    function register<T>(eventName: string, handler: (payload: T) => void) {
+      void listen<T>(eventName, (event) => handler(event.payload))
+        .then((stopListening) => {
+          if (disposed) stopListening();
+          else unlisteners.push(stopListening);
+        })
+        .catch((value: unknown) => {
+          if (!disposed) syncError = `Native ${eventName} updates unavailable: ${errorMessage(value)}`;
+        });
+    }
+
+    register<OverlayTick>("unfocus-overlay-tick", (payload) => {
+      if (payload.runId !== runId || !Number.isFinite(payload.remainingMs)) return;
+      const sampledAt = performance.now();
+      nativeClock = anchorFromRemaining(durationMs, payload.remainingMs, sampledAt);
+      monotonicNowMs = sampledAt;
     });
+    register<OverlayComplete>("unfocus-overlay-complete", (payload) => {
+      if (payload.runId !== runId) return;
+      const sampledAt = performance.now();
+      nativeClock = anchorFromRemaining(durationMs, 0, sampledAt);
+      monotonicNowMs = sampledAt;
+    });
+    register<undefined>("unfocus-overlay-closing", () => beginDismissing());
 
     return () => {
       disposed = true;
       if (timer !== undefined) window.clearTimeout(timer);
-      unlisten?.();
+      if (recoveryTimer !== undefined) window.clearTimeout(recoveryTimer);
+      for (const stopListening of unlisteners) stopListening();
     };
   });
 </script>
@@ -156,7 +193,7 @@
       class="timer"
       role="timer"
       aria-live="off"
-      aria-label={`${secondsLeft} seconds remaining`}
+      aria-label={complete ? "Break complete" : `${secondsLeft} seconds remaining`}
     >
       <svg viewBox="0 0 40 40" aria-hidden="true">
         <circle class="ring-track" cx="20" cy="20" r="15.9" pathLength="100"></circle>
@@ -176,16 +213,19 @@
   </section>
 
   <footer class="overlay-controls">
-    <button class="skip-button" type="button" onclick={closePreview} disabled={actionPending || complete}>
+    <button class="skip-button" type="button" onclick={closePreview} disabled={actionPending}>
       <svg viewBox="0 0 20 20" aria-hidden="true">
         <path d="m4.5 5 5 5-5 5M10.5 5l5 5-5 5"></path>
       </svg>
-      Close preview
+      End break
     </button>
     <p class="shortcut">Press <kbd>Esc</kbd> to close</p>
     <p class="display-label">Display {monitorIndex + 1} of {monitorCount}</p>
     {#if actionError}
       <p class="action-error" role="alert">Could not close the break: {actionError}</p>
+    {/if}
+    {#if syncError}
+      <p class="sync-error" role="status">{syncError}</p>
     {/if}
   </footer>
 
@@ -201,10 +241,15 @@
   .break-overlay {
     position: fixed;
     inset: 0;
+    display: grid;
+    height: 100vh;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: clamp(14px, 3vh, 30px);
     isolation: isolate;
-    overflow: hidden;
+    overflow: auto;
     min-width: 320px;
     min-height: 100vh;
+    padding: max(24px, 4.8vh) max(28px, 5vw) max(22px, 4.5vh);
     color: #f0f7f3;
     background: #060f0d;
   }
@@ -212,10 +257,6 @@
   .break-overlay.closing {
     pointer-events: none;
     animation: overlay-dismiss 460ms cubic-bezier(0.4, 0, 1, 1) forwards;
-  }
-
-  .break-overlay.complete:not(.closing) {
-    animation: overlay-complete 820ms 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
   }
 
   .atmosphere {
@@ -294,10 +335,7 @@
   }
 
   .overlay-header {
-    position: absolute;
-    top: max(34px, 4.8vh);
-    right: max(44px, 5vw);
-    left: max(44px, 5vw);
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -310,7 +348,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    color: rgba(222, 238, 229, 0.66);
+    color: rgba(235, 246, 239, 0.78);
     font-size: 0.72rem;
     font-weight: 650;
     letter-spacing: 0.15em;
@@ -322,34 +360,37 @@
     height: 7px;
     border-radius: 50%;
     background: #7dcf9b;
-    box-shadow: 0 0 18px rgba(125, 207, 155, 0.66);
   }
 
   .overlay-header time {
-    color: rgba(222, 238, 229, 0.7);
+    color: rgba(235, 246, 239, 0.78);
     font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.04em;
   }
 
   .break-content {
-    position: absolute;
-    top: 48%;
-    left: 50%;
+    position: relative;
     display: flex;
     width: min(88vw, 960px);
+    max-height: 100%;
+    min-height: 0;
     flex-direction: column;
     align-items: center;
+    align-self: center;
+    justify-self: center;
+    overflow: auto;
+    padding: 8px 0;
     text-align: center;
     opacity: 0;
-    transform: translate3d(-50%, calc(-50% + 18px), 0) scale(0.985);
+    transform: translate3d(0, 18px, 0) scale(0.985);
     animation: content-reveal 1.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     animation-delay: calc(180ms - var(--presentation-offset));
   }
 
   .eyebrow {
     margin: 0 0 26px;
-    color: rgba(159, 216, 180, 0.6);
+    color: rgba(190, 232, 205, 0.82);
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 0.7rem;
     font-weight: 500;
@@ -369,12 +410,14 @@
     text-wrap: balance;
     text-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
     animation: message-arrive 650ms cubic-bezier(0.22, 1, 0.36, 1);
+    animation-delay: calc(0ms - var(--presentation-offset));
+    animation-fill-mode: both;
   }
 
   .guidance {
     max-width: 520px;
     margin: 20px 0 0;
-    color: rgba(210, 229, 216, 0.55);
+    color: rgba(226, 239, 230, 0.76);
     font-size: clamp(0.82rem, 1.05vw, 1rem);
     line-height: 1.55;
   }
@@ -417,19 +460,18 @@
   }
 
   .timer-digits {
-    color: rgba(233, 243, 236, 0.66);
+    color: rgba(240, 248, 243, 0.82);
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.08em;
     animation: digits-arrive 210ms ease-out;
+    animation-delay: calc(0ms - var(--presentation-offset));
+    animation-fill-mode: both;
   }
 
   .overlay-controls {
-    position: absolute;
-    right: 0;
-    bottom: max(30px, 4.5vh);
-    left: 0;
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -494,30 +536,33 @@
 
   .shortcut,
   .display-label,
-  .action-error {
+  .action-error,
+  .sync-error {
     margin: 10px 0 0;
-    color: rgba(186, 211, 195, 0.38);
-    font-size: 0.61rem;
+    color: rgba(228, 240, 232, 0.74);
+    font-size: 0.68rem;
+    line-height: 1.35;
+    text-align: center;
   }
 
   kbd {
     display: inline-block;
     min-width: 25px;
     margin: 0 3px;
-    border: 1px solid rgba(207, 228, 215, 0.14);
+    border: 1px solid rgba(226, 240, 231, 0.38);
     border-radius: 5px;
     padding: 2px 5px;
-    color: rgba(221, 236, 226, 0.6);
-    background: rgba(255, 255, 255, 0.04);
+    color: #edf7f0;
+    background: rgba(255, 255, 255, 0.08);
     font: inherit;
   }
 
   .display-label {
     margin-top: 7px;
-    opacity: 0.55;
   }
 
-  .action-error {
+  .action-error,
+  .sync-error {
     color: #f1b0a7;
   }
 
@@ -545,11 +590,11 @@
   @keyframes content-reveal {
     from {
       opacity: 0;
-      transform: translate3d(-50%, calc(-50% + 18px), 0) scale(0.985);
+      transform: translate3d(0, 18px, 0) scale(0.985);
     }
     to {
       opacity: 1;
-      transform: translate3d(-50%, -50%, 0) scale(1);
+      transform: translate3d(0, 0, 0) scale(1);
     }
   }
 
@@ -621,38 +666,62 @@
     }
   }
 
-  @keyframes overlay-complete {
-    0%,
-    28% {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
-  }
-
   @media (max-height: 760px) {
-    .break-content {
-      top: 45%;
+    .break-overlay {
+      gap: 10px;
+      padding-top: 18px;
+      padding-bottom: 16px;
     }
 
     .message {
-      font-size: clamp(2rem, 4.5vw, 4.3rem);
+      font-size: clamp(1.8rem, 4.2vw, 3.4rem);
     }
 
     .timer {
-      margin-top: 20px;
+      margin-top: 14px;
     }
 
-    .overlay-controls {
-      bottom: 22px;
+    .guidance {
+      margin-top: 10px;
+    }
+
+    .eyebrow {
+      margin-bottom: 12px;
+    }
+  }
+
+  @media (max-height: 520px) {
+    .break-overlay {
+      grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .overlay-header,
+    .guidance,
+    .shortcut,
+    .display-label {
+      display: none;
+    }
+
+    .timer svg {
+      width: 42px;
+      height: 42px;
+    }
+
+    .skip-button {
+      min-height: 40px;
+      padding-block: 8px;
     }
   }
 
   @media (prefers-contrast: more) {
     .message,
     .guidance,
-    .timer-digits {
+    .timer-digits,
+    .eyebrow,
+    .wordmark,
+    .overlay-header time,
+    .shortcut,
+    .display-label {
       color: #ffffff;
       text-shadow: 0 2px 16px #000000;
     }
@@ -673,7 +742,7 @@
     }
 
     .break-content {
-      transform: translate3d(-50%, -50%, 0);
+      transform: none;
     }
 
     .atmosphere :global(.ridge-1),
@@ -698,8 +767,7 @@
       transition: none;
     }
 
-    .break-overlay.closing,
-    .break-overlay.complete:not(.closing) {
+    .break-overlay.closing {
       animation: overlay-dismiss 120ms linear forwards;
     }
   }
