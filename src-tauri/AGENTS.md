@@ -12,11 +12,12 @@ orchestration, OS probes, timing, and diagnostics.
 - IMPORTANT: probes return a `Result` per poll. On failure, surface the error
   in diagnostics and keep the timer running. A probe must never panic, guess,
   or change timer behavior.
-- `platform_probe` has one `cfg`-selected arm per platform. Linux reads idle
-  from XScreenSaver and fullscreen from EWMH `_NET_WM_STATE`. macOS reads idle
-  from `CGEventSourceSecondsSinceLastEventType` and compares the frontmost
-  layer-0 window's `kCGWindowBounds` with every active display. Every other
-  platform returns an error naming itself.
+- `platform_probe` has one `cfg`-selected arm per platform. Linux support is
+  limited to X11: it reads idle from XScreenSaver and fullscreen from EWMH
+  `_NET_WM_STATE`; Wayland is unsupported. macOS reads idle from
+  `CGEventSourceSecondsSinceLastEventType` and compares the frontmost layer-0
+  window's `kCGWindowBounds` with every active display. Windows has no probes,
+  and unsupported platforms return an error naming themselves.
 - Keep platform-independent logic outside the platform arms. The fullscreen
   rectangle comparison is gated with `any(target_os = "macos", test)`. Both
   halves are required: removing the gate trips `dead_code` under Linux clippy;

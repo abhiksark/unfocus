@@ -71,7 +71,7 @@ line tools on macOS — plus the Bun and Rust versions declared in
 `.bun-version` and `rust-toolchain.toml`, then:
 
 ```sh
-bun install
+bun install --frozen-lockfile
 bun run tauri dev
 ```
 
