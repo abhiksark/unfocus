@@ -55,9 +55,10 @@ rechecked with the complete quality gate before packaging fans out to Linux
 (`.deb`, `.rpm`, `.AppImage`), Windows, macOS arm64, and macOS x86_64. A
 credential-isolated publisher then creates a draft pre-release with checksums
 and build-provenance attestations, a CycloneDX SBOM, and third-party notices.
-Published releases are never overwritten. A tag may carry a prerelease label
-(`v0.1.0-rc1`); the packages it builds are still named for the declared
-version, so a candidate and its final release produce identically named files.
+Published releases are never overwritten. The declared version may carry a
+prerelease label (`0.1.0-alpha.1`) and the tag must match it exactly, so
+artifacts are named for the release they belong to. Only the Windows MSI's
+internal version differs — it is numeric-only and carries the `0.1.0` core.
 **No tagged release exists yet**, so the Release badge will read "no status"
 until the first one. Artifacts are not code-signed or notarized; see the
 release notes for platform support and download-verification details.

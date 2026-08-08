@@ -1,6 +1,6 @@
 [package]
 name = "unfocus"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 description = "A local-first eye-break reminder"
 authors = ["Unfocus contributors"]
 edition = "2021"
@@ -20,7 +20,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
