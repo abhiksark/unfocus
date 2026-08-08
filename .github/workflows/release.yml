@@ -90,7 +90,7 @@ jobs:
           bun run sbom:generate release-metadata/unfocus.cdx.json
           cp THIRD_PARTY_NOTICES.txt release-metadata/
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-metadata
           path: release-metadata/*
@@ -156,7 +156,7 @@ jobs:
           TAURI_ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
         run: bun run scripts/collect-release-artifacts.js release-artifacts
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-${{ matrix.name }}
           path: release-artifacts/*
