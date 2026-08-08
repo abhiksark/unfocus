@@ -1,12 +1,17 @@
 # Unfocus
 
 [![CI](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml)
-[![Release](https://github.com/abhiksark/unfocus/actions/workflows/release.yml/badge.svg)](https://github.com/abhiksark/unfocus/actions/workflows/release.yml)
+[![Release](https://img.shields.io/github/v/release/abhiksark/unfocus?include_prereleases&sort=semver)](https://github.com/abhiksark/unfocus/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Qualified platform: Linux X11](https://img.shields.io/badge/qualified-Linux%20X11-4f8a66.svg)](#platform-status)
 [![Built with Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24c8db.svg)](https://v2.tauri.app)
 
 A break reminder that asks one thing of you: look at something far away.
+
+[Releases](https://github.com/abhiksark/unfocus/releases) ·
+[Report a bug](https://github.com/abhiksark/unfocus/issues/new?template=bug_report.yml) ·
+[Request a feature](https://github.com/abhiksark/unfocus/issues/new?template=feature_request.yml) ·
+[Security](https://github.com/abhiksark/unfocus/security/policy)
 
 ![The Unfocus break screen, a generated night landscape with a countdown](.github/media/break-resting.png)
 
@@ -18,13 +23,20 @@ watched. The whole point is that you stop looking at the screen.
 
 ## Download the alpha
 
-The current alpha is available from [GitHub Releases](https://github.com/abhiksark/unfocus/releases)
-as Linux `.deb`, `.rpm`, and `.AppImage` packages, Windows `.msi` and setup
-packages, and macOS arm64 and x86_64 disk images.
+Download the current alpha from [GitHub Releases](https://github.com/abhiksark/unfocus/releases)
+and choose the package for your system:
 
-These early builds are not code-signed or notarized. Read the release notes
-for platform limitations and verify downloads with the accompanying
-`SHA256SUMS` file and GitHub build-provenance attestations.
+| Platform | Choose | Status and first-run notes |
+| --- | --- | --- |
+| Linux X11 | `.deb` for Debian or Ubuntu, `.rpm` for Fedora or RHEL, or `.AppImage` for a portable build | Qualified; Wayland is unsupported |
+| Windows x64 | Setup `.exe` for a normal install or `.msi` for managed installation | Early build; idle and fullscreen probes are unavailable |
+| macOS Apple silicon | `aarch64.dmg` | Preview; right-click the app and choose **Open** on first launch |
+| macOS Intel | `x64.dmg` | Preview; right-click the app and choose **Open** on first launch |
+
+These early builds are not code-signed or notarized. Download only from the
+official releases page, read the release notes, and verify packages with the
+accompanying `SHA256SUMS` file and GitHub build-provenance attestations.
+Unfocus does not update itself yet, so check the releases page for new builds.
 
 ## How it works
 
@@ -39,6 +51,9 @@ for platform limitations and verify downloads with the accompanying
   crashing, guessing, or silently disabling future breaks
 - Runs local-first: no account, telemetry, cloud dependency, or packaged-app
   network calls
+
+The alpha currently uses a fixed twenty-minute work interval and twenty-second
+break. Timing settings are not implemented yet.
 
 ![The same scene near the end of a break, with amber dawn light rising behind the summit](.github/media/break-returning.png)
 
@@ -145,7 +160,7 @@ touching the SVG by hand.
 
 ## License
 
-[MIT](LICENSE). The vendored Fraunces font remains under the
-[SIL Open Font License 1.1](static/fonts/OFL.txt). Generated dependency license
-texts and notices are bundled with every package and tracked in
-[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
+- Unfocus source code: [MIT](LICENSE)
+- Vendored Fraunces font: [SIL Open Font License 1.1](static/fonts/OFL.txt)
+- Dependency license texts and notices: bundled with every package and tracked
+  in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)
