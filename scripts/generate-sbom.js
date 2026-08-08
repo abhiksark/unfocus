@@ -79,6 +79,7 @@ for (const pkg of cargoMetadata.packages) {
 const bunLock = (await import(pathToFileURL(join(root, "bun.lock")).href)).default;
 const bunPackages = [];
 const bunPackagesByName = new Map();
+const bunPackagesByLockKey = new Map();
 for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
   if (!Array.isArray(entry) || typeof entry[0] !== "string") {
     throw new Error("bun.lock contains an invalid package entry");
@@ -90,13 +91,21 @@ for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
   const name = entry[0].slice(0, separator);
   const version = entry[0].slice(separator + 1);
   const manifest = installedNodePackages.get(`${name}@${version}`);
-  const platformLicense = name.startsWith("@esbuild/") || name.startsWith("@rollup/") || name === "fsevents"
+  const platformLicense =
+    name.startsWith("@esbuild/") ||
+    name.startsWith("@rollup/") ||
+    name.startsWith("@rolldown/binding-") ||
+    name === "fsevents"
     ? "MIT"
-    : name.startsWith("@tauri-apps/cli-")
-      ? "Apache-2.0 OR MIT"
-      : name.startsWith("@napi-rs/lzma-")
-        ? "MIT"
-        : null;
+    : name.startsWith("@typescript/typescript-")
+      ? "Apache-2.0"
+      : name.startsWith("lightningcss-")
+        ? "MPL-2.0"
+        : name.startsWith("@tauri-apps/cli-")
+          ? "Apache-2.0 OR MIT"
+          : name.startsWith("@napi-rs/lzma-")
+            ? "MIT"
+            : null;
   const purl = npmPurl(name, version);
   const integrity = typeof entry[3] === "string" ? entry[3].match(/^sha512-(.+)$/) : null;
   const metadata = entry[2] ?? {};
@@ -128,6 +137,10 @@ for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
   });
   const record = { lockKey, name, version, ref: purl, metadata };
   bunPackages.push(record);
+  if (bunPackagesByLockKey.has(lockKey)) {
+    throw new Error(`bun.lock contains a duplicate package key: ${lockKey}`);
+  }
+  bunPackagesByLockKey.set(lockKey, record);
   const versions = bunPackagesByName.get(name) ?? [];
   versions.push(record);
   bunPackagesByName.set(name, versions);
@@ -192,7 +205,8 @@ function resolveBunDependency(owner, name, range, optional) {
   if (typeof range !== "string" || range.length === 0) {
     throw new Error(`${owner} has an invalid dependency range for ${name}`);
   }
-  const candidates = bunPackagesByName.get(name) ?? [];
+  const candidates = bunPackagesByName.get(name) ??
+    (bunPackagesByLockKey.has(name) ? [bunPackagesByLockKey.get(name)] : []);
   const matches = candidates.filter((candidate) => Bun.semver.satisfies(candidate.version, range));
   if (matches.length === 1) return matches[0].ref;
   if (matches.length === 0 && optional && candidates.length === 0) return null;
