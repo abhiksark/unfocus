@@ -44,11 +44,11 @@ is not supported yet.
 
 ## Builds
 
-CI runs on every push to `main`, every pull request, and a weekly schedule. It
-gates on frontend unit tests, `svelte-check`, the production frontend build,
-dependency policy, `cargo fmt --check`, `cargo clippy` with warnings denied,
-and `cargo test`. macOS and Windows also receive a compile check before code is
-merged. The badge above reflects that run.
+CI runs on every push to `main` or `dev`, every pull request, and a weekly
+schedule. It gates on frontend unit tests, `svelte-check`, the production
+frontend build, dependency policy, `cargo fmt --check`, `cargo clippy` with
+warnings denied, and `cargo test`. macOS and Windows also receive a compile
+check before code is merged. The badge above reflects that run.
 
 Releases are cut from a tagged commit already contained in `main`. The tag is
 rechecked with the complete quality gate before packaging fans out to Linux
