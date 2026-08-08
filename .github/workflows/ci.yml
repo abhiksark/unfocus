@@ -19,6 +19,20 @@ env:
   RUST_VERSION: 1.97.1
 
 jobs:
+  branch-policy:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Enforce the pull request flow
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ] && [ "$BASE_REF" = main ] && [ "$HEAD_REF" != dev ]; then
+            echo "::error::Pull requests into main must come from dev. Target dev for normal development."
+            exit 1
+          fi
+
   versions:
     runs-on: ubuntu-24.04
     steps:
@@ -120,17 +134,19 @@ jobs:
   required:
     name: Required CI
     if: ${{ always() }}
-    needs: [versions, check, dependency-audit, platform-check]
+    needs: [branch-policy, versions, check, dependency-audit, platform-check]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - name: Require every CI job to pass
         env:
+          BRANCH_POLICY_RESULT: ${{ needs.branch-policy.result }}
           CHECK_RESULT: ${{ needs.check.result }}
           DEPENDENCY_AUDIT_RESULT: ${{ needs.dependency-audit.result }}
           PLATFORM_CHECK_RESULT: ${{ needs.platform-check.result }}
           VERSIONS_RESULT: ${{ needs.versions.result }}
         run: |
+          test "$BRANCH_POLICY_RESULT" = success
           test "$VERSIONS_RESULT" = success
           test "$CHECK_RESULT" = success
           test "$DEPENDENCY_AUDIT_RESULT" = success

@@ -25,16 +25,19 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
 
 ## Branching and SemVer strategy
 
-- `main` is the protected release branch. It must always be release-ready and
-  receives normal development only through a batch promotion from `dev`.
-- `dev` is the protected integration branch, the GitHub default branch, and
-  the base for normal work.
+- `main` is the protected release branch and the GitHub default branch. It
+  must always be release-ready and receives normal development only through a
+  batch promotion from `dev`.
+- `dev` is the protected integration branch and the base for normal work.
 - `main` and `dev` are the only long-lived branches. Start short-lived branches
   from current `dev` and name them by purpose: `feature/<slug>`, `fix/<slug>`,
   `docs/<slug>`, `chore/<slug>`, or `refactor/<slug>`.
 - Open normal pull requests from the short-lived branch into `dev`. Do not
   target `main` directly. Prefer squash merges into `dev`, then delete the
   merged work branch.
+- Because GitHub preselects the default branch as a new pull request's base,
+  verify the base explicitly. CI rejects a pull request into `main` unless its
+  head branch is `dev`.
 - Promote a coherent, reviewed, releasable batch with one pull request from
   `dev` into `main`. Use a merge commit for this promotion so the batch has a
   visible boundary. Do not add unrelated fixes directly to the promotion PR.
@@ -50,9 +53,9 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
   short-lived branch.
 - Dependabot updates follow the same integration path and target `dev`. Keep
   `.github/dependabot.yml` aligned.
-- A main-only emergency fix is an explicit exception, not a second normal
-  workflow. It requires user approval and must be merged back into `dev` before
-  more batches are promoted.
+- Urgent fixes still use a short-lived `fix/<slug>` branch into `dev`, followed
+  by an expedited `dev` to `main` promotion. Do not bypass the integration
+  branch.
 
 ## Pull requests and Dependabot
 

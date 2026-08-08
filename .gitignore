@@ -10,9 +10,10 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# working notes stay local; only the README and agent guidance are tracked
+# working notes stay local; repository policy and agent guidance are tracked
 *.md
 !README.md
+!.github/SECURITY.md
 !CLAUDE.md
 !AGENTS.md
 !**/CLAUDE.md
