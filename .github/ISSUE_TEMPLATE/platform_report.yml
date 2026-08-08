@@ -94,7 +94,7 @@ body:
         - label: The scene filled each display correctly, including HiDPI ones — no black band, no wrongly scaled scene.
         - label: Every display showed the same countdown value at the same moment.
         - label: Escape dismissed the overlay on every display at once, not just the focused one.
-        - label: Clicking once dismissed the overlay on every display at once.
+        - label: Selecting **End break** dismissed the overlay on every display at once.
         - label: Idle seconds on the dashboard climbed while I kept my hands off, and reset when I typed.
         - label: Active fullscreen flipped to Yes when another app went fullscreen — and did not read Yes merely because an Unfocus overlay was up.
         - label: Turning on the system reduce-motion setting stopped every animation in the scene.

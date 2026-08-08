@@ -73,8 +73,8 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
 
 ## Release invariants
 
-- A release tag must point to a commit already contained in `main` and match
-  the complete declared version exactly.
+- A release tag must point to a commit already contained in `main` and equal
+  the complete declared version with a `v` prefix.
 - The quality job runs before packaging. Build jobs do not receive release
   credentials; the publisher alone receives narrowly scoped write,
   provenance, and attestation permissions through the `release` environment.
