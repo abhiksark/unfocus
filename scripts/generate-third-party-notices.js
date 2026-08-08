@@ -168,6 +168,15 @@ for (const entry of Object.values(bunLock.packages)) {
   if (files.length === 0 && name.startsWith("@rollup/")) {
     files = licenseFiles(join(root, "node_modules", "rollup"));
   }
+  if (files.length === 0 && name.startsWith("@rolldown/binding-")) {
+    files = licenseFiles(join(root, "node_modules", "rolldown"));
+  }
+  if (files.length === 0 && name.startsWith("@typescript/typescript-")) {
+    files = licenseFiles(join(root, "node_modules", "@typescript", "native"));
+  }
+  if (files.length === 0 && name.startsWith("lightningcss-")) {
+    files = licenseFiles(join(root, "node_modules", "lightningcss"));
+  }
   if (files.length === 0 && name.startsWith("@tauri-apps/cli-")) {
     files = licenseFiles(join(root, "node_modules", "@tauri-apps", "cli"));
   }
@@ -183,16 +192,22 @@ for (const entry of Object.values(bunLock.packages)) {
     ? { license: "MIT", authors: ["Evan Wallace and esbuild contributors"] }
     : name.startsWith("@rollup/")
       ? { license: "MIT", authors: ["Lukas Taegert-Atkinson"] }
-      : name.startsWith("@tauri-apps/cli-")
-        ? { license: "Apache-2.0 OR MIT", authors: ["Tauri Programme within The Commons Conservancy"] }
-        : name.startsWith("@napi-rs/lzma-")
-          ? { license: "MIT", authors: ["Brooooooklyn/lzma contributors"] }
-          : name === "fsevents"
-            ? {
-                license: "MIT",
-                authors: ["Philipp Dunkel", "Ben Noordhuis", "Elan Shankar", "Miroslav Bajtoš", "Paul Miller"]
-              }
-            : null;
+      : name.startsWith("@rolldown/binding-")
+        ? { license: "MIT", authors: ["VoidZero Inc. & Contributors"] }
+        : name.startsWith("@typescript/typescript-")
+          ? { license: "Apache-2.0", authors: ["Microsoft Corp."] }
+          : name.startsWith("lightningcss-")
+            ? { license: "MPL-2.0", authors: [] }
+            : name.startsWith("@tauri-apps/cli-")
+              ? { license: "Apache-2.0 OR MIT", authors: ["Tauri Programme within The Commons Conservancy"] }
+              : name.startsWith("@napi-rs/lzma-")
+                ? { license: "MIT", authors: ["Brooooooklyn/lzma contributors"] }
+                : name === "fsevents"
+                  ? {
+                      license: "MIT",
+                      authors: ["Philipp Dunkel", "Ben Noordhuis", "Elan Shankar", "Miroslav Bajtoš", "Paul Miller"]
+                    }
+                  : null;
   components.push({
     ecosystem: "JavaScript",
     name,
