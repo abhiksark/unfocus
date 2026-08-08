@@ -2593,12 +2593,12 @@ Declared license: MIT
 Upstream authors: daggerbot <daggerbot@gmail.com>, Erle Pereira <erle@erlepereira.com>, AltF02 <contact@altf2.dev>
 License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
 
-Rust: x11rb-protocol@0.13.2
+Rust: x11rb-protocol@0.14.0
 Declared license: MIT OR Apache-2.0
 Upstream authors: Uli Schlachter <psychon@znc.in>, Eduardo Sánchez Muñoz <eduardosm-dev@e64.io>, notgull <jtnunley01@gmail.com>
 License text IDs: 50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a, a72561f47c1f665535930f606739d9098a6186802d5e2e8ec491faf00f4add5b
 
-Rust: x11rb@0.13.2
+Rust: x11rb@0.14.0
 Declared license: MIT OR Apache-2.0
 Upstream authors: Uli Schlachter <psychon@znc.in>, Eduardo Sánchez Muñoz <eduardosm-dev@e64.io>, notgull <jtnunley01@gmail.com>
 License text IDs: 50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a, a72561f47c1f665535930f606739d9098a6186802d5e2e8ec491faf00f4add5b
@@ -10187,8 +10187,8 @@ Used by:
   - Rust: serialize-to-javascript@0.1.2
   - Rust: tinyvec@1.12.0
   - Rust: utf8_iter@1.0.4
-  - Rust: x11rb-protocol@0.13.2
-  - Rust: x11rb@0.13.2
+  - Rust: x11rb-protocol@0.14.0
+  - Rust: x11rb@0.14.0
 -------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004
@@ -15460,8 +15460,8 @@ SOFTWARE.
 ===============================================================================
 License text ID: a72561f47c1f665535930f606739d9098a6186802d5e2e8ec491faf00f4add5b
 Used by:
-  - Rust: x11rb-protocol@0.13.2
-  - Rust: x11rb@0.13.2
+  - Rust: x11rb-protocol@0.14.0
+  - Rust: x11rb@0.14.0
 -------------------------------------------------------------------------------
 Copyright 2019 x11rb Contributers
 
