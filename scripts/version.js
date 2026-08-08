@@ -18,14 +18,14 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CRATE = "unfocus";
-const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+// The numeric core, which is all a Windows MSI ProductVersion can express.
+const CORE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
-// A release tag may carry a prerelease label that the declared version cannot:
-// a Windows MSI ProductVersion has no way to express one, so packages stay
-// X.Y.Z while the tag marks the candidate. The numeric core is still compared
-// exactly, so a v0.2.0 tag can never ship 0.1.0 artifacts.
-const TAG =
-  /^v(?<core>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))(?:-(?<prerelease>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+// The declared version, which may carry a prerelease label so that artifacts
+// are named for the release they belong to. Build metadata stays out: it does
+// not order, and nothing downstream reads it.
+const VERSION =
+  /^(?<core>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))(?:-(?<prerelease>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
 const FILES = {
   packageJson: join(ROOT, "package.json"),
@@ -56,6 +56,33 @@ function writeJsonVersion(text, next, label) {
   if (!JSON_VERSION.test(text)) throw new Error(`${label}: no top-level "version" key found`);
   const out = text.replace(JSON_VERSION, (_, before, __, after) => `${before}${next}${after}`);
   JSON.parse(out); // refuse to emit invalid JSON
+  return out;
+}
+
+// bundle.windows.wix.version, read by parsing so nesting cannot fool it, and
+// written against the wix block alone so the top-level version is untouched.
+const WIX_VERSION = /("wix"\s*:\s*\{\s*)"version"(\s*:\s*")([^"]+)(")/;
+
+function readWixVersion(text, label) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${label}: not valid JSON: ${error.message}`);
+  }
+  const version = parsed?.bundle?.windows?.wix?.version;
+  if (typeof version !== "string") {
+    throw new Error(`${label}: no bundle.windows.wix.version string`);
+  }
+  return version;
+}
+
+function writeWixVersion(text, next, label) {
+  if (!WIX_VERSION.test(text)) {
+    throw new Error(`${label}: bundle.windows.wix.version must be the first key of the wix block`);
+  }
+  const out = text.replace(WIX_VERSION, (_, open, mid, __, close) => `${open}"version"${mid}${next}${close}`);
+  if (readWixVersion(out, label) !== next) throw new Error(`${label}: wix version did not update`);
   return out;
 }
 
@@ -193,43 +220,51 @@ async function check(expect) {
   }
 
   const declared = unique[0];
-  if (!SEMVER.test(declared)) {
-    console.error(`declared version ${declared} is not X.Y.Z`);
+  const parsed = VERSION.exec(declared);
+  if (!parsed) {
+    console.error(`declared version ${declared} is not X.Y.Z or X.Y.Z-prerelease`);
+    process.exit(1);
+  }
+  const { core, prerelease } = parsed.groups;
+
+  // The MSI cannot carry the prerelease label the other declarations do, so it
+  // gets the numeric core and has to stay pinned to it.
+  const wix = readWixVersion(state.tauriConf.text, LABELS.tauriConf);
+  if (wix !== core) {
+    console.error(`bundle.windows.wix.version is ${wix}, expected the numeric core ${core}`);
+    report(state);
+    console.error(`\nfix with: bun run version:set ${declared}`);
     process.exit(1);
   }
 
   if (expect !== undefined) {
-    const tag = TAG.exec(expect);
-    if (!tag) {
-      console.error(`expected tag ${expect} is not vX.Y.Z or vX.Y.Z-prerelease`);
-      process.exit(1);
-    }
-    const { core, prerelease } = tag.groups;
-    if (core !== declared) {
+    if (expect !== `v${declared}`) {
       console.error(`tag ${expect} does not match the declared version ${declared}`);
       report(state);
-      console.error(
-        `\nthe tag must be v${declared} or v${declared}-<prerelease>, or the declared version must be ${core}`
-      );
+      console.error(`\nthe tag must be v${declared}, or the declared version must match the tag`);
       process.exit(1);
     }
-    if (prerelease) {
-      console.log(
-        `ok: ${expect} is a prerelease of all four declarations (${declared}); packages ship as ${declared}`
-      );
-    } else {
-      console.log(`ok: ${expect} matches all four declarations (${declared})`);
-    }
+    console.log(`ok: ${expect} matches all four declarations (${declared}); MSI ships as ${wix}`);
     return;
   }
 
-  console.log(`ok: all four declarations are ${declared}`);
+  console.log(
+    prerelease
+      ? `ok: all four declarations are ${declared}; MSI ships as ${wix}`
+      : `ok: all four declarations are ${declared}`
+  );
 }
 
 async function set(next) {
-  if (!SEMVER.test(next)) {
-    console.error(`refusing ${next}: version must be X.Y.Z`);
-    console.error("prerelease and build metadata cannot round-trip through a Windows MSI ProductVersion");
+  const parsed = VERSION.exec(next);
+  if (!parsed) {
+    console.error(`refusing ${next}: version must be X.Y.Z or X.Y.Z-prerelease`);
+    console.error("build metadata does not order and nothing downstream reads it");
+    process.exit(1);
+  }
+  const core = parsed.groups.core;
+  if (!CORE.test(core)) {
+    console.error(`refusing ${next}: ${core} is not a numeric X.Y.Z core`);
     process.exit(1);
   }
 
@@ -242,7 +277,10 @@ async function set(next) {
 
   try {
     for (const [key, writer] of Object.entries(WRITERS)) {
-      await writeFile(FILES[key], writer(snapshot[key].text, next, LABELS[key]));
+      let text = writer(snapshot[key].text, next, LABELS[key]);
+      // The MSI takes the numeric core; it cannot express the label.
+      if (key === "tauriConf") text = writeWixVersion(text, core, LABELS[key]);
+      await writeFile(FILES[key], text);
     }
     if (haveCargo()) {
       await syncLockWithCargo(next);
@@ -257,6 +295,8 @@ async function set(next) {
     const after = await readAll();
     const bad = Object.keys(FILES).filter((key) => after[key].version !== next);
     if (bad.length) throw new Error(`post-write check failed for: ${bad.map((key) => LABELS[key]).join(", ")}`);
+    const wroteWix = readWixVersion(after.tauriConf.text, LABELS.tauriConf);
+    if (wroteWix !== core) throw new Error(`post-write check failed: wix version is ${wroteWix}, expected ${core}`);
   } catch (error) {
     console.error(`\n${error.message}`);
     await restore(snapshot);

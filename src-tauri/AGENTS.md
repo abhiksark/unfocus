@@ -35,6 +35,11 @@ diagnostics.
   `emit_to(EventTarget::webview_window(..))`, and the overlay subscribes with
   its own label. Both halves are required: either one alone leaves every
   overlay receiving every run's events.
+- The tray icon is per-platform: macOS embeds `icons/tray/tray-template.png`
+  as a template image (black + alpha only), other platforms embed
+  `icons/tray/tray-light.png` (white + alpha). Unit tests enforce both
+  invariants. Regenerate with `bun run tray:generate`; never hand-edit the
+  PNGs or reintroduce an SVG mask into the glyph source.
 - Gate before committing: `cargo fmt --check`, then `cargo clippy` and
   `cargo test` with `--all-targets --all-features --locked` and warnings
   denied.
