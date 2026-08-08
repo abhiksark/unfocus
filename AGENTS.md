@@ -40,6 +40,9 @@ Use Bun for all JS tooling. npm, npx, and pnpm are not used in this repo.
 - `bun run notices:check` / `bun run notices:generate` — THIRD_PARTY_NOTICES.txt
   is generated, never hand-edited
 - `bun run sbom:generate <path>` — CycloneDX SBOM from the locked trees
+- `bun run tray:generate` — regenerate the tray icon PNGs in
+  `src-tauri/icons/tray/` from `unfocus-tray.svg`; needs rsvg-convert. The
+  PNGs are committed generated artifacts, never hand-edited
 
 Before claiming a change done, run the checks for the area you touched.
 Frontend changes need `bun run test`, `bun run check`, and `bun run build` at

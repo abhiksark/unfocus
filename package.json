@@ -22,6 +22,7 @@
     "notices:generate": "bun run scripts/generate-third-party-notices.js",
     "sbom:generate": "bun run scripts/generate-sbom.js",
     "toolchains:check": "bun run scripts/check-toolchain-versions.js",
+    "tray:generate": "bun run scripts/gen-tray-icons.js",
     "version:check": "bun run scripts/version.js check",
     "version:set": "bun run scripts/version.js set"
   },
