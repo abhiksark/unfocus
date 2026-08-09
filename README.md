@@ -27,6 +27,12 @@ watched. The whole point is that you stop looking at the screen.
 Download the current alpha from [GitHub Releases](https://github.com/abhiksark/unfocus/releases)
 and choose the package for your system:
 
+On macOS, install the same prerelease through the public Homebrew tap:
+
+```sh
+brew install --cask abhiksark/unfocus/unfocus@alpha
+```
+
 | Platform | Choose | Status and first-run notes |
 | --- | --- | --- |
 | Linux X11 | `.deb` for Debian or Ubuntu, `.rpm` for Fedora or RHEL, or `.AppImage` for a portable build | Qualified; Wayland is unsupported |
