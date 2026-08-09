@@ -87,6 +87,22 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
 - Current packages are not code-signed or notarized. Release notes must say so
   and retain checksum and build-provenance verification guidance.
 
+## Homebrew tap automation boundary
+
+- The `Unfocus Homebrew Updater` GitHub App is installed only on
+  `abhiksark/homebrew-unfocus`. Its credentials live in the
+  default-branch-restricted `homebrew-tap-automation` environment and mint a
+  token scoped only to that tap.
+- The source repository may use that token only to send the
+  `unfocus-alpha-published` repository dispatch. The tap may use it only to
+  push an automation branch and open a reviewable cask pull request.
+- The App has only Contents and Pull Requests read/write permissions on the
+  tap. It must never be installed on Unfocus or receive Administration,
+  Actions, Environments, or Secrets permissions.
+- Contents and Pull Requests write access must be used only for the automation
+  branch and pull request. The workflows must never alter releases or release
+  assets, merge the App's pull request, or grant the App a ruleset bypass.
+
 ## Repository settings
 
 - Do not infer live branch protection, tag rules, environments, immutable
