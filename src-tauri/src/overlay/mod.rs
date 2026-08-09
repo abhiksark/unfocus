@@ -15,6 +15,7 @@ use std::{
     collections::VecDeque,
     io,
     sync::{
+        atomic::{AtomicUsize, Ordering},
         mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError},
         Arc, Mutex,
     },
@@ -126,6 +127,7 @@ impl OverlayCloseOrigins {
 pub(crate) struct OverlayController {
     sender: SyncSender<OverlayCommand>,
     close_origins: OverlayCloseOrigins,
+    active_runs: Arc<AtomicUsize>,
 }
 
 impl OverlayController {
@@ -133,13 +135,22 @@ impl OverlayController {
         let (sender, receiver) = mpsc::sync_channel(OVERLAY_COMMAND_CAPACITY);
         let close_origins = OverlayCloseOrigins::default();
         let worker_close_origins = close_origins.clone();
+        let active_runs = Arc::new(AtomicUsize::new(0));
+        let worker_active_runs = Arc::clone(&active_runs);
         std::thread::Builder::new()
             .name("unfocus-overlays".into())
-            .spawn(move || run_overlay_worker(app, receiver, worker_close_origins))?;
+            .spawn(move || {
+                run_overlay_worker(app, receiver, worker_close_origins, worker_active_runs);
+            })?;
         Ok(Self {
             sender,
             close_origins,
+            active_runs,
         })
+    }
+
+    pub(crate) fn has_active_run(&self) -> bool {
+        self.active_runs.load(Ordering::Acquire) > 0
     }
 
     fn send(&self, command: OverlayCommand) -> Result<(), String> {
@@ -314,6 +325,7 @@ fn run_overlay_worker(
     app: AppHandle,
     receiver: Receiver<OverlayCommand>,
     close_origins: OverlayCloseOrigins,
+    active_runs: Arc<AtomicUsize>,
 ) {
     let mut runs = Vec::new();
 
@@ -327,10 +339,14 @@ fn run_overlay_worker(
                 }
             }
             Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => break,
+            Err(RecvTimeoutError::Disconnected) => {
+                active_runs.store(0, Ordering::Release);
+                break;
+            }
         }
 
         process_overlay_runs(&app, &close_origins, &mut runs, Instant::now());
+        active_runs.store(runs.len(), Ordering::Release);
     }
 }
 
