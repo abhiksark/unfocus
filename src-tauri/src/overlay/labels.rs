@@ -5,10 +5,12 @@ use std::{
 
 static OVERLAY_RUN_ID: AtomicU64 = AtomicU64::new(1);
 pub(super) const MAX_OVERLAY_MONITORS: usize = 64;
+pub(crate) const MIN_OVERLAY_DURATION_SECONDS: u64 = 3;
+pub(crate) const MAX_OVERLAY_DURATION_SECONDS: u64 = 30;
 const JAVASCRIPT_MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 pub(super) fn bounded_overlay_duration(seconds: u64) -> u64 {
-    seconds.clamp(3, 30)
+    seconds.clamp(MIN_OVERLAY_DURATION_SECONDS, MAX_OVERLAY_DURATION_SECONDS)
 }
 
 fn unix_timestamp_ms() -> u64 {
@@ -81,7 +83,7 @@ pub(crate) fn overlay_run_id_from_label(label: &str) -> Option<u64> {
         || total == 0
         || total > MAX_OVERLAY_MONITORS as u64
         || index >= total
-        || !(3..=30).contains(&duration)
+        || !(MIN_OVERLAY_DURATION_SECONDS..=MAX_OVERLAY_DURATION_SECONDS).contains(&duration)
         || deadline == 0
         || deadline > JAVASCRIPT_MAX_SAFE_INTEGER
     {

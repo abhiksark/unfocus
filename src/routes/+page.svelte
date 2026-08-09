@@ -7,6 +7,14 @@
     type DiagnosticsReport
   } from "$lib/diagnostics";
   import { parseWindowLabel } from "$lib/overlay-label";
+  import {
+    MAX_BREAK_SECONDS,
+    MAX_WORK_MINUTES,
+    MIN_BREAK_SECONDS,
+    MIN_WORK_MINUTES,
+    type ReminderSettings,
+    validateReminderSettings
+  } from "$lib/reminder-settings";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
@@ -20,6 +28,12 @@
   let invalidOverlayCloseError = $state<string | null>(null);
   let refreshing = $state(false);
   let overlayRunning = $state(false);
+  let workMinutesInput = $state("");
+  let breakSecondsInput = $state("");
+  let settingsLoading = $state(true);
+  let settingsSaving = $state(false);
+  let settingsError = $state<string | null>(null);
+  let settingsStatus = $state<string | null>(null);
 
   function errorMessage(value: unknown): string {
     return value instanceof Error ? value.message : String(value);
@@ -29,6 +43,15 @@
   const health = $derived(diagnosticsHealth(report, diagnosticsError));
   const healthLabel = $derived(diagnosticsHealthLabel(health));
   const backend = $derived(probeBackend(report));
+  const settingsValidation = $derived(
+    validateReminderSettings(workMinutesInput, breakSecondsInput)
+  );
+  const workMinutesError = $derived(
+    settingsLoading ? null : settingsValidation.workMinutesError
+  );
+  const breakSecondsError = $derived(
+    settingsLoading ? null : settingsValidation.breakSecondsError
+  );
 
   // A field the running platform simply does not report is not a pending
   // read, so say so rather than implying data is still on its way.
@@ -73,6 +96,70 @@
     }
   }
 
+  function useSettings(settings: ReminderSettings) {
+    workMinutesInput = String(settings.workMinutes);
+    breakSecondsInput = String(settings.breakSeconds);
+  }
+
+  async function loadReminderSettings() {
+    settingsLoading = true;
+    settingsError = null;
+    try {
+      useSettings(await invoke<ReminderSettings>("get_reminder_settings"));
+    } catch (value) {
+      settingsError = `Could not load reminder settings: ${errorMessage(value)}`;
+    } finally {
+      settingsLoading = false;
+    }
+  }
+
+  async function saveReminderSettings() {
+    const settings = settingsValidation.settings;
+    if (!settings || settingsLoading || settingsSaving) return;
+
+    settingsSaving = true;
+    settingsError = null;
+    settingsStatus = null;
+    try {
+      const saved = await invoke<ReminderSettings>("save_reminder_settings", { settings });
+      useSettings(saved);
+      settingsStatus =
+        "Saved locally. A running work countdown restarts from now; an active break keeps its current deadline.";
+    } catch (value) {
+      settingsError = `Could not save reminder settings: ${errorMessage(value)}`;
+    } finally {
+      settingsSaving = false;
+    }
+  }
+
+  async function resetReminderSettings() {
+    if (settingsLoading || settingsSaving) return;
+
+    settingsSaving = true;
+    settingsError = null;
+    settingsStatus = null;
+    try {
+      const defaults = await invoke<ReminderSettings>("reset_reminder_settings");
+      useSettings(defaults);
+      settingsStatus =
+        "Defaults restored locally. A running work countdown restarts from now; an active break keeps its current deadline.";
+    } catch (value) {
+      settingsError = `Could not reset reminder settings: ${errorMessage(value)}`;
+    } finally {
+      settingsSaving = false;
+    }
+  }
+
+  function updateWorkMinutes(event: Event) {
+    workMinutesInput = (event.currentTarget as HTMLInputElement).value;
+    settingsStatus = null;
+  }
+
+  function updateBreakSeconds(event: Event) {
+    breakSecondsInput = (event.currentTarget as HTMLInputElement).value;
+    settingsStatus = null;
+  }
+
   async function closeOverlays() {
     if (!overlayParameters) throw new Error("Overlay parameters are unavailable");
     await invoke("close_overlay_test", { runId: overlayParameters.runId });
@@ -112,6 +199,7 @@
     };
 
     updatePolling();
+    void loadReminderSettings();
     document.addEventListener("visibilitychange", updatePolling);
     return () => {
       stopPolling();
@@ -229,6 +317,110 @@
         <strong>{report?.activeWindowFullscreen === true ? "Yes" : report?.activeWindowFullscreen === false ? "No" : "—"}</strong>
         <small>{fullscreenCaption}</small>
       </article>
+    </section>
+
+    <section class="panel settings-panel" aria-labelledby="reminder-settings-title">
+      <div class="settings-copy">
+        <p class="eyebrow">Reminder timing</p>
+        <h2 id="reminder-settings-title">Choose your work and eye-break rhythm</h2>
+        <p>
+          Settings stay on this device. Saving during work starts a fresh work countdown;
+          a break already on screen keeps the deadline it opened with.
+        </p>
+      </div>
+
+      <form
+        class="settings-form"
+        novalidate
+        onsubmit={(event) => {
+          event.preventDefault();
+          void saveReminderSettings();
+        }}
+      >
+        <div class="duration-fields">
+          <div class="duration-field">
+            <label for="work-duration">Work duration</label>
+            <div class="duration-input" class:invalid={workMinutesError}>
+              <input
+                id="work-duration"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                autocomplete="off"
+                value={workMinutesInput}
+                disabled={settingsLoading || settingsSaving}
+                aria-invalid={workMinutesError ? "true" : "false"}
+                aria-describedby={workMinutesError
+                  ? "work-duration-help work-duration-error"
+                  : "work-duration-help"}
+                oninput={updateWorkMinutes}
+              />
+              <span>minutes</span>
+            </div>
+            <small id="work-duration-help">{MIN_WORK_MINUTES}–{MAX_WORK_MINUTES} whole minutes</small>
+            {#if workMinutesError}
+              <small id="work-duration-error" class="field-error">
+                {workMinutesError}
+              </small>
+            {/if}
+          </div>
+
+          <div class="duration-field">
+            <label for="break-duration">Break duration</label>
+            <div class="duration-input" class:invalid={breakSecondsError}>
+              <input
+                id="break-duration"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                autocomplete="off"
+                value={breakSecondsInput}
+                disabled={settingsLoading || settingsSaving}
+                aria-invalid={breakSecondsError ? "true" : "false"}
+                aria-describedby={breakSecondsError
+                  ? "break-duration-help break-duration-error"
+                  : "break-duration-help"}
+                oninput={updateBreakSeconds}
+              />
+              <span>seconds</span>
+            </div>
+            <small id="break-duration-help">{MIN_BREAK_SECONDS}–{MAX_BREAK_SECONDS} whole seconds</small>
+            {#if breakSecondsError}
+              <small id="break-duration-error" class="field-error">
+                {breakSecondsError}
+              </small>
+            {/if}
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button
+            class="primary"
+            type="submit"
+            disabled={settingsLoading || settingsSaving || !settingsValidation.settings}
+          >
+            {settingsSaving ? "Saving…" : "Save timing"}
+          </button>
+          <button
+            class="secondary"
+            type="button"
+            onclick={() => void resetReminderSettings()}
+            disabled={settingsLoading || settingsSaving}
+          >
+            Reset to defaults
+          </button>
+        </div>
+
+        <div class="settings-feedback" aria-live="polite">
+          {#if settingsLoading}
+            <p>Loading saved timing…</p>
+          {:else if settingsError}
+            <p class="settings-error" role="alert">{settingsError}</p>
+          {:else if settingsStatus}
+            <p class="settings-success">{settingsStatus}</p>
+          {/if}
+        </div>
+      </form>
     </section>
 
     <section class="panel">
@@ -506,6 +698,117 @@
     padding: 22px;
   }
 
+  .settings-panel {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.8fr) minmax(380px, 1.2fr);
+    gap: 32px;
+    margin-bottom: 12px;
+  }
+
+  .settings-copy p:not(.eyebrow) {
+    margin: 10px 0 0;
+    color: #abb5ad;
+    font-size: 0.78rem;
+    line-height: 1.55;
+  }
+
+  .settings-form {
+    min-width: 0;
+  }
+
+  .duration-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .duration-field {
+    min-width: 0;
+  }
+
+  .duration-field label {
+    display: block;
+    margin-bottom: 7px;
+    color: #dce7de;
+    font-size: 0.78rem;
+    font-weight: 620;
+  }
+
+  .duration-input {
+    display: flex;
+    align-items: center;
+    border: 1px solid #3a473d;
+    border-radius: 9px;
+    background: #0f1511;
+  }
+
+  .duration-input:focus-within {
+    border-color: #75d38e;
+    box-shadow: 0 0 0 3px rgba(117, 211, 142, 0.12);
+  }
+
+  .duration-input.invalid {
+    border-color: #a95454;
+  }
+
+  .duration-input input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    padding: 10px 5px 10px 12px;
+    color: #edf5ef;
+    background: transparent;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .duration-input input:disabled {
+    color: #8c958e;
+  }
+
+  .duration-input span {
+    flex: 0 0 auto;
+    padding-right: 11px;
+    color: #929c94;
+    font-size: 0.68rem;
+  }
+
+  .duration-field small {
+    display: block;
+    margin-top: 6px;
+    color: #929c94;
+    font-size: 0.66rem;
+    line-height: 1.35;
+  }
+
+  .duration-field .field-error,
+  .settings-error {
+    color: #ffc4c4;
+  }
+
+  .settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .settings-feedback {
+    min-height: 1.2rem;
+    margin-top: 8px;
+  }
+
+  .settings-feedback p {
+    margin: 0;
+    font-size: 0.68rem;
+    line-height: 1.4;
+  }
+
+  .settings-success {
+    color: #b9ddc2;
+  }
+
   .panel-heading {
     padding-bottom: 18px;
   }
@@ -667,6 +970,11 @@
 
     .summary-grid {
       grid-template-columns: repeat(2, 1fr);
+    }
+
+    .settings-panel,
+    .duration-fields {
+      grid-template-columns: 1fr;
     }
 
     header,

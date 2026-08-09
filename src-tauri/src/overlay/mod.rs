@@ -2,7 +2,9 @@ mod labels;
 mod lifecycle;
 mod windows;
 
-pub(crate) use labels::overlay_run_id_from_label;
+pub(crate) use labels::{
+    overlay_run_id_from_label, MAX_OVERLAY_DURATION_SECONDS, MIN_OVERLAY_DURATION_SECONDS,
+};
 pub(crate) use windows::{schedule_automatic_overlay_test, show_overlay};
 
 use crate::authorize_main_caller;
