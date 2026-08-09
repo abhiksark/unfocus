@@ -16,11 +16,12 @@ A break reminder that asks one thing of you: look at something far away.
 
 ![The Unfocus break screen, a generated night landscape with a countdown](.github/media/break-resting.png)
 
-Every twenty minutes, Unfocus covers every monitor with a quiet night scene
-and counts down twenty seconds while your eyes rest on the farthest point you
-can find. When the scene warms to amber, dawn is rising behind the ridge and
-the break is almost over. No streaks, no badges, no mascot asking to be
-watched. The whole point is that you stop looking at the screen.
+By default, every twenty minutes Unfocus covers every monitor with a quiet
+night scene and counts down twenty seconds while your eyes rest on the farthest
+point you can find. You can change both durations from the dashboard. When the
+scene warms to amber, dawn is rising behind the ridge and the break is almost
+over. No streaks, no badges, no mascot asking to be watched. The whole point is
+that you stop looking at the screen.
 
 ## Download the alpha
 
@@ -52,6 +53,8 @@ Unfocus does not update itself yet, so check the releases page for new builds.
 - Signals state through light: cool green while you rest, amber dawn when it
   is time to come back
 - Ends early without a fight: press Escape or select **End break**
+- Lets you choose a 1–120 minute work interval and a 3–30 second break from
+  the dashboard, storing those settings only on your device
 - Uses idle and fullscreen signals, where supported, to avoid interrupting
   you when you are already away from the desk or presenting
 - Keeps the reminder timer running when a platform probe fails instead of
@@ -59,8 +62,10 @@ Unfocus does not update itself yet, so check the releases page for new builds.
 - Runs local-first: no account, telemetry, cloud dependency, or packaged-app
   network calls
 
-The alpha currently uses a fixed twenty-minute work interval and twenty-second
-break. Timing settings are not implemented yet.
+Timing defaults to a twenty-minute work interval and twenty-second break.
+Saving a change during work starts a new work countdown immediately; a break
+already on screen keeps its original duration and the saved timing applies to
+the next work phase.
 
 ![The same scene near the end of a break, with amber dawn light rising behind the summit](.github/media/break-returning.png)
 

@@ -10,7 +10,10 @@ use overlay::{
     show_overlay_test, OverlayController,
 };
 use probes::ProbeCache;
-use reminder::start_scheduler as start_reminder_scheduler;
+use reminder::{
+    get_reminder_settings, reset_reminder_settings, save_reminder_settings,
+    start_scheduler as start_reminder_scheduler, ReminderSettingsManager,
+};
 use std::io;
 use tauri::Manager;
 use tray::install as install_tray;
@@ -27,8 +30,12 @@ fn authorize_main_caller(label: &str) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            let settings_manager = ReminderSettingsManager::load(&app.path().app_config_dir()?)?;
             let probe_cache = ProbeCache::start()?;
             let overlay_controller = OverlayController::start(app.handle().clone())?;
+            if !app.manage(settings_manager.clone()) {
+                return Err(io::Error::other("reminder settings were already managed").into());
+            }
             if !app.manage(probe_cache.clone()) {
                 return Err(io::Error::other("probe cache was already managed").into());
             }
@@ -37,7 +44,12 @@ pub fn run() {
             }
             install_tray(app)?;
             schedule_automatic_overlay_test(app, overlay_controller.clone());
-            start_reminder_scheduler(app.handle().clone(), probe_cache, overlay_controller)?;
+            start_reminder_scheduler(
+                app.handle().clone(),
+                probe_cache,
+                overlay_controller,
+                settings_manager,
+            )?;
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -60,6 +72,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_diagnostics,
+            get_reminder_settings,
+            save_reminder_settings,
+            reset_reminder_settings,
             show_overlay_test,
             close_overlay_test
         ])
