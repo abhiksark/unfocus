@@ -20,7 +20,7 @@ use reminder::{
 };
 use std::io;
 use tauri::Manager;
-use tray::{install as install_tray, TrayController, TrayStatus};
+use tray::{dashboard_close_action, DashboardCloseAction, TrayRuntime, TrayStatus};
 
 fn authorize_main_caller(label: &str) -> Result<(), String> {
     if label == "main" {
@@ -58,9 +58,9 @@ pub fn run() {
             if !app.manage(tray_status.clone()) {
                 return Err(io::Error::other("tray status was already managed").into());
             }
-            let tray_controller = install_tray(app, &tray_status)?;
-            if !app.manage::<TrayController>(tray_controller) {
-                return Err(io::Error::other("tray controller was already managed").into());
+            let tray_runtime = TrayRuntime::install(app, &tray_status);
+            if !app.manage(tray_runtime) {
+                return Err(io::Error::other("tray runtime was already managed").into());
             }
             schedule_automatic_overlay_test(app, overlay_controller.clone());
             start_reminder_scheduler(
@@ -76,7 +76,18 @@ pub fn run() {
             if window.label() == "main" {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
-                    let _ = window.hide();
+                    let tray_available = window
+                        .app_handle()
+                        .try_state::<TrayRuntime>()
+                        .is_some_and(|runtime| runtime.can_hide_dashboard());
+                    match dashboard_close_action(tray_available) {
+                        DashboardCloseAction::Hide => {
+                            if let Err(error) = window.hide() {
+                                eprintln!("could not hide the dashboard into the tray: {error}");
+                            }
+                        }
+                        DashboardCloseAction::Exit => window.app_handle().exit(0),
+                    }
                 }
             } else if matches!(
                 event,

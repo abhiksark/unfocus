@@ -288,6 +288,10 @@
       <div class="error" role="alert">Diagnostics unavailable: {diagnosticsError}</div>
     {/if}
 
+    {#if report?.tray.error}
+      <div class="error" role="alert">Tray needs attention: {report.tray.error}</div>
+    {/if}
+
     {#if overlayError}
       <div class="error" role="alert">Could not open the overlay: {overlayError}</div>
     {/if}
@@ -465,7 +469,13 @@
     </section>
 
     <footer>
-      Closing this window sends Unfocus to the tray. Use the tray menu to reopen or quit.
+      {#if report?.tray.available === false}
+        The tray is unavailable. Keep this dashboard open; closing it exits Unfocus safely.
+      {:else if report?.tray.available}
+        Closing this window sends Unfocus to the tray. Use the tray menu to reopen or quit.
+      {:else}
+        Closing uses the tray when available; otherwise Unfocus exits safely.
+      {/if}
     </footer>
   </main>
 {/if}
