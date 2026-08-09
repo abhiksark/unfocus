@@ -82,11 +82,12 @@ not just whether a package can be produced.
 | Linux Wayland | Unsupported | No Wayland probes or acceptance coverage |
 
 On launch, the dashboard shows the live platform signals Unfocus can read.
-Closing the dashboard leaves the reminder running in the system tray; the tray
-menu can reopen it or quit the app. Starting Unfocus again reveals that same
-dashboard instead of creating another tray or reminder timer. Where probes are
-supported, a due break stays hidden when you are already idle or the active
-window is fullscreen.
+Closing the dashboard leaves the reminder running in the system tray. Where a
+tray is available, its menu shows the current work countdown or break phase and
+can preview a break, reopen the dashboard, or quit the app. Starting Unfocus
+again reveals that same dashboard instead of creating another tray or reminder
+timer. Where probes are supported, a due break stays hidden when you are already
+idle or the active window is fullscreen.
 
 ![The diagnostics dashboard showing live probe data](.github/media/dashboard.png)
 

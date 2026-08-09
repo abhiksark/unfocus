@@ -20,7 +20,7 @@ use reminder::{
 };
 use std::io;
 use tauri::Manager;
-use tray::install as install_tray;
+use tray::{install as install_tray, TrayController, TrayStatus};
 
 fn authorize_main_caller(label: &str) -> Result<(), String> {
     if label == "main" {
@@ -45,6 +45,7 @@ pub fn run() {
             let settings_manager = ReminderSettingsManager::load(&app.path().app_config_dir()?)?;
             let probe_cache = ProbeCache::start()?;
             let overlay_controller = OverlayController::start(app.handle().clone())?;
+            let tray_status = TrayStatus::default();
             if !app.manage(settings_manager.clone()) {
                 return Err(io::Error::other("reminder settings were already managed").into());
             }
@@ -54,13 +55,20 @@ pub fn run() {
             if !app.manage(overlay_controller.clone()) {
                 return Err(io::Error::other("overlay controller was already managed").into());
             }
-            install_tray(app)?;
+            if !app.manage(tray_status.clone()) {
+                return Err(io::Error::other("tray status was already managed").into());
+            }
+            let tray_controller = install_tray(app, &tray_status)?;
+            if !app.manage::<TrayController>(tray_controller) {
+                return Err(io::Error::other("tray controller was already managed").into());
+            }
             schedule_automatic_overlay_test(app, overlay_controller.clone());
             start_reminder_scheduler(
                 app.handle().clone(),
                 probe_cache,
                 overlay_controller,
                 settings_manager,
+                tray_status,
             )?;
             Ok(())
         })

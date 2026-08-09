@@ -118,10 +118,7 @@ fn report_activation(report: ActivationReport) {
     }
 }
 
-/// Handles a notification from an already-terminated secondary process.
-/// Arguments and the secondary working directory are deliberately discarded
-/// by the plugin callback before this function is reached.
-pub(crate) fn handle_secondary_launch(app: &AppHandle) {
+pub(crate) fn reveal_dashboard(app: &AppHandle) {
     let app = app.clone();
     let dispatcher = app.clone();
     if let Err(error) = dispatcher.run_on_main_thread(move || {
@@ -130,6 +127,13 @@ pub(crate) fn handle_secondary_launch(app: &AppHandle) {
     }) {
         eprintln!("could not schedule activation of the existing Unfocus dashboard: {error}");
     }
+}
+
+/// Handles a notification from an already-terminated secondary process.
+/// Arguments and the secondary working directory are deliberately discarded
+/// by the plugin callback before this function is reached.
+pub(crate) fn handle_secondary_launch(app: &AppHandle) {
+    reveal_dashboard(app);
 }
 
 #[cfg(test)]
