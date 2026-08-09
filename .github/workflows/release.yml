@@ -80,7 +80,7 @@ jobs:
       - run: bun run dependencies:check
       - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked -- -D warnings
-      - run: cargo test --manifest-path src-tauri/Cargo.toml --all-features --locked
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked
       - run: cargo install cargo-audit --version 0.22.2 --locked
       - run: bun run dependencies:audit-rust
 

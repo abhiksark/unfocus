@@ -12,8 +12,8 @@ body:
         | Platform | Overlays and tray | Idle and fullscreen probes |
         | --- | --- | --- |
         | Linux X11 | Qualified | Working — XScreenSaver and EWMH |
-        | macOS | Working — but no multi-monitor acceptance run yet | Working — Quartz |
-        | Windows | Working | **None, by design** — reported as unavailable |
+        | macOS | Preview — no multi-monitor acceptance run yet | Working — Quartz |
+        | Windows | Packaged, not qualified | **None, by design** — reported as unavailable |
         | Linux Wayland | **Unsupported** | Reports an error, by design |
 
         A dash under **Idle time** or **Active fullscreen** on Windows is
@@ -65,11 +65,13 @@ body:
     attributes:
       label: Unfocus version and build
       description: >-
-        No release has been tagged yet, so nearly everyone is on a source
-        build. Give the short commit from `git rev-parse --short HEAD` and say
-        whether you ran `bun run tauri dev`, a bundled build, or the container
-        runner script.
-      placeholder: "0.1.0 — source build at 5106c6a — bun run tauri dev"
+        For a packaged release, give the version from its filename or release
+        page. For a source build, give the short commit from
+        `git rev-parse --short HEAD` and say whether you ran
+        `bun run tauri dev` or the container runner script.
+      placeholder: >-
+        X.Y.Z — AppImage from GitHub Releases, or source build at abcdef1 —
+        bun run tauri dev
     validations:
       required: true
 
