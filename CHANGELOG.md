@@ -9,6 +9,8 @@ released versions link to their GitHub release.
 
 - Added a generated, monochrome system-tray icon with platform-specific light
   and template variants.
+- Added single-instance activation so reopening Unfocus reveals the existing
+  dashboard without starting another tray or reminder timer.
 - Added a private vulnerability-reporting policy.
 
 ### Changed

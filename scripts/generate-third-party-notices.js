@@ -16,7 +16,14 @@ const decoder = new TextDecoder();
 const compareText = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
 
 function normalizeText(text) {
-  return text.replaceAll("\r\n", "\n").trim() + "\n";
+  let normalized = text.replaceAll("\r\n", "\n");
+  if (normalized.startsWith("Apache License\n\nVersion 2.0")) {
+    normalized = normalized
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .join("\n");
+  }
+  return normalized.trim() + "\n";
 }
 
 function licenseFiles(directory, declaredFile) {

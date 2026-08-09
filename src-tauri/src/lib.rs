@@ -1,10 +1,14 @@
 mod diagnostics;
+#[cfg(desktop)]
+mod instance;
 mod overlay;
 mod probes;
 mod reminder;
 mod tray;
 
 use diagnostics::get_diagnostics;
+#[cfg(desktop)]
+use instance::handle_secondary_launch;
 use overlay::{
     close_overlay_test, overlay_run_id_from_label, schedule_automatic_overlay_test,
     show_overlay_test, OverlayController,
@@ -28,7 +32,15 @@ fn authorize_main_caller(label: &str) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Instance coordination must be the first plugin so a secondary process
+    // exits before setup can load settings or start any Unfocus worker.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(
+        |app, _arguments, _working_directory| handle_secondary_launch(app),
+    ));
+
+    builder
         .setup(|app| {
             let settings_manager = ReminderSettingsManager::load(&app.path().app_config_dir()?)?;
             let probe_cache = ProbeCache::start()?;
