@@ -7,6 +7,28 @@ changing generated tray assets, dependencies, versions, or toolchain pins.
 The Tauri 2 backend owns tray behavior, window lifecycle, overlay
 orchestration, OS probes, timing, and diagnostics.
 
+## Module ownership
+
+- `src/lib.rs` is the composition root: module declarations, shared main-window
+  authorization, Tauri setup and managed state, window-event routing, command
+  registration, and exported `run()`.
+- `src/diagnostics.rs` owns diagnostics serialization, environment reporting,
+  monitor enumeration, and the diagnostics command.
+- `src/reminder.rs` owns the pure reminder timer, probe-based presentation
+  decision, and scheduler thread.
+- `src/tray.rs` owns tray construction, callbacks, embedded assets, and asset
+  tests.
+- `src/probes/mod.rs` owns probe caches, workers, snapshots, panic containment,
+  stale-result handling, and platform dispatch. `src/probes/linux.rs` owns X11
+  probes and validation; `src/probes/macos.rs` owns Quartz probes and fullscreen
+  geometry.
+- `src/overlay/mod.rs` owns the overlay controller, command channel, worker,
+  close-origin tracking, and commands. `src/overlay/lifecycle.rs` owns the pure
+  lifecycle state machine and timeout calculation; `src/overlay/labels.rs`
+  owns canonical labels, run IDs, bounds, deadlines, and caller authorization;
+  `src/overlay/windows.rs` owns monitor windows, targeted events, sibling
+  teardown, and startup-preview scheduling.
+
 ## Probes and platform gates
 
 - IMPORTANT: probes return a `Result` per poll. On failure, surface the error
