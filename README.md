@@ -9,6 +9,7 @@
 A break reminder that asks one thing of you: look at something far away.
 
 [Releases](https://github.com/abhiksark/unfocus/releases) ·
+[Changelog](CHANGELOG.md) ·
 [Report a bug](https://github.com/abhiksark/unfocus/issues/new?template=bug_report.yml) ·
 [Request a feature](https://github.com/abhiksark/unfocus/issues/new?template=feature_request.yml) ·
 [Security](https://github.com/abhiksark/unfocus/security/policy)
