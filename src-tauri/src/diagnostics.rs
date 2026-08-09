@@ -1,4 +1,8 @@
-use crate::{authorize_main_caller, probes::ProbeCache};
+use crate::{
+    authorize_main_caller,
+    probes::ProbeCache,
+    tray::{TrayDiagnostics, TrayRuntime},
+};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Manager, PhysicalPosition, PhysicalSize, State, WebviewWindow};
@@ -29,6 +33,7 @@ pub(crate) struct DiagnosticsReport {
     idle_error: Option<String>,
     active_window_fullscreen: Option<bool>,
     fullscreen_error: Option<String>,
+    tray: TrayDiagnostics,
 }
 
 fn environment_value(key: &str) -> Option<String> {
@@ -84,6 +89,7 @@ fn monitor_report(
 pub(crate) fn get_diagnostics(
     window: WebviewWindow,
     probe_cache: State<'_, ProbeCache>,
+    tray_runtime: State<'_, TrayRuntime>,
 ) -> Result<DiagnosticsReport, String> {
     authorize_main_caller(window.label())?;
     let app = window.app_handle();
@@ -135,6 +141,7 @@ pub(crate) fn get_diagnostics(
         idle_error,
         active_window_fullscreen,
         fullscreen_error,
+        tray: tray_runtime.diagnostics(),
     })
 }
 

@@ -76,7 +76,7 @@ not just whether a package can be produced.
 
 | Platform | Status | Current behavior |
 | --- | --- | --- |
-| Linux X11 | Qualified | Tray, synchronized multi-monitor overlays, XScreenSaver idle detection, and EWMH fullscreen detection |
+| Linux X11 | Qualified | AppIndicator tray where the desktop provides a host, synchronized multi-monitor overlays, XScreenSaver idle detection, and EWMH fullscreen detection |
 | macOS | Preview | Quartz idle and fullscreen probes work interactively; multi-monitor behavior has not completed an acceptance run |
 | Windows | Early build | Packages are produced; idle and fullscreen probes report as unavailable |
 | Linux Wayland | Unsupported | No Wayland probes or acceptance coverage |
@@ -88,6 +88,14 @@ can preview a break, reopen the dashboard, or quit the app. Starting Unfocus
 again reveals that same dashboard instead of creating another tray or reminder
 timer. Where probes are supported, a due break stays hidden when you are already
 idle or the active window is fullscreen.
+
+On Linux, the desktop must provide a StatusNotifier/AppIndicator host; Ubuntu
+GNOME normally does this through its Ubuntu AppIndicators extension. The locked
+Tauri tray API can report construction failure, but it cannot confirm that a
+panel chose to display a successfully constructed indicator. If the icon is
+missing, keep the dashboard open, enable or restart the desktop's indicator
+host, and restart Unfocus. A known setup error appears in the dashboard, and
+closing that dashboard exits instead of hiding an unreachable process.
 
 ![The diagnostics dashboard showing live probe data](.github/media/dashboard.png)
 
@@ -114,7 +122,9 @@ That runner is a development convenience, not a sandbox. Run it only from a
 revision you trust. It can access the host X11 display and session bus. The
 repository is mounted read-only except for ignored `src-tauri/target` and
 `src-tauri/gen` build directories, which are bind-mounted read-write. The
-frontend build also runs on the host before the container starts.
+frontend build also runs on the host before the container starts. A private
+temporary runtime directory gives libappindicator a writable icon path and is
+removed when the runner exits.
 
 ## Contributing
 

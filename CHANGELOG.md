@@ -17,6 +17,9 @@ released versions link to their GitHub release.
 
 ### Changed
 
+- A known tray setup failure now appears in local diagnostics and keeps the
+  dashboard reachable; closing the dashboard exits instead of hiding an
+  unreachable background reminder.
 - Updated the frontend toolchain to Vite 8, TypeScript 7, and the Svelte Vite
   plugin 7, and updated `x11rb` to 0.14.
 - Updated the GitHub Actions used for checkout, artifact transfer, and build
