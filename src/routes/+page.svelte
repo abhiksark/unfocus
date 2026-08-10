@@ -15,6 +15,11 @@
     type ReminderSettings,
     validateReminderSettings
   } from "$lib/reminder-settings";
+  import {
+    pauseActionCommand,
+    type ReminderActionCommand,
+    type ReminderStatus
+  } from "$lib/reminder-status";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
@@ -34,6 +39,11 @@
   let settingsSaving = $state(false);
   let settingsError = $state<string | null>(null);
   let settingsStatus = $state<string | null>(null);
+  let reminderStatus = $state<ReminderStatus | null>(null);
+  let reminderStatusError = $state<string | null>(null);
+  let reminderActionPending = $state<ReminderActionCommand | null>(null);
+  let reminderActionStatus = $state<string | null>(null);
+  let reminderRefreshGeneration = 0;
 
   function errorMessage(value: unknown): string {
     return value instanceof Error ? value.message : String(value);
@@ -74,14 +84,36 @@
   async function refresh() {
     if (refreshing) return;
     refreshing = true;
-    try {
-      report = await invoke<DiagnosticsReport>("get_diagnostics");
+    const reminderGeneration = reminderRefreshGeneration;
+    const [diagnostics, reminder] = await Promise.allSettled([
+      invoke<DiagnosticsReport>("get_diagnostics"),
+      invoke<ReminderStatus>("get_reminder_status")
+    ]);
+    if (diagnostics.status === "fulfilled") {
+      report = diagnostics.value;
       diagnosticsError = null;
-    } catch (value) {
-      diagnosticsError = errorMessage(value);
-    } finally {
-      refreshing = false;
+    } else {
+      diagnosticsError = errorMessage(diagnostics.reason);
     }
+    if (
+      reminder.status === "fulfilled" &&
+      reminderGeneration === reminderRefreshGeneration
+    ) {
+      if (
+        reminderStatus &&
+        reminder.value.stateRevision !== reminderStatus.stateRevision
+      ) {
+        reminderActionStatus = null;
+      }
+      reminderStatus = reminder.value;
+      reminderStatusError = null;
+    } else if (
+      reminder.status === "rejected" &&
+      reminderGeneration === reminderRefreshGeneration
+    ) {
+      reminderStatusError = errorMessage(reminder.reason);
+    }
+    refreshing = false;
   }
 
   async function runOverlayTest() {
@@ -94,6 +126,30 @@
     } finally {
       overlayRunning = false;
     }
+  }
+
+  async function runReminderAction(command: ReminderActionCommand) {
+    if (reminderActionPending) return;
+    reminderActionPending = command;
+    reminderRefreshGeneration += 1;
+    reminderStatusError = null;
+    reminderActionStatus = null;
+    try {
+      const updated = await invoke<ReminderStatus>(command);
+      reminderRefreshGeneration += 1;
+      reminderStatus = updated;
+      reminderActionStatus = `Reminder status: ${updated.status}.`;
+    } catch (value) {
+      reminderRefreshGeneration += 1;
+      reminderStatusError = `Could not update reminder state: ${errorMessage(value)}`;
+    } finally {
+      reminderActionPending = null;
+    }
+  }
+
+  function runPauseAction() {
+    if (!reminderStatus) return;
+    void runReminderAction(pauseActionCommand(reminderStatus));
   }
 
   function useSettings(settings: ReminderSettings) {
@@ -292,6 +348,16 @@
       <div class="error" role="alert">Tray needs attention: {report.tray.error}</div>
     {/if}
 
+    {#if reminderStatusError}
+      <div class="error" role="alert">{reminderStatusError}</div>
+    {/if}
+
+    {#if reminderStatus?.actionError}
+      <div class="error" role="alert">
+        Last reminder action failed: {reminderStatus.actionError}. The existing timer state was kept.
+      </div>
+    {/if}
+
     {#if overlayError}
       <div class="error" role="alert">Could not open the overlay: {overlayError}</div>
     {/if}
@@ -321,6 +387,44 @@
         <strong>{report?.activeWindowFullscreen === true ? "Yes" : report?.activeWindowFullscreen === false ? "No" : "—"}</strong>
         <small>{fullscreenCaption}</small>
       </article>
+    </section>
+
+    <section class="panel reminder-controls-panel" aria-labelledby="reminder-controls-title">
+      <div class="reminder-controls-copy">
+        <p class="eyebrow">Reminder controls</p>
+        <h2 id="reminder-controls-title">{reminderStatus?.status ?? "Reading timer status…"}</h2>
+        <p>
+          Pause is stored locally and expires after 30 minutes, including across a restart.
+          Resuming starts a fresh work countdown. Take a break now uses the configured break
+          duration and then begins the next work phase.
+        </p>
+      </div>
+
+      <div class="reminder-actions">
+        <button
+          class="secondary"
+          type="button"
+          onclick={runPauseAction}
+          disabled={!reminderStatus?.pauseActionEnabled || reminderActionPending !== null}
+        >
+          {reminderActionPending === "pause_reminders" || reminderActionPending === "resume_reminders"
+            ? "Updating…"
+            : (reminderStatus?.pauseActionLabel ?? "Pause for 30 minutes")}
+        </button>
+        <button
+          class="primary"
+          type="button"
+          onclick={() => void runReminderAction("take_break_now")}
+          disabled={!reminderStatus?.takeBreakEnabled || reminderActionPending !== null}
+        >
+          {reminderActionPending === "take_break_now" ? "Starting…" : "Take a break now"}
+        </button>
+        <div class="reminder-feedback" aria-live="polite">
+          {#if reminderActionStatus}
+            <p>{reminderActionStatus}</p>
+          {/if}
+        </div>
+      </div>
     </section>
 
     <section class="panel settings-panel" aria-labelledby="reminder-settings-title">
@@ -463,8 +567,16 @@
           itself; Escape is the safety exit.
         </p>
       </div>
-      <button class="primary" onclick={runOverlayTest} disabled={overlayRunning || !report}>
-        {overlayRunning ? "Opening…" : "Run overlay test"}
+      <button
+        class="primary"
+        onclick={runOverlayTest}
+        disabled={overlayRunning || !report || !reminderStatus?.previewEnabled}
+      >
+        {overlayRunning
+          ? "Opening…"
+          : reminderStatus && !reminderStatus.previewEnabled
+            ? "Overlay active"
+            : "Run overlay test"}
       </button>
     </section>
 
@@ -706,6 +818,43 @@
   .panel {
     border-radius: 14px;
     padding: 22px;
+  }
+
+  .reminder-controls-panel {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) auto;
+    align-items: center;
+    gap: 28px;
+    margin-bottom: 12px;
+    border-color: #31513d;
+  }
+
+  .reminder-controls-copy p:not(.eyebrow) {
+    max-width: 620px;
+    margin: 10px 0 0;
+    color: #abb5ad;
+    font-size: 0.78rem;
+    line-height: 1.55;
+  }
+
+  .reminder-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .reminder-feedback {
+    width: 100%;
+    min-height: 1.2rem;
+    color: #b9ddc2;
+    font-size: 0.68rem;
+    line-height: 1.4;
+    text-align: right;
+  }
+
+  .reminder-feedback p {
+    margin: 0;
   }
 
   .settings-panel {
@@ -982,9 +1131,18 @@
       grid-template-columns: repeat(2, 1fr);
     }
 
+    .reminder-controls-panel,
     .settings-panel,
     .duration-fields {
       grid-template-columns: 1fr;
+    }
+
+    .reminder-actions {
+      justify-content: flex-start;
+    }
+
+    .reminder-feedback {
+      text-align: left;
     }
 
     header,

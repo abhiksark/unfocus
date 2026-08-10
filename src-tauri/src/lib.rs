@@ -15,8 +15,9 @@ use overlay::{
 };
 use probes::ProbeCache;
 use reminder::{
-    get_reminder_settings, reset_reminder_settings, save_reminder_settings,
-    start_scheduler as start_reminder_scheduler, ReminderSettingsManager,
+    get_reminder_settings, get_reminder_status, pause_reminders, reset_reminder_settings,
+    resume_reminders, save_reminder_settings, start_scheduler as start_reminder_scheduler,
+    take_break_now, ReminderSettingsManager,
 };
 use std::io;
 use tauri::Manager;
@@ -58,18 +59,21 @@ pub fn run() {
             if !app.manage(tray_status.clone()) {
                 return Err(io::Error::other("tray status was already managed").into());
             }
+            let reminder_control = start_reminder_scheduler(
+                app.handle().clone(),
+                probe_cache,
+                overlay_controller.clone(),
+                settings_manager,
+                tray_status.clone(),
+            )?;
+            if !app.manage(reminder_control) {
+                return Err(io::Error::other("reminder control was already managed").into());
+            }
             let tray_runtime = TrayRuntime::install(app, &tray_status);
             if !app.manage(tray_runtime) {
                 return Err(io::Error::other("tray runtime was already managed").into());
             }
             schedule_automatic_overlay_test(app, overlay_controller.clone());
-            start_reminder_scheduler(
-                app.handle().clone(),
-                probe_cache,
-                overlay_controller,
-                settings_manager,
-                tray_status,
-            )?;
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -104,8 +108,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_diagnostics,
             get_reminder_settings,
+            get_reminder_status,
             save_reminder_settings,
             reset_reminder_settings,
+            pause_reminders,
+            resume_reminders,
+            take_break_now,
             show_overlay_test,
             close_overlay_test
         ])

@@ -4,7 +4,8 @@ pub(crate) use model::{TrayPhase, TraySnapshot, TrayStatus};
 
 use crate::{
     instance::reveal_dashboard,
-    overlay::{show_overlay, OverlayController},
+    overlay::{show_overlay_if_idle, OverlayController},
+    reminder::{ReminderAction, ReminderControl, ReminderStatus},
 };
 use model::TrayStatusSubscription;
 use serde::Serialize;
@@ -17,6 +18,8 @@ use tauri::{
 };
 
 const STATUS_MENU_ID: &str = "unfocus.tray.status";
+const PAUSE_MENU_ID: &str = "unfocus.tray.pause";
+const TAKE_BREAK_MENU_ID: &str = "unfocus.tray.take-break";
 const OPEN_MENU_ID: &str = "unfocus.tray.open";
 const PREVIEW_MENU_ID: &str = "unfocus.tray.preview";
 const QUIT_MENU_ID: &str = "unfocus.tray.quit";
@@ -24,6 +27,8 @@ const PREVIEW_DURATION_SECONDS: u64 = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrayAction {
+    Pause,
+    TakeBreak,
     Open,
     Preview,
     Quit,
@@ -31,6 +36,8 @@ enum TrayAction {
 
 fn tray_action(menu_id: &str) -> Option<TrayAction> {
     match menu_id {
+        PAUSE_MENU_ID => Some(TrayAction::Pause),
+        TAKE_BREAK_MENU_ID => Some(TrayAction::TakeBreak),
         OPEN_MENU_ID => Some(TrayAction::Open),
         PREVIEW_MENU_ID => Some(TrayAction::Preview),
         QUIT_MENU_ID => Some(TrayAction::Quit),
@@ -126,6 +133,9 @@ impl TrayHealth {
 pub(crate) struct TrayController {
     _tray: TrayIcon,
     _status: MenuItem<tauri::Wry>,
+    _pause: MenuItem<tauri::Wry>,
+    _take_break: MenuItem<tauri::Wry>,
+    _preview: MenuItem<tauri::Wry>,
 }
 
 pub(crate) struct TrayRuntime {
@@ -172,13 +182,35 @@ impl TrayRuntime {
     }
 }
 
-trait TrayStatusItem {
-    fn update_text(&self, text: &str) -> Result<(), String>;
+trait TrayMenuItems {
+    fn update(&self, status: &ReminderStatus) -> Result<(), String>;
 }
 
-impl TrayStatusItem for MenuItem<tauri::Wry> {
-    fn update_text(&self, text: &str) -> Result<(), String> {
-        self.set_text(text).map_err(|error| error.to_string())
+#[derive(Clone)]
+struct MutableTrayMenu {
+    status: MenuItem<tauri::Wry>,
+    pause: MenuItem<tauri::Wry>,
+    take_break: MenuItem<tauri::Wry>,
+    preview: MenuItem<tauri::Wry>,
+}
+
+impl TrayMenuItems for MutableTrayMenu {
+    fn update(&self, reminder: &ReminderStatus) -> Result<(), String> {
+        self.status
+            .set_text(reminder.tray_status())
+            .map_err(|error| format!("could not update status text: {error}"))?;
+        self.pause
+            .set_text(&reminder.pause_action_label)
+            .map_err(|error| format!("could not update pause action text: {error}"))?;
+        self.pause
+            .set_enabled(reminder.pause_action_enabled)
+            .map_err(|error| format!("could not update pause action availability: {error}"))?;
+        self.take_break
+            .set_enabled(reminder.take_break_enabled)
+            .map_err(|error| format!("could not update take-break availability: {error}"))?;
+        self.preview
+            .set_enabled(reminder.preview_enabled)
+            .map_err(|error| format!("could not update preview availability: {error}"))
     }
 }
 
@@ -190,12 +222,12 @@ enum TrayUpdateOutcome {
     FailedRepeated,
 }
 
-fn apply_status_update(
-    status: &impl TrayStatusItem,
-    text: &str,
+fn apply_menu_update(
+    menu: &impl TrayMenuItems,
+    reminder: &ReminderStatus,
     health: &TrayHealth,
 ) -> TrayUpdateOutcome {
-    match status.update_text(text) {
+    match menu.update(reminder) {
         Ok(()) if health.record_update_success() => TrayUpdateOutcome::Recovered,
         Ok(()) => TrayUpdateOutcome::Updated,
         Err(error) => {
@@ -212,7 +244,7 @@ fn apply_status_update(
 }
 
 fn run_status_worker(
-    status: MenuItem<tauri::Wry>,
+    menu: MutableTrayMenu,
     subscription: TrayStatusSubscription,
     health: TrayHealth,
 ) {
@@ -220,8 +252,8 @@ fn run_status_worker(
         let Some(snapshot) = subscription.current() else {
             break;
         };
-        let text = snapshot.presentation().status;
-        match apply_status_update(&status, &text, &health) {
+        let reminder = ReminderStatus::from_snapshot(snapshot);
+        match apply_menu_update(&menu, &reminder, &health) {
             TrayUpdateOutcome::FailedFirst(message) => eprintln!("{message}"),
             TrayUpdateOutcome::Recovered => eprintln!("tray reminder status updates recovered"),
             TrayUpdateOutcome::Updated | TrayUpdateOutcome::FailedRepeated => {}
@@ -234,19 +266,52 @@ fn install_controller(
     tray_status: &TrayStatus,
     health: TrayHealth,
 ) -> tauri::Result<TrayController> {
-    let initial_status = tray_status.current().presentation().status;
-    let status = MenuItem::with_id(app, STATUS_MENU_ID, initial_status, false, None::<&str>)?;
-    let separator = PredefinedMenuItem::separator(app)?;
+    let initial = ReminderStatus::from_snapshot(tray_status.current());
+    let status = MenuItem::with_id(
+        app,
+        STATUS_MENU_ID,
+        initial.tray_status(),
+        false,
+        None::<&str>,
+    )?;
+    let controls_separator = PredefinedMenuItem::separator(app)?;
+    let pause = MenuItem::with_id(
+        app,
+        PAUSE_MENU_ID,
+        initial.pause_action_label,
+        initial.pause_action_enabled,
+        None::<&str>,
+    )?;
+    let take_break = MenuItem::with_id(
+        app,
+        TAKE_BREAK_MENU_ID,
+        "Take a break now",
+        initial.take_break_enabled,
+        None::<&str>,
+    )?;
     let open = MenuItem::with_id(app, OPEN_MENU_ID, "Open Unfocus", true, None::<&str>)?;
     let preview = MenuItem::with_id(
         app,
         PREVIEW_MENU_ID,
         format!("Preview break ({PREVIEW_DURATION_SECONDS} seconds)"),
-        true,
+        initial.preview_enabled,
         None::<&str>,
     )?;
+    let quit_separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, QUIT_MENU_ID, "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&status, &separator, &open, &preview, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &status,
+            &controls_separator,
+            &pause,
+            &take_break,
+            &open,
+            &preview,
+            &quit_separator,
+            &quit,
+        ],
+    )?;
 
     // macOS recolours a template image to match the menubar theme; every
     // other platform gets a fixed light glyph for their (dark) panels.
@@ -273,10 +338,29 @@ fn install_controller(
 
     let tray = builder
         .on_menu_event(|app, event| match tray_action(event.id.as_ref()) {
+            Some(TrayAction::Pause) => {
+                let control = app.state::<ReminderControl>();
+                let status = app.state::<TrayStatus>();
+                let action = if status.current().phase == TrayPhase::Paused {
+                    ReminderAction::Resume
+                } else {
+                    ReminderAction::Pause
+                };
+                if let Err(error) = control.dispatch(action) {
+                    eprintln!("tray pause action failed: {error}");
+                }
+            }
+            Some(TrayAction::TakeBreak) => {
+                let control = app.state::<ReminderControl>();
+                if let Err(error) = control.dispatch(ReminderAction::TakeBreakNow) {
+                    eprintln!("tray take-break action failed: {error}");
+                }
+            }
             Some(TrayAction::Open) => reveal_dashboard(app),
             Some(TrayAction::Preview) => {
                 let controller = app.state::<OverlayController>();
-                if let Err(error) = show_overlay(app, &controller, PREVIEW_DURATION_SECONDS) {
+                if let Err(error) = show_overlay_if_idle(app, &controller, PREVIEW_DURATION_SECONDS)
+                {
                     eprintln!("overlay preview failed: {error}");
                 }
             }
@@ -287,15 +371,23 @@ fn install_controller(
     health.mark_installed();
 
     let subscription = tray_status.subscribe();
-    let worker_status = status.clone();
+    let worker_menu = MutableTrayMenu {
+        status: status.clone(),
+        pause: pause.clone(),
+        take_break: take_break.clone(),
+        preview: preview.clone(),
+    };
     let worker_health = health.clone();
     std::thread::Builder::new()
         .name("unfocus-tray-status".into())
-        .spawn(move || run_status_worker(worker_status, subscription, worker_health))?;
+        .spawn(move || run_status_worker(worker_menu, subscription, worker_health))?;
 
     Ok(TrayController {
         _tray: tray,
         _status: status,
+        _pause: pause,
+        _take_break: take_break,
+        _preview: preview,
     })
 }
 
@@ -351,6 +443,8 @@ mod tests {
 
     #[test]
     fn tray_ids_only_dispatch_known_unfocus_actions() {
+        assert_eq!(tray_action(PAUSE_MENU_ID), Some(TrayAction::Pause));
+        assert_eq!(tray_action(TAKE_BREAK_MENU_ID), Some(TrayAction::TakeBreak));
         assert_eq!(tray_action(OPEN_MENU_ID), Some(TrayAction::Open));
         assert_eq!(tray_action(PREVIEW_MENU_ID), Some(TrayAction::Preview));
         assert_eq!(tray_action(QUIT_MENU_ID), Some(TrayAction::Quit));
@@ -366,12 +460,12 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct FakeStatusItem {
+    struct FakeMenu {
         results: RefCell<VecDeque<Result<(), String>>>,
         visible_text: RefCell<String>,
     }
 
-    impl FakeStatusItem {
+    impl FakeMenu {
         fn with_results(results: impl IntoIterator<Item = Result<(), String>>) -> Self {
             Self {
                 results: RefCell::new(results.into_iter().collect()),
@@ -380,21 +474,31 @@ mod tests {
         }
     }
 
-    impl TrayStatusItem for FakeStatusItem {
-        fn update_text(&self, text: &str) -> Result<(), String> {
+    impl TrayMenuItems for FakeMenu {
+        fn update(&self, reminder: &ReminderStatus) -> Result<(), String> {
             let result = self.results.borrow_mut().pop_front().unwrap_or(Ok(()));
             if result.is_ok() {
-                *self.visible_text.borrow_mut() = text.into();
+                *self.visible_text.borrow_mut() = reminder.tray_status().into();
             }
             result
         }
+    }
+
+    fn working_status(minutes: u64) -> ReminderStatus {
+        ReminderStatus::from_snapshot(TraySnapshot::timer(
+            TrayPhase::Working,
+            std::time::Duration::from_secs(minutes * 60),
+            false,
+            0,
+            0,
+        ))
     }
 
     #[test]
     fn update_failures_preserve_text_and_report_once_until_recovery() {
         let health = TrayHealth::default();
         health.mark_installed();
-        let item = FakeStatusItem::with_results([
+        let menu = FakeMenu::with_results([
             Err("panel disconnected".into()),
             Err("panel still disconnected".into()),
             Ok(()),
@@ -402,31 +506,31 @@ mod tests {
         ]);
 
         assert!(matches!(
-            apply_status_update(&item, "Working · break in 19 min", &health),
+            apply_menu_update(&menu, &working_status(19), &health),
             TrayUpdateOutcome::FailedFirst(_)
         ));
-        assert_eq!(&*item.visible_text.borrow(), "Working · break in 20 min");
+        assert_eq!(&*menu.visible_text.borrow(), "Working · break in 20 min");
         let diagnostics = health.diagnostics();
         assert!(!diagnostics.available);
         assert!(diagnostics.error.is_some());
 
         assert_eq!(
-            apply_status_update(&item, "Working · break in 18 min", &health),
+            apply_menu_update(&menu, &working_status(18), &health),
             TrayUpdateOutcome::FailedRepeated
         );
-        assert_eq!(&*item.visible_text.borrow(), "Working · break in 20 min");
+        assert_eq!(&*menu.visible_text.borrow(), "Working · break in 20 min");
 
         assert_eq!(
-            apply_status_update(&item, "Working · break in 17 min", &health),
+            apply_menu_update(&menu, &working_status(17), &health),
             TrayUpdateOutcome::Recovered
         );
-        assert_eq!(&*item.visible_text.borrow(), "Working · break in 17 min");
+        assert_eq!(&*menu.visible_text.borrow(), "Working · break in 17 min");
         let diagnostics = health.diagnostics();
         assert!(diagnostics.available);
         assert_eq!(diagnostics.error, None);
 
         assert!(matches!(
-            apply_status_update(&item, "Working · break in 16 min", &health),
+            apply_menu_update(&menu, &working_status(16), &health),
             TrayUpdateOutcome::FailedFirst(_)
         ));
         assert!(!health.diagnostics().available);

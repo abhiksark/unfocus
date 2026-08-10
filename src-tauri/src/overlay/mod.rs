@@ -5,7 +5,7 @@ mod windows;
 pub(crate) use labels::{
     overlay_run_id_from_label, MAX_OVERLAY_DURATION_SECONDS, MIN_OVERLAY_DURATION_SECONDS,
 };
-pub(crate) use windows::{schedule_automatic_overlay_test, show_overlay};
+pub(crate) use windows::{schedule_automatic_overlay_test, show_overlay, show_overlay_if_idle};
 
 use crate::authorize_main_caller;
 use labels::authorize_overlay_close_caller;
@@ -370,7 +370,7 @@ pub(crate) fn show_overlay_test(
     duration_seconds: u64,
 ) -> Result<usize, String> {
     authorize_main_caller(window.label())?;
-    show_overlay(window.app_handle(), &controller, duration_seconds)
+    show_overlay_if_idle(window.app_handle(), &controller, duration_seconds)
 }
 
 #[tauri::command]
