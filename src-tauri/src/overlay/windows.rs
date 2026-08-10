@@ -78,12 +78,33 @@ pub(crate) fn show_overlay(
     controller: &OverlayController,
     duration_seconds: u64,
 ) -> Result<usize, String> {
+    start_overlay(app, controller, duration_seconds, true)
+}
+
+pub(crate) fn show_overlay_if_idle(
+    app: &AppHandle,
+    controller: &OverlayController,
+    duration_seconds: u64,
+) -> Result<usize, String> {
+    start_overlay(app, controller, duration_seconds, false)
+}
+
+fn start_overlay(
+    app: &AppHandle,
+    controller: &OverlayController,
+    duration_seconds: u64,
+    replace_existing: bool,
+) -> Result<usize, String> {
     let _start_guard = OVERLAY_START_LOCK
         .lock()
-        .map_err(|_| "overlay preview start lock is poisoned".to_owned())?;
+        .map_err(|_| "overlay start lock is poisoned".to_owned())?;
 
-    controller.cancel_all()?;
-    controller.close_windows(app, None, "superseded by a new preview");
+    if replace_existing {
+        controller.cancel_all()?;
+        controller.close_windows(app, None, "superseded by a new overlay run");
+    } else if controller.has_active_run() || overlay_run_exists(app, "overlay-") {
+        return Err("another overlay run is already active".into());
+    }
 
     let monitors = app
         .available_monitors()
@@ -133,7 +154,7 @@ pub(crate) fn show_overlay(
                 .build();
 
         if let Err(error) = build_result {
-            controller.close_windows(app, Some(&prefix), "preview startup failed");
+            controller.close_windows(app, Some(&prefix), "overlay startup failed");
             return Err(format!("could not create overlay {index}: {error}"));
         }
     }

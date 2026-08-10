@@ -12,9 +12,9 @@ use std::{
 const UPDATE_CHANNEL_CAPACITY: usize = 1;
 const MILLISECONDS_PER_MINUTE: u64 = 60_000;
 
-// Stage B and C own the runtime producers for paused, stopped, and activity
-// states. Keeping them in the shared model now prevents platform menus from
-// inventing incompatible representations later.
+// Stage C owns the runtime producers for stopped and activity states. Keeping
+// them in the shared model prevents platform menus from inventing incompatible
+// representations later.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +45,7 @@ pub(crate) struct TraySnapshot {
     pub(crate) activity: TrayActivity,
     pub(crate) settings_revision: u64,
     pub(crate) state_revision: u64,
+    pub(crate) action_error: Option<String>,
 }
 
 impl TraySnapshot {
@@ -64,6 +65,25 @@ impl TraySnapshot {
             activity: TrayActivity::Absent,
             settings_revision,
             state_revision,
+            action_error: None,
+        }
+    }
+
+    pub(crate) fn paused(
+        remaining: Duration,
+        overlay_active: bool,
+        settings_revision: u64,
+        state_revision: u64,
+    ) -> Self {
+        Self {
+            phase: TrayPhase::Paused,
+            remaining_milliseconds: None,
+            pause_expires_in_milliseconds: Some(duration_milliseconds(remaining)),
+            overlay_active,
+            activity: TrayActivity::Absent,
+            settings_revision,
+            state_revision,
+            action_error: None,
         }
     }
 
@@ -76,7 +96,13 @@ impl TraySnapshot {
             activity: TrayActivity::Absent,
             settings_revision: 0,
             state_revision: 0,
+            action_error: None,
         }
+    }
+
+    pub(crate) fn with_action_error(mut self, action_error: Option<String>) -> Self {
+        self.action_error = action_error;
+        self
     }
 
     pub(crate) fn presentation(&self) -> TrayPresentation {
@@ -161,6 +187,7 @@ struct UpdateKey {
     overlay_active: bool,
     settings_revision: u64,
     state_revision: u64,
+    action_error: Option<String>,
 }
 
 impl From<&TraySnapshot> for UpdateKey {
@@ -179,6 +206,7 @@ impl From<&TraySnapshot> for UpdateKey {
             overlay_active: snapshot.overlay_active,
             settings_revision: snapshot.settings_revision,
             state_revision: snapshot.state_revision,
+            action_error: snapshot.action_error.clone(),
         }
     }
 }
@@ -224,6 +252,23 @@ impl TrayStatus {
         let update = UpdateKey::from(&snapshot);
         let mut state = self.state();
         state.current = snapshot;
+        if state.last_update == update {
+            return;
+        }
+
+        state.last_update = update;
+        state
+            .subscribers
+            .retain(|subscriber| match subscriber.try_send(()) {
+                Ok(()) | Err(TrySendError::Full(())) => true,
+                Err(TrySendError::Disconnected(())) => false,
+            });
+    }
+
+    pub(crate) fn publish_action_error(&self, action_error: Option<String>) {
+        let mut state = self.state();
+        state.current.action_error = action_error;
+        let update = UpdateKey::from(&state.current);
         if state.last_update == update {
             return;
         }
@@ -287,6 +332,7 @@ mod tests {
             activity: TrayActivity::Absent,
             settings_revision: 3,
             state_revision: 7,
+            action_error: None,
         }
     }
 
@@ -382,6 +428,7 @@ mod tests {
         assert_eq!(serialized["activity"]["kind"], "absent");
         assert_eq!(serialized["settingsRevision"], 4);
         assert_eq!(serialized["stateRevision"], 9);
+        assert_eq!(serialized["actionError"], serde_json::Value::Null);
     }
 
     #[test]
@@ -457,5 +504,34 @@ mod tests {
             "Working · break in 1 min"
         );
         assert_eq!(subscription.try_recv(), Err(TryRecvError::Empty));
+    }
+
+    #[test]
+    fn action_failures_publish_without_changing_authoritative_timer_fields() {
+        let status = TrayStatus::default();
+        let subscription = status.subscribe();
+        assert_eq!(subscription.recv(), Ok(()));
+
+        let timer = TraySnapshot::timer(
+            TrayPhase::Working,
+            Duration::from_secs(12 * 60),
+            false,
+            4,
+            9,
+        );
+        status.publish(timer.clone());
+        assert_eq!(subscription.recv(), Ok(()));
+
+        status.publish_action_error(Some("overlay could not be created".into()));
+        assert_eq!(subscription.recv(), Ok(()));
+        let failed = status.current();
+        assert_eq!(failed.phase, timer.phase);
+        assert_eq!(failed.remaining_milliseconds, timer.remaining_milliseconds);
+        assert_eq!(failed.settings_revision, timer.settings_revision);
+        assert_eq!(failed.state_revision, timer.state_revision);
+        assert_eq!(
+            failed.action_error.as_deref(),
+            Some("overlay could not be created")
+        );
     }
 }

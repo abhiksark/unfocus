@@ -11,8 +11,12 @@ released versions link to their GitHub release.
   and template variants.
 - Added single-instance activation so reopening Unfocus reveals the existing
   dashboard without starting another tray or reminder timer.
-- Added a live, read-only tray status row for the current work countdown and
-  break phase, updated at meaningful minute and state boundaries.
+- Added a live tray status row and native controls for a bounded thirty-minute
+  pause, resume, and an immediate configured break, updated at meaningful
+  minute and state boundaries.
+- Added the same reminder status and controls to the dashboard. Pause expiry is
+  stored locally, remains bounded across restarts, and resumes into a fresh
+  work interval.
 - Added a private vulnerability-reporting policy.
 
 ### Changed

@@ -55,6 +55,9 @@ Unfocus does not update itself yet, so check the releases page for new builds.
 - Ends early without a fight: press Escape or select **End break**
 - Lets you choose a 1–120 minute work interval and a 3–30 second break from
   the dashboard, storing those settings only on your device
+- Lets you pause reminders for thirty minutes, resume into a fresh work
+  interval, or start the configured break immediately from the dashboard or
+  tray; a pause keeps only its bounded local expiry across restarts
 - Uses idle and fullscreen signals, where supported, to avoid interrupting
   you when you are already away from the desk or presenting
 - Keeps the reminder timer running when a platform probe fails instead of
@@ -84,10 +87,11 @@ not just whether a package can be produced.
 On launch, the dashboard shows the live platform signals Unfocus can read.
 Closing the dashboard leaves the reminder running in the system tray. Where a
 tray is available, its menu shows the current work countdown or break phase and
-can preview a break, reopen the dashboard, or quit the app. Starting Unfocus
-again reveals that same dashboard instead of creating another tray or reminder
-timer. Where probes are supported, a due break stays hidden when you are already
-idle or the active window is fullscreen.
+can pause or resume reminders, start the configured break immediately, preview
+a break without changing the timer, reopen the dashboard, or quit the app.
+Starting Unfocus again reveals that same dashboard instead of creating another
+tray or reminder timer. Where probes are supported, a due break stays hidden
+when you are already idle or the active window is fullscreen.
 
 On Linux, the desktop must provide a StatusNotifier/AppIndicator host; Ubuntu
 GNOME normally does this through its Ubuntu AppIndicators extension. The locked
