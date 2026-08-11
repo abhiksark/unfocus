@@ -177,6 +177,11 @@ cannot collide. The Windows MSI's internal ProductVersion is the one exception:
 Windows requires a numeric-only value, so `0.1.0-alpha.1` is represented there
 as `0.1.0`.
 
+Debian packages also retain the canonical SemVer in their filename. Their
+embedded `Version` uses Debian ordering, so `0.2.0-alpha.1` becomes
+`0.2.0~alpha.1-1` and upgrades normally through later candidates to the stable
+package.
+
 ## Privacy and security
 
 Unfocus has no accounts, telemetry, cloud dependency, or packaged-app runtime
