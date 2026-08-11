@@ -8,12 +8,14 @@ SvelteKit 2 uses the static adapter and Svelte 5 runes. Write runes syntax
 (`$props()`, `$state()`, `$derived()`); do not introduce Svelte 4 patterns such
 as `export let` or `$:` reactive statements.
 
-## Activity strip
+## Activity strip and break ledger
 
 - `today-activity.ts` formats the rolling-window summary from
   `get_today_activity`. Keep copy observational (active / away / deep blocks);
   no streaks, badges, or gamification.
 - The strip is presence-only (OS idle). Never request or display keylogging.
+- `break-summary.ts` formats calm counts from `get_break_summary`. Do not add
+  scores, streaks, or competitive framing.
 
 ## Window routing and native events
 

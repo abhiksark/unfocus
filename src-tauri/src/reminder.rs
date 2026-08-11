@@ -1,6 +1,7 @@
 use crate::{
     activity::{epoch_ms, ActivityTrackerHandle},
     authorize_main_caller,
+    break_ledger::{BreakEventKind, BreakLedgerHandle},
     overlay::{
         show_overlay, show_overlay_if_idle, OverlayController, MAX_OVERLAY_DURATION_SECONDS,
         MIN_OVERLAY_DURATION_SECONDS,
@@ -950,6 +951,7 @@ fn execute_reminder_action(
     settings_manager: &ReminderSettingsManager,
     app: &AppHandle,
     overlay_controller: &OverlayController,
+    break_ledger: &BreakLedgerHandle,
 ) -> Result<(), String> {
     match action {
         ReminderAction::Pause if timer.phase == ReminderPhase::Working => {
@@ -959,9 +961,19 @@ fn execute_reminder_action(
             resume_from_pause(timer, now, || settings_manager.clear_pause())?;
         }
         ReminderAction::TakeBreakNow if timer.phase == ReminderPhase::Working => {
+            let settings = timer.settings;
             start_manual_break(timer, now, |break_duration| {
                 show_overlay_if_idle(app, overlay_controller, break_duration.as_secs()).map(|_| ())
             })?;
+            // Only record after the timer transition commits (overlay built).
+            if timer.phase == ReminderPhase::Break {
+                break_ledger.record(
+                    BreakEventKind::ManualTakeBreak,
+                    settings.work_minutes,
+                    settings.break_seconds,
+                    epoch_ms(SystemTime::now()),
+                );
+            }
         }
         ReminderAction::Pause | ReminderAction::Resume | ReminderAction::TakeBreakNow => {
             // Stale and repeated native events are explicit idempotent no-ops.
@@ -1016,36 +1028,44 @@ fn start_manual_break(
     Ok(())
 }
 
+/// Presentation decision after optional overlay creation.
+///
+/// `Show` is only returned when the overlay was created successfully so the
+/// break ledger does not invent a "shown" outcome for a failed cover.
 fn present_scheduled_break(
     app: &AppHandle,
     probe_cache: &ProbeCache,
     overlay_controller: &OverlayController,
     break_duration: Duration,
-) -> BreakPresentation {
+) -> Option<BreakPresentation> {
     let probes = probe_cache.snapshot();
     let decision = break_presentation(&probes, break_duration);
     match decision {
         BreakPresentation::NaturalIdle => {
             eprintln!("scheduled break credited as natural rest because the user is already idle");
-            return decision;
+            return Some(decision);
         }
         BreakPresentation::SuppressFullscreen => {
             eprintln!("scheduled break stayed hidden while fullscreen is active");
-            return decision;
+            return Some(decision);
         }
         BreakPresentation::Show => {}
     }
 
-    if let Err(error) = show_overlay(app, overlay_controller, break_duration.as_secs()) {
-        eprintln!("could not present scheduled break: {error}");
+    match show_overlay(app, overlay_controller, break_duration.as_secs()) {
+        Ok(_) => Some(BreakPresentation::Show),
+        Err(error) => {
+            eprintln!("could not present scheduled break: {error}");
+            None
+        }
     }
-    decision
 }
 
 pub(crate) fn start_scheduler(
     app: AppHandle,
     probe_cache: ProbeCache,
     activity_tracker: ActivityTrackerHandle,
+    break_ledger: BreakLedgerHandle,
     overlay_controller: OverlayController,
     settings_manager: ReminderSettingsManager,
     tray_status: TrayStatus,
@@ -1107,6 +1127,7 @@ pub(crate) fn start_scheduler(
                         &settings_manager,
                         &app,
                         &overlay_controller,
+                        &break_ledger,
                     )
                 });
                 if let (Some(request), Some(result)) = (&request, &action_result) {
@@ -1130,15 +1151,30 @@ pub(crate) fn start_scheduler(
                         action_health.record_failure(attempt_id, error);
                     }
                 } else if transition == Some(ReminderTransition::StartBreak) {
-                    let presentation = present_scheduled_break(
+                    let settings = timer.settings;
+                    if let Some(presentation) = present_scheduled_break(
                         &app,
                         &probe_cache,
                         &overlay_controller,
                         timer.break_duration(),
-                    );
-                    if presentation == BreakPresentation::NaturalIdle {
-                        let credited = timer.credit_natural_break(now);
-                        debug_assert!(credited);
+                    ) {
+                        let kind = match presentation {
+                            BreakPresentation::Show => BreakEventKind::ScheduledShown,
+                            BreakPresentation::NaturalIdle => BreakEventKind::NaturalIdle,
+                            BreakPresentation::SuppressFullscreen => {
+                                BreakEventKind::FullscreenSuppress
+                            }
+                        };
+                        break_ledger.record(
+                            kind,
+                            settings.work_minutes,
+                            settings.break_seconds,
+                            epoch_ms(SystemTime::now()),
+                        );
+                        if presentation == BreakPresentation::NaturalIdle {
+                            let credited = timer.credit_natural_break(now);
+                            debug_assert!(credited);
+                        }
                     }
                 }
 

@@ -91,8 +91,10 @@ computer use versus time away from the keyboard (presence only — no keylogging
 Gaps under five minutes stay inside continuous work; stretches of at least
 twenty-five minutes of continuous activity are counted as deep blocks. Segment
 history is stored only on this device next to other Unfocus settings, pruned to
-the rolling window, and never uploaded. The summary is observe-only: it does
-not pause, skip, or advance the break timer. Timing can be edited inline;
+the rolling window, and never uploaded. The same card shows calm counts of
+local break outcomes (shown, natural rest, manual rest, held for fullscreen)
+for the last day and week. The summary is observe-only: it does not pause,
+skip, or advance the break timer. Timing can be edited inline;
 expand **Advanced** in that editor and select **Open developer mode** for live
 platform signals, monitor coordinates, raw probe errors, and manual refresh.
 The selected consumer or developer view is remembered on this device.
