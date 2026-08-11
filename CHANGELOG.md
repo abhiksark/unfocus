@@ -21,6 +21,10 @@ released versions link to their GitHub release.
 
 ### Changed
 
+- Replaced the diagnostics-first startup screen with a scene-led consumer
+  dashboard. The previous technical dashboard remains available through the
+  timing editor's **Advanced** section, and the selected view is remembered
+  locally.
 - A known tray setup failure now appears in local diagnostics and keeps the
   dashboard reachable; closing the dashboard exits instead of hiding an
   unreachable background reminder.
