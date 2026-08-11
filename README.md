@@ -84,7 +84,12 @@ not just whether a package can be produced.
 | Windows | Early build | Packages are produced; idle and fullscreen probes report as unavailable |
 | Linux Wayland | Unsupported | No Wayland probes or acceptance coverage |
 
-On launch, the dashboard shows the live platform signals Unfocus can read.
+On launch, the consumer dashboard leads with the current reminder state, the
+next break, and the saved focus-to-rest rhythm. Timing can be edited inline;
+expand **Advanced** in that editor and select **Open developer mode** for live
+platform signals, monitor coordinates, raw probe errors, and manual refresh.
+The selected consumer or developer view is remembered on this device.
+
 Closing the dashboard leaves the reminder running in the system tray. Where a
 tray is available, its menu shows the current work countdown or break phase and
 can pause or resume reminders, start the configured break immediately, preview
@@ -101,7 +106,7 @@ missing, keep the dashboard open, enable or restart the desktop's indicator
 host, and restart Unfocus. A known setup error appears in the dashboard, and
 closing that dashboard exits instead of hiding an unreachable process.
 
-![The diagnostics dashboard showing live probe data](.github/media/dashboard.png)
+![The consumer dashboard showing focus time, reminder actions, and the saved rhythm](.github/media/dashboard.png)
 
 ## Build from source
 
