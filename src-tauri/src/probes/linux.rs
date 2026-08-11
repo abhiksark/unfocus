@@ -8,6 +8,17 @@ use x11rb::{
     rust_connection::RustConnection,
 };
 
+const SPIKE_FORCE_PROBE_FAILURE: &str = "UNFOCUS_SPIKE_FORCE_PROBE_FAILURE";
+
+fn validate_spike_probe_override(value: Option<&str>) -> Result<(), String> {
+    if value == Some("1") {
+        return Err(format!(
+            "Linux probe failure injected by {SPIKE_FORCE_PROBE_FAILURE}"
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn validate_session(
     session_type: Option<&str>,
     display: Option<&str>,
@@ -63,6 +74,7 @@ pub(super) fn validate_property(
 
 #[cfg(target_os = "linux")]
 fn connect() -> Result<(RustConnection, usize), String> {
+    validate_spike_probe_override(std::env::var(SPIKE_FORCE_PROBE_FAILURE).ok().as_deref())?;
     validate_session(
         std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
         std::env::var("DISPLAY").ok().as_deref(),
@@ -216,6 +228,13 @@ mod tests {
         assert!(validate_session(None, Some(":0")).is_err());
         assert!(validate_session(Some("x11"), None).is_err());
         assert!(validate_session(Some("x11"), Some("")).is_err());
+    }
+
+    #[test]
+    fn linux_probe_failure_can_be_injected_without_changing_the_session_backend() {
+        assert_eq!(validate_spike_probe_override(None), Ok(()));
+        assert_eq!(validate_spike_probe_override(Some("0")), Ok(()));
+        assert!(validate_spike_probe_override(Some("1")).is_err());
     }
 
     #[test]

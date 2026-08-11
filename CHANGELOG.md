@@ -11,12 +11,20 @@ released versions link to their GitHub release.
   and template variants.
 - Added single-instance activation so reopening Unfocus reveals the existing
   dashboard without starting another tray or reminder timer.
-- Added a live, read-only tray status row for the current work countdown and
-  break phase, updated at meaningful minute and state boundaries.
+- Added a live tray status row and native controls for a bounded thirty-minute
+  pause, resume, and an immediate configured break, updated at meaningful
+  minute and state boundaries.
+- Added the same reminder status and controls to the dashboard. Pause expiry is
+  stored locally, remains bounded across restarts, and resumes into a fresh
+  work interval.
 - Added a private vulnerability-reporting policy.
 
 ### Changed
 
+- Replaced the diagnostics-first startup screen with a scene-led consumer
+  dashboard. The previous technical dashboard remains available through the
+  timing editor's **Advanced** section, and the selected view is remembered
+  locally.
 - A known tray setup failure now appears in local diagnostics and keeps the
   dashboard reachable; closing the dashboard exits instead of hiding an
   unreachable background reminder.
@@ -29,6 +37,10 @@ released versions link to their GitHub release.
 - Documented the `dev`-first branching strategy, release workflow, download
   choices, platform status, and contributor checks.
 - Expanded CI and release Rust tests to cover all targets and features.
+- Recorded Linux tray acceptance on Ubuntu 22.04.5 GNOME 42.9 X11 with
+  Ubuntu AppIndicators 42-2~fakesync1: the AppImage ran on the host, while the
+  Debian package was installed in Debian 12 and the RPM in Fedora 43 against
+  that same physical two-display X11 session. Wayland remains unsupported.
 
 ## [0.1.0-alpha.1] - 2026-08-07
 
