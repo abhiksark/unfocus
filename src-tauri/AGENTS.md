@@ -22,7 +22,8 @@ orchestration, OS probes, timing, and diagnostics.
 - `src/diagnostics.rs` owns diagnostics serialization, environment reporting,
   monitor enumeration, and the diagnostics command.
 - `src/reminder.rs` owns the pure reminder timer, probe-based presentation
-  decision, and scheduler thread (including observe-only activity sampling).
+  decision (including optional activity-history adaptation that never mutates
+  the clock), and scheduler thread (including observe-only activity sampling).
 - `src/tray.rs` owns tray construction, callbacks, embedded assets, and asset
   tests.
 - `src/probes/mod.rs` owns probe caches, workers, snapshots, panic containment,

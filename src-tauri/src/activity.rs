@@ -23,6 +23,12 @@ use std::{
 pub(crate) const AFK_THRESHOLD_SECONDS: u64 = 5 * 60;
 /// Continuous active stretch at least this long counts as a deep block.
 pub(crate) const DEEP_BLOCK_MIN_SECONDS: u64 = 25 * 60;
+/// Long continuous active threshold for break presentation adaptation (#61).
+pub(crate) const LONG_ACTIVE_SECONDS: u64 = DEEP_BLOCK_MIN_SECONDS;
+/// Long AFK threshold for break presentation adaptation (#61).
+pub(crate) const LONG_AFK_SECONDS: u64 = AFK_THRESHOLD_SECONDS;
+/// Recent AFK still influences presentation this long after it ends (#61).
+pub(crate) const RECENT_AFK_GRACE_SECONDS: u64 = 2 * 60;
 /// Rolling observation window for the dashboard strip and totals.
 pub(crate) const ACTIVITY_WINDOW_SECONDS: u64 = 24 * 60 * 60;
 /// Half-hour buckets across the rolling window (48 × 30 min = 24 h).
@@ -258,6 +264,53 @@ impl ActivityTracker {
         }
     }
 
+    /// Snapshot for pure break-presentation adaptation (issue #61).
+    pub(crate) fn presentation_context(&self, now_ms: u64) -> ActivityPresentationContext {
+        if self.segments.is_empty() {
+            return ActivityPresentationContext {
+                history_available: false,
+                continuous_active_seconds: 0,
+                recent_afk_seconds: 0,
+            };
+        }
+
+        let continuous_active_seconds = self
+            .segments
+            .last()
+            .filter(|segment| segment.kind == ActivityKind::Active)
+            .map(|segment| {
+                let end = now_ms.max(segment.end_ms);
+                end.saturating_sub(segment.start_ms) / MILLIS_PER_SECOND
+            })
+            .unwrap_or(0);
+
+        let grace_ms = RECENT_AFK_GRACE_SECONDS.saturating_mul(MILLIS_PER_SECOND);
+        let mut recent_afk_seconds = 0_u64;
+        for segment in self.segments.iter().rev() {
+            if segment.kind != ActivityKind::Afk {
+                continue;
+            }
+            let end = if self.segments.last().is_some_and(|last| {
+                last.start_ms == segment.start_ms && last.end_ms == segment.end_ms
+            }) {
+                now_ms.max(segment.end_ms)
+            } else {
+                segment.end_ms
+            };
+            if now_ms.saturating_sub(end) > grace_ms {
+                break;
+            }
+            recent_afk_seconds = end.saturating_sub(segment.start_ms) / MILLIS_PER_SECOND;
+            break;
+        }
+
+        ActivityPresentationContext {
+            history_available: true,
+            continuous_active_seconds,
+            recent_afk_seconds,
+        }
+    }
+
     pub(crate) fn summary(&self, now_ms: u64) -> ActivitySummary {
         let window_ms = self.window_seconds.saturating_mul(MILLIS_PER_SECOND);
         let window_start = now_ms.saturating_sub(window_ms);
@@ -345,6 +398,14 @@ impl ActivityTracker {
         }
         buckets
     }
+}
+
+/// Presence signals used only for break presentation (never the pure clock).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ActivityPresentationContext {
+    pub(crate) history_available: bool,
+    pub(crate) continuous_active_seconds: u64,
+    pub(crate) recent_afk_seconds: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -453,6 +514,17 @@ impl ActivityTrackerHandle {
             .lock()
             .map(|state| state.tracker.summary(now_ms))
             .unwrap_or_else(|_| ActivityTracker::default().summary(now_ms))
+    }
+
+    pub(crate) fn presentation_context(&self, now_ms: u64) -> ActivityPresentationContext {
+        self.inner
+            .lock()
+            .map(|state| state.tracker.presentation_context(now_ms))
+            .unwrap_or(ActivityPresentationContext {
+                history_available: false,
+                continuous_active_seconds: 0,
+                recent_afk_seconds: 0,
+            })
     }
 }
 
@@ -870,5 +942,31 @@ mod tests {
         tracker.observe(t0 + 120_000, Some(0));
         tracker.observe(t0, Some(0));
         assert!(tracker.summary(t0).active_seconds < 60);
+    }
+
+    #[test]
+    fn presentation_context_reports_continuous_active_and_recent_afk() {
+        let mut tracker = tracker();
+        let t0 = 1_700_000_000_000_u64;
+        // 30 minutes active.
+        tracker.observe(t0, Some(0));
+        tracker.observe(t0 + 30 * 60_000, Some(0));
+        let active_ctx = tracker.presentation_context(t0 + 30 * 60_000);
+        assert!(active_ctx.history_available);
+        assert!(active_ctx.continuous_active_seconds >= 30 * 60);
+        assert_eq!(active_ctx.recent_afk_seconds, 0);
+
+        // Switch to AFK for 6 minutes.
+        tracker.observe(t0 + 30 * 60_000 + 1_000, Some(400));
+        tracker.observe(t0 + 36 * 60_000, Some(400));
+        let afk_ctx = tracker.presentation_context(t0 + 36 * 60_000);
+        assert_eq!(afk_ctx.continuous_active_seconds, 0);
+        assert!(afk_ctx.recent_afk_seconds >= 5 * 60);
+
+        // Return to active; AFK still recent within grace.
+        tracker.observe(t0 + 36 * 60_000 + 30_000, Some(0));
+        let grace_ctx = tracker.presentation_context(t0 + 36 * 60_000 + 30_000);
+        assert!(grace_ctx.continuous_active_seconds < 60);
+        assert!(grace_ctx.recent_afk_seconds >= 5 * 60);
     }
 }

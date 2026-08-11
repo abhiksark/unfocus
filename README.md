@@ -94,7 +94,11 @@ history is stored only on this device next to other Unfocus settings, pruned to
 the rolling window, and never uploaded. The same card shows calm counts of
 local break outcomes (shown, natural rest, manual rest, held for fullscreen)
 for the last day and week. The summary is observe-only: it does not pause,
-skip, or advance the break timer. Timing can be edited inline;
+skip, or advance the break timer. Scheduled break presentation may use that
+local presence history so a long continuous stretch requires a real away
+period before natural credit, while a long AFK still prefers a quiet natural
+rest when you remain idle; fullscreen still suppresses the overlay. Timing can
+be edited inline;
 expand **Advanced** in that editor and select **Open developer mode** for live
 platform signals, monitor coordinates, raw probe errors, and manual refresh.
 The selected consumer or developer view is remembered on this device.
