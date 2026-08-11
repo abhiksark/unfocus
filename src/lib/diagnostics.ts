@@ -32,7 +32,13 @@ export function diagnosticsHealth(
 ): DiagnosticsHealth {
   if (transportError) return "unavailable";
   if (!report) return "connecting";
-  if (report.monitorError || report.idleError || report.fullscreenError || report.tray.error) {
+  if (
+    !report.tray.available ||
+    report.monitorError ||
+    report.idleError ||
+    report.fullscreenError ||
+    report.tray.error
+  ) {
     return "degraded";
   }
   return "healthy";

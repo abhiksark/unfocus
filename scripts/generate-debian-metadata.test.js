@@ -51,4 +51,11 @@ describe("Debian metadata generation", () => {
       "exactly one dated [0.2.0-alpha.2] section",
     );
   });
+
+  test("rejects an invalid calendar date", () => {
+    const invalid = changelog.replace("2026-08-11", "2026-02-31");
+    expect(() => renderDebianChangelog(invalid, "0.2.0-alpha.1")).toThrow(
+      "CHANGELOG.md has an invalid date for [0.2.0-alpha.1]",
+    );
+  });
 });

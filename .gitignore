@@ -13,7 +13,7 @@ vite.config.ts.timestamp-*
 # working notes stay local; repository policy and agent guidance are tracked
 *.md
 !README.md
-!CHANGELOG.md
+!/CHANGELOG.md
 !.github/SECURITY.md
 !CLAUDE.md
 !AGENTS.md

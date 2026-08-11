@@ -186,10 +186,14 @@ export function finalizeDebianPackage(packagePath, canonicalVersion, options = {
 
 export function debianVersionIsGreater(candidate, previous) {
   try {
-    command("dpkg", ["--compare-versions", candidate, "gt", previous]);
+    execFileSync("dpkg", ["--compare-versions", candidate, "gt", previous], { stdio: "ignore" });
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (error?.status === 1) return false;
+    const status = error?.status ?? "unknown";
+    throw new Error(
+      `dpkg --compare-versions ${candidate} gt ${previous} could not run (exit ${status})`,
+    );
   }
 }
 

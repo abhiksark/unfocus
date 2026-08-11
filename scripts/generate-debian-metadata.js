@@ -15,7 +15,17 @@ export function renderDebianChangelog(changelog, version) {
   const heading = new RegExp(`^## \\[${version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\] - (\\d{4})-(\\d{2})-(\\d{2})\\s*$`, "m");
   const match = changelog.match(heading);
   if (!match) throw new Error(`CHANGELOG.md has no dated [${version}] section`);
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    throw new Error(`CHANGELOG.md has an invalid date for [${version}]`);
+  }
   const timestamp = date.toUTCString().replace("GMT", "+0000");
   return `unfocus (${semverToDebianVersion(version)}) unstable; urgency=medium\n\n  * Release v${version}. See changelog.gz for curated release notes.\n\n -- ${MAINTAINER}  ${timestamp}\n`;
 }
