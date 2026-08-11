@@ -1,5 +1,8 @@
 use crate::{
-    activity::{epoch_ms, ActivityTrackerHandle},
+    activity::{
+        epoch_ms, ActivityPresentationContext, ActivityTrackerHandle, LONG_ACTIVE_SECONDS,
+        LONG_AFK_SECONDS,
+    },
     authorize_main_caller,
     break_ledger::{BreakEventKind, BreakLedgerHandle},
     overlay::{
@@ -909,8 +912,9 @@ impl ReminderTimer {
     }
 }
 
-/// Why a due break was or was not shown. Probe data only affects presentation
-/// (and natural-break credit for idle); it never advances the pure clock.
+/// Why a due break was or was not shown. Probe data and optional activity
+/// context only affect presentation (and natural-break credit for idle); they
+/// never advance the pure clock.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BreakPresentation {
     Show,
@@ -924,23 +928,53 @@ enum BreakPresentation {
 /// the timer by itself. Errors fail open so an unavailable probe never
 /// disables breaks. Idle long enough for a natural break is reported separately
 /// so the scheduler can credit work without a silent break phase.
-fn break_presentation(probes: &ProbeSnapshot, break_duration: Duration) -> BreakPresentation {
-    let user_is_already_resting = probes
-        .idle_seconds
-        .as_ref()
-        .is_ok_and(|seconds| *seconds >= break_duration.as_secs());
-    if user_is_already_resting {
-        return BreakPresentation::NaturalIdle;
-    }
-
-    let presentation_is_active = probes
+///
+/// When `activity` history is available, issue #61 adapts presentation only:
+/// long continuous active requires a real AFK for natural credit; long AFK
+/// still prefers natural credit when idle ≥ break length. Fullscreen always
+/// wins. Empty history falls back to the legacy idle/fullscreen rules.
+fn break_presentation(
+    probes: &ProbeSnapshot,
+    break_duration: Duration,
+    activity: Option<ActivityPresentationContext>,
+) -> BreakPresentation {
+    // Fullscreen is never overridden by adaptation (#61 decision 5).
+    if probes
         .active_window_fullscreen
         .as_ref()
-        .is_ok_and(|fullscreen| *fullscreen);
-    if presentation_is_active {
+        .is_ok_and(|fullscreen| *fullscreen)
+    {
         return BreakPresentation::SuppressFullscreen;
     }
 
+    let Ok(idle_seconds) = probes.idle_seconds.as_ref() else {
+        // Idle probe dark: fail open and show the break.
+        return BreakPresentation::Show;
+    };
+    let idle_seconds = *idle_seconds;
+    let break_secs = break_duration.as_secs();
+
+    if let Some(ctx) = activity.filter(|ctx| ctx.history_available) {
+        if ctx.continuous_active_seconds >= LONG_ACTIVE_SECONDS {
+            // After deep continuous work, micro-idle equal only to a short break
+            // is not enough; require a real AFK-length rest for natural credit.
+            let required = break_secs.max(LONG_AFK_SECONDS);
+            if idle_seconds >= required {
+                return BreakPresentation::NaturalIdle;
+            }
+            return BreakPresentation::Show;
+        }
+        if ctx.recent_afk_seconds >= LONG_AFK_SECONDS {
+            if idle_seconds >= break_secs {
+                return BreakPresentation::NaturalIdle;
+            }
+            return BreakPresentation::Show;
+        }
+    }
+
+    if idle_seconds >= break_secs {
+        return BreakPresentation::NaturalIdle;
+    }
     BreakPresentation::Show
 }
 
@@ -1035,11 +1069,13 @@ fn start_manual_break(
 fn present_scheduled_break(
     app: &AppHandle,
     probe_cache: &ProbeCache,
+    activity_tracker: &ActivityTrackerHandle,
     overlay_controller: &OverlayController,
     break_duration: Duration,
 ) -> Option<BreakPresentation> {
     let probes = probe_cache.snapshot();
-    let decision = break_presentation(&probes, break_duration);
+    let activity = activity_tracker.presentation_context(epoch_ms(SystemTime::now()));
+    let decision = break_presentation(&probes, break_duration, Some(activity));
     match decision {
         BreakPresentation::NaturalIdle => {
             eprintln!("scheduled break credited as natural rest because the user is already idle");
@@ -1155,6 +1191,7 @@ pub(crate) fn start_scheduler(
                     if let Some(presentation) = present_scheduled_break(
                         &app,
                         &probe_cache,
+                        &activity_tracker,
                         &overlay_controller,
                         timer.break_duration(),
                     ) {
@@ -1840,6 +1877,26 @@ mod tests {
         assert_eq!(resumed.state_revision, 2);
     }
 
+    fn no_history() -> Option<ActivityPresentationContext> {
+        None
+    }
+
+    fn long_active_context() -> Option<ActivityPresentationContext> {
+        Some(ActivityPresentationContext {
+            history_available: true,
+            continuous_active_seconds: LONG_ACTIVE_SECONDS,
+            recent_afk_seconds: 0,
+        })
+    }
+
+    fn long_afk_context() -> Option<ActivityPresentationContext> {
+        Some(ActivityPresentationContext {
+            history_available: true,
+            continuous_active_seconds: 0,
+            recent_afk_seconds: LONG_AFK_SECONDS,
+        })
+    }
+
     #[test]
     fn configured_break_duration_controls_idle_suppression() {
         let idle = ProbeSnapshot {
@@ -1848,11 +1905,11 @@ mod tests {
         };
 
         assert_eq!(
-            break_presentation(&idle, Duration::from_secs(8)),
+            break_presentation(&idle, Duration::from_secs(8), no_history()),
             BreakPresentation::NaturalIdle
         );
         assert_eq!(
-            break_presentation(&idle, Duration::from_secs(20)),
+            break_presentation(&idle, Duration::from_secs(20), no_history()),
             BreakPresentation::Show
         );
     }
@@ -1878,19 +1935,19 @@ mod tests {
         };
 
         assert_eq!(
-            break_presentation(&active, break_duration),
+            break_presentation(&active, break_duration, no_history()),
             BreakPresentation::Show
         );
         assert_eq!(
-            break_presentation(&idle, break_duration),
+            break_presentation(&idle, break_duration, no_history()),
             BreakPresentation::NaturalIdle
         );
         assert_eq!(
-            break_presentation(&fullscreen, break_duration),
+            break_presentation(&fullscreen, break_duration, no_history()),
             BreakPresentation::SuppressFullscreen
         );
         assert_eq!(
-            break_presentation(&failed, break_duration),
+            break_presentation(&failed, break_duration, no_history()),
             BreakPresentation::Show
         );
 
@@ -1898,7 +1955,7 @@ mod tests {
         // separate scheduler step after StartBreak, not inside tick().
         for probes in [&active, &idle, &fullscreen, &failed] {
             let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 3));
-            let _ = break_presentation(probes, Duration::from_secs(3));
+            let _ = break_presentation(probes, Duration::from_secs(3), no_history());
             assert_eq!(
                 timer.tick(Duration::from_secs(60)),
                 Some(ReminderTransition::StartBreak)
@@ -1908,6 +1965,78 @@ mod tests {
                 Some(ReminderTransition::EndBreak)
             );
         }
+    }
+
+    #[test]
+    fn long_active_requires_real_afk_for_natural_credit() {
+        let break_duration = Duration::from_secs(20);
+        let micro_idle = ProbeSnapshot {
+            idle_seconds: Ok(20),
+            active_window_fullscreen: Ok(false),
+        };
+        let real_afk = ProbeSnapshot {
+            idle_seconds: Ok(LONG_AFK_SECONDS),
+            active_window_fullscreen: Ok(false),
+        };
+        assert_eq!(
+            break_presentation(&micro_idle, break_duration, long_active_context()),
+            BreakPresentation::Show
+        );
+        assert_eq!(
+            break_presentation(&real_afk, break_duration, long_active_context()),
+            BreakPresentation::NaturalIdle
+        );
+    }
+
+    #[test]
+    fn long_afk_prefers_natural_when_still_idle() {
+        let break_duration = Duration::from_secs(20);
+        let still_idle = ProbeSnapshot {
+            idle_seconds: Ok(20),
+            active_window_fullscreen: Ok(false),
+        };
+        let typing = ProbeSnapshot {
+            idle_seconds: Ok(0),
+            active_window_fullscreen: Ok(false),
+        };
+        assert_eq!(
+            break_presentation(&still_idle, break_duration, long_afk_context()),
+            BreakPresentation::NaturalIdle
+        );
+        assert_eq!(
+            break_presentation(&typing, break_duration, long_afk_context()),
+            BreakPresentation::Show
+        );
+    }
+
+    #[test]
+    fn fullscreen_wins_over_long_active_adaptation() {
+        let probes = ProbeSnapshot {
+            idle_seconds: Ok(0),
+            active_window_fullscreen: Ok(true),
+        };
+        assert_eq!(
+            break_presentation(&probes, Duration::from_secs(20), long_active_context()),
+            BreakPresentation::SuppressFullscreen
+        );
+    }
+
+    #[test]
+    fn empty_history_uses_legacy_idle_rules() {
+        let break_duration = Duration::from_secs(20);
+        let idle = ProbeSnapshot {
+            idle_seconds: Ok(20),
+            active_window_fullscreen: Ok(false),
+        };
+        let empty = Some(ActivityPresentationContext {
+            history_available: false,
+            continuous_active_seconds: LONG_ACTIVE_SECONDS,
+            recent_afk_seconds: LONG_AFK_SECONDS,
+        });
+        assert_eq!(
+            break_presentation(&idle, break_duration, empty),
+            BreakPresentation::NaturalIdle
+        );
     }
 
     #[test]
@@ -1945,14 +2074,16 @@ mod tests {
     }
 
     #[test]
-    fn idle_outranks_fullscreen_for_natural_break() {
+    fn fullscreen_outranks_idle_for_presentation_contract() {
+        // Issue #61: fullscreen is never overridden, including when idle would
+        // otherwise natural-credit.
         let both = ProbeSnapshot {
             idle_seconds: Ok(30),
             active_window_fullscreen: Ok(true),
         };
         assert_eq!(
-            break_presentation(&both, Duration::from_secs(20)),
-            BreakPresentation::NaturalIdle
+            break_presentation(&both, Duration::from_secs(20), no_history()),
+            BreakPresentation::SuppressFullscreen
         );
     }
 }

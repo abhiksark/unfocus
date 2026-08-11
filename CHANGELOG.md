@@ -18,6 +18,10 @@ released versions link to their GitHub release.
 - Added a local break-event ledger for scheduled shown, natural idle, fullscreen
   suppress, and manual take-break outcomes, with calm dashboard counts for the
   last day and week.
+- Adapted scheduled break presentation from continuous activity and AFK history
+  without changing the pure timer: after a long active stretch a short micro-idle
+  no longer natural-credits; long AFK still prefers quiet natural credit when
+  idle; fullscreen is never overridden.
 
 ## [0.2.0-alpha.1] - 2026-08-11
 
