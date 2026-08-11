@@ -15,6 +15,9 @@ released versions link to their GitHub release.
 - Persisted activity segments locally across restarts (atomic JSON next to app
   settings, pruned to the rolling window). Write failures keep the previous
   complete history and leave the reminder timer unchanged.
+- Added a local break-event ledger for scheduled shown, natural idle, fullscreen
+  suppress, and manual take-break outcomes, with calm dashboard counts for the
+  last day and week.
 
 ## [0.2.0-alpha.1] - 2026-08-11
 

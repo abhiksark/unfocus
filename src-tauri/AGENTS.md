@@ -16,6 +16,9 @@ orchestration, OS probes, timing, and diagnostics.
   samples, local atomic history persistence, the rolling-window summary, and
   the `get_today_activity` command. It never keylogs and never mutates the
   reminder timer.
+- `src/break_ledger.rs` owns the local break-outcome ledger (shown, natural,
+  fullscreen suppress, manual), atomic persistence, and `get_break_summary`.
+  Ledger failures must not stop the reminder scheduler.
 - `src/diagnostics.rs` owns diagnostics serialization, environment reporting,
   monitor enumeration, and the diagnostics command.
 - `src/reminder.rs` owns the pure reminder timer, probe-based presentation

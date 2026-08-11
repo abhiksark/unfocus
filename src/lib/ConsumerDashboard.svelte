@@ -14,6 +14,11 @@
   } from "$lib/reminder-settings";
   import type { ReminderActionCommand, ReminderStatus } from "$lib/reminder-status";
   import {
+    breakSummaryCaption,
+    weekBreakCaption,
+    type BreakSummary
+  } from "$lib/break-summary";
+  import {
     currentKindLabel,
     deepBlockCaption,
     formatActivityDuration,
@@ -35,6 +40,8 @@
     diagnosticsReady: boolean;
     todayActivity: TodayActivity | null;
     todayActivityError: string | null;
+    breakSummary: BreakSummary | null;
+    breakSummaryError: string | null;
     savedSettings: ReminderSettings | null;
     timingEditorExpanded: boolean;
     workMinutesInput: string;
@@ -68,6 +75,8 @@
     diagnosticsReady,
     todayActivity,
     todayActivityError,
+    breakSummary,
+    breakSummaryError,
     savedSettings,
     timingEditorExpanded,
     workMinutesInput,
@@ -129,6 +138,14 @@
   const activityStripLabel = $derived(
     todayActivity ? stripAriaLabel(todayActivity) : "Activity strip loading"
   );
+  const breakCaption = $derived(
+    breakSummary
+      ? breakSummaryCaption(breakSummary)
+      : breakSummaryError
+        ? "Break history unavailable"
+        : "Reading break history…"
+  );
+  const weekCaption = $derived(breakSummary ? weekBreakCaption(breakSummary) : "");
 </script>
 
 <main class="consumer-dashboard">
@@ -243,6 +260,36 @@
       {:else}
         <p class="today-footnote">Collecting idle samples from this session…</p>
       {/if}
+
+      <div class="break-history" aria-labelledby="break-history-title">
+        <p class="section-label" id="break-history-title">Break outcomes</p>
+        {#if breakSummary}
+          <div class="break-counts" role="group" aria-label="Break outcome counts">
+            <div>
+              <span>Shown</span>
+              <strong>{breakSummary.scheduledShown}</strong>
+            </div>
+            <div>
+              <span>Natural</span>
+              <strong>{breakSummary.naturalIdle}</strong>
+            </div>
+            <div>
+              <span>Manual</span>
+              <strong>{breakSummary.manualTakeBreak}</strong>
+            </div>
+            <div>
+              <span>Fullscreen</span>
+              <strong>{breakSummary.fullscreenSuppress}</strong>
+            </div>
+          </div>
+          <p class="today-footnote">{breakCaption}</p>
+          <p class="today-footnote">{weekCaption}</p>
+        {:else if breakSummaryError}
+          <p class="today-error" role="status">{breakSummaryError}</p>
+        {:else}
+          <p class="today-footnote">{breakCaption}</p>
+        {/if}
+      </div>
     </section>
 
     <section class="rhythm" aria-labelledby="rhythm-title">
@@ -603,6 +650,48 @@
     color: #ffc4c4;
   }
 
+  .break-history {
+    display: grid;
+    gap: 10px;
+    border-top: 1px solid #2b372e;
+    padding-top: 14px;
+  }
+
+  .break-history .section-label {
+    margin-bottom: 0;
+  }
+
+  .break-counts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .break-counts div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    border: 1px solid #2b372e;
+    border-radius: 10px;
+    background: #0f1612;
+  }
+
+  .break-counts span {
+    color: #8f9d94;
+    font-size: 0.66rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .break-counts strong {
+    color: #e7f0e9;
+    font-size: 1rem;
+    font-weight: 650;
+  }
+
   .actions {
     display: flex;
     min-height: 76px;
@@ -876,7 +965,8 @@
       grid-row: auto;
     }
 
-    .today-stats {
+    .today-stats,
+    .break-counts {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
@@ -892,7 +982,8 @@
       grid-template-columns: 1fr;
     }
 
-    .today-stats {
+    .today-stats,
+    .break-counts {
       grid-template-columns: 1fr;
     }
 

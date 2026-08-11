@@ -1,6 +1,7 @@
 use crate::{
     activity::{epoch_ms, ActivityTrackerHandle},
     authorize_main_caller,
+    break_ledger::{BreakEventKind, BreakLedgerHandle},
     overlay::{
         show_overlay, show_overlay_if_idle, OverlayController, MAX_OVERLAY_DURATION_SECONDS,
         MIN_OVERLAY_DURATION_SECONDS,
@@ -950,6 +951,7 @@ fn execute_reminder_action(
     settings_manager: &ReminderSettingsManager,
     app: &AppHandle,
     overlay_controller: &OverlayController,
+    break_ledger: &BreakLedgerHandle,
 ) -> Result<(), String> {
     match action {
         ReminderAction::Pause if timer.phase == ReminderPhase::Working => {
@@ -959,9 +961,19 @@ fn execute_reminder_action(
             resume_from_pause(timer, now, || settings_manager.clear_pause())?;
         }
         ReminderAction::TakeBreakNow if timer.phase == ReminderPhase::Working => {
+            let settings = timer.settings;
             start_manual_break(timer, now, |break_duration| {
                 show_overlay_if_idle(app, overlay_controller, break_duration.as_secs()).map(|_| ())
             })?;
+            // Only record after the timer transition commits (overlay built).
+            if timer.phase == ReminderPhase::Break {
+                break_ledger.record(
+                    BreakEventKind::ManualTakeBreak,
+                    settings.work_minutes,
+                    settings.break_seconds,
+                    epoch_ms(SystemTime::now()),
+                );
+            }
         }
         ReminderAction::Pause | ReminderAction::Resume | ReminderAction::TakeBreakNow => {
             // Stale and repeated native events are explicit idempotent no-ops.
@@ -1046,6 +1058,7 @@ pub(crate) fn start_scheduler(
     app: AppHandle,
     probe_cache: ProbeCache,
     activity_tracker: ActivityTrackerHandle,
+    break_ledger: BreakLedgerHandle,
     overlay_controller: OverlayController,
     settings_manager: ReminderSettingsManager,
     tray_status: TrayStatus,
@@ -1107,6 +1120,7 @@ pub(crate) fn start_scheduler(
                         &settings_manager,
                         &app,
                         &overlay_controller,
+                        &break_ledger,
                     )
                 });
                 if let (Some(request), Some(result)) = (&request, &action_result) {
@@ -1130,11 +1144,25 @@ pub(crate) fn start_scheduler(
                         action_health.record_failure(attempt_id, error);
                     }
                 } else if transition == Some(ReminderTransition::StartBreak) {
+                    let settings = timer.settings;
                     let presentation = present_scheduled_break(
                         &app,
                         &probe_cache,
                         &overlay_controller,
                         timer.break_duration(),
+                    );
+                    let kind = match presentation {
+                        BreakPresentation::Show => BreakEventKind::ScheduledShown,
+                        BreakPresentation::NaturalIdle => BreakEventKind::NaturalIdle,
+                        BreakPresentation::SuppressFullscreen => {
+                            BreakEventKind::FullscreenSuppress
+                        }
+                    };
+                    break_ledger.record(
+                        kind,
+                        settings.work_minutes,
+                        settings.break_seconds,
+                        epoch_ms(SystemTime::now()),
                     );
                     if presentation == BreakPresentation::NaturalIdle {
                         let credited = timer.credit_natural_break(now);
