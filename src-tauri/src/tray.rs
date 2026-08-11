@@ -358,11 +358,15 @@ fn install_controller(
             }
             Some(TrayAction::Open) => reveal_dashboard(app),
             Some(TrayAction::Preview) => {
-                let controller = app.state::<OverlayController>();
-                if let Err(error) = show_overlay_if_idle(app, &controller, PREVIEW_DURATION_SECONDS)
-                {
-                    eprintln!("overlay preview failed: {error}");
-                }
+                let app = app.clone();
+                let controller = app.state::<OverlayController>().inner().clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    if let Err(error) =
+                        show_overlay_if_idle(&app, &controller, PREVIEW_DURATION_SECONDS)
+                    {
+                        eprintln!("overlay preview failed: {error}");
+                    }
+                });
             }
             Some(TrayAction::Quit) => app.exit(0),
             None => {}

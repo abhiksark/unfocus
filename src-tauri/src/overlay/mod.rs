@@ -366,13 +366,19 @@ fn begin_overlay_close(
 }
 
 #[tauri::command]
-pub(crate) fn show_overlay_test(
+pub(crate) async fn show_overlay_test(
     window: WebviewWindow,
     controller: State<'_, OverlayController>,
     duration_seconds: u64,
 ) -> Result<usize, String> {
     authorize_main_caller(window.label())?;
-    show_overlay_if_idle(window.app_handle(), &controller, duration_seconds)
+    let app = window.app_handle().clone();
+    let controller = controller.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        show_overlay_if_idle(&app, &controller, duration_seconds)
+    })
+    .await
+    .map_err(|error| format!("overlay preview task failed: {error}"))?
 }
 
 #[tauri::command]
