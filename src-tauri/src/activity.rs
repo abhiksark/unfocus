@@ -2,10 +2,20 @@
 //!
 //! Privacy boundary: only presence of input (OS idle seconds) is used. No
 //! keylogging, mouse paths, app titles, or window content.
+//!
+//! Segment history is stored locally next to app config as JSON. Writes are
+//! atomic (temp file + replace). Probe or write failures never mutate the
+//! reminder timer.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
-    sync::{Arc, Mutex},
+    fs::{self, File, OpenOptions},
+    io::{self, Write},
+    path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -17,10 +27,15 @@ pub(crate) const DEEP_BLOCK_MIN_SECONDS: u64 = 25 * 60;
 pub(crate) const ACTIVITY_WINDOW_SECONDS: u64 = 24 * 60 * 60;
 /// Half-hour buckets across the rolling window (48 × 30 min = 24 h).
 pub(crate) const STRIP_BUCKET_COUNT: usize = 48;
-
+/// Minimum spacing between background history writes while a segment extends.
+const PERSIST_MIN_INTERVAL_MS: u64 = 30_000;
+const HISTORY_FILE_NAME: &str = "activity-history.json";
+const HISTORY_SCHEMA_VERSION: u32 = 1;
 const MILLIS_PER_SECOND: u64 = 1_000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+static HISTORY_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum ActivityKind {
     Active,
@@ -28,11 +43,50 @@ pub(crate) enum ActivityKind {
     Unknown,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum PersistedKind {
+    Active,
+    Afk,
+}
+
+impl PersistedKind {
+    fn from_activity(kind: ActivityKind) -> Option<Self> {
+        match kind {
+            ActivityKind::Active => Some(Self::Active),
+            ActivityKind::Afk => Some(Self::Afk),
+            ActivityKind::Unknown => None,
+        }
+    }
+
+    fn into_activity(self) -> ActivityKind {
+        match self {
+            Self::Active => ActivityKind::Active,
+            Self::Afk => ActivityKind::Afk,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Segment {
     kind: ActivityKind,
     start_ms: u64,
     end_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PersistedSegment {
+    kind: PersistedKind,
+    start_ms: u64,
+    end_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PersistedActivityHistory {
+    version: u32,
+    segments: Vec<PersistedSegment>,
 }
 
 #[derive(Debug, Clone)]
@@ -79,6 +133,29 @@ impl ActivityTracker {
             last_kind: None,
             last_probe_ok: false,
         }
+    }
+
+    /// Replace live segments with a pruned history snapshot.
+    ///
+    /// Future wall-clock ends (clock skew) clear history rather than inventing
+    /// multi-day spans. Restored state is not treated as a live probe success.
+    fn restore_segments(&mut self, segments: Vec<Segment>, now_ms: u64) {
+        self.segments = segments;
+        if self
+            .segments
+            .iter()
+            .any(|segment| segment.end_ms > now_ms || segment.start_ms > now_ms)
+        {
+            self.segments.clear();
+            self.last_sample_ms = None;
+            self.last_kind = None;
+            self.last_probe_ok = false;
+            return;
+        }
+        self.prune(now_ms);
+        self.last_sample_ms = self.segments.last().map(|segment| segment.end_ms);
+        self.last_kind = self.segments.last().map(|segment| segment.kind);
+        self.last_probe_ok = false;
     }
 
     /// Record one idle reading at `now_ms` (Unix epoch milliseconds).
@@ -157,6 +234,28 @@ impl ActivityTracker {
             }
             true
         });
+    }
+
+    fn to_persisted(&self) -> PersistedActivityHistory {
+        let segments = self
+            .segments
+            .iter()
+            .filter_map(|segment| {
+                let kind = PersistedKind::from_activity(segment.kind)?;
+                if segment.end_ms < segment.start_ms {
+                    return None;
+                }
+                Some(PersistedSegment {
+                    kind,
+                    start_ms: segment.start_ms,
+                    end_ms: segment.end_ms,
+                })
+            })
+            .collect();
+        PersistedActivityHistory {
+            version: HISTORY_SCHEMA_VERSION,
+            segments,
+        }
     }
 
     pub(crate) fn summary(&self, now_ms: u64) -> ActivitySummary {
@@ -272,29 +371,87 @@ pub(crate) struct ActivitySummary {
     pub(crate) strip: Vec<StripBucket>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
+struct ActivityTrackerState {
+    tracker: ActivityTracker,
+    path: PathBuf,
+    last_persisted_at_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct ActivityTrackerHandle {
-    inner: Arc<Mutex<ActivityTracker>>,
+    inner: Arc<Mutex<ActivityTrackerState>>,
+}
+
+impl Default for ActivityTrackerHandle {
+    fn default() -> Self {
+        // Tests and fallbacks only; production uses `load`.
+        Self {
+            inner: Arc::new(Mutex::new(ActivityTrackerState {
+                tracker: ActivityTracker::default(),
+                path: PathBuf::from(HISTORY_FILE_NAME),
+                last_persisted_at_ms: None,
+            })),
+        }
+    }
 }
 
 impl ActivityTrackerHandle {
+    /// Load pruned history from `config_dir` or start empty after repair.
+    pub(crate) fn load(config_dir: &Path) -> io::Result<Self> {
+        Self::load_at(config_dir, epoch_ms(SystemTime::now()))
+    }
+
+    fn load_at(config_dir: &Path, now_ms: u64) -> io::Result<Self> {
+        let path = config_dir.join(HISTORY_FILE_NAME);
+        let mut tracker = ActivityTracker::default();
+        let segments = load_or_repair_history(&path, now_ms, tracker.window_seconds)?;
+        tracker.restore_segments(segments, now_ms);
+        Ok(Self {
+            inner: Arc::new(Mutex::new(ActivityTrackerState {
+                tracker,
+                path,
+                last_persisted_at_ms: None,
+            })),
+        })
+    }
+
     #[cfg(test)]
-    fn new(tracker: ActivityTracker) -> Self {
+    fn new_with_path(tracker: ActivityTracker, path: PathBuf) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(tracker)),
+            inner: Arc::new(Mutex::new(ActivityTrackerState {
+                tracker,
+                path,
+                last_persisted_at_ms: None,
+            })),
         }
     }
 
     pub(crate) fn observe(&self, now_ms: u64, idle_seconds: Option<u64>) {
-        if let Ok(mut tracker) = self.inner.lock() {
-            tracker.observe(now_ms, idle_seconds);
+        let Ok(mut state) = self.inner.lock() else {
+            return;
+        };
+        let previous_kind = state.tracker.last_kind;
+        state.tracker.observe(now_ms, idle_seconds);
+        let kind_changed = state.tracker.last_kind != previous_kind;
+        let due = match state.last_persisted_at_ms {
+            None => true,
+            Some(previous) => now_ms.saturating_sub(previous) >= PERSIST_MIN_INTERVAL_MS,
+        };
+        if !kind_changed && !due {
+            return;
         }
+        if let Err(error) = persist_history(&state.path, &state.tracker.to_persisted()) {
+            eprintln!("could not persist activity history: {error}");
+            return;
+        }
+        state.last_persisted_at_ms = Some(now_ms);
     }
 
     pub(crate) fn summary(&self, now_ms: u64) -> ActivitySummary {
         self.inner
             .lock()
-            .map(|tracker| tracker.summary(now_ms))
+            .map(|state| state.tracker.summary(now_ms))
             .unwrap_or_else(|_| ActivityTracker::default().summary(now_ms))
     }
 }
@@ -303,6 +460,144 @@ pub(crate) fn epoch_ms(now: SystemTime) -> u64 {
     now.duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+fn segments_from_persisted(
+    history: PersistedActivityHistory,
+    now_ms: u64,
+    window_seconds: u64,
+) -> Result<Vec<Segment>, ()> {
+    if history.version != HISTORY_SCHEMA_VERSION {
+        return Err(());
+    }
+    let window_ms = window_seconds.saturating_mul(MILLIS_PER_SECOND);
+    let cutoff = now_ms.saturating_sub(window_ms);
+    let mut segments = Vec::with_capacity(history.segments.len());
+    for item in history.segments {
+        if item.end_ms < item.start_ms {
+            return Err(());
+        }
+        if item.end_ms > now_ms || item.start_ms > now_ms {
+            // Future timestamps: treat as clock skew, drop whole history.
+            return Err(());
+        }
+        if item.end_ms <= cutoff {
+            continue;
+        }
+        let start_ms = item.start_ms.max(cutoff);
+        segments.push(Segment {
+            kind: item.kind.into_activity(),
+            start_ms,
+            end_ms: item.end_ms,
+        });
+    }
+    Ok(segments)
+}
+
+fn load_or_repair_history(
+    path: &Path,
+    now_ms: u64,
+    window_seconds: u64,
+) -> io::Result<Vec<Segment>> {
+    match fs::read(path) {
+        Ok(contents) => {
+            let parsed = serde_json::from_slice::<PersistedActivityHistory>(&contents)
+                .ok()
+                .and_then(|history| segments_from_persisted(history, now_ms, window_seconds).ok());
+            if let Some(segments) = parsed {
+                return Ok(segments);
+            }
+
+            // Invalid or untrusted content: write a complete empty history so
+            // the next launch does not re-parse corruption silently as success.
+            let empty = PersistedActivityHistory {
+                version: HISTORY_SCHEMA_VERSION,
+                segments: Vec::new(),
+            };
+            persist_history(path, &empty)?;
+            Ok(Vec::new())
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) => Err(error),
+    }
+}
+
+fn create_history_temp_file(path: &Path) -> io::Result<(PathBuf, File)> {
+    let parent = path.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "activity history path has no parent",
+        )
+    })?;
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy())
+        .unwrap_or_else(|| "activity-history".into());
+
+    for _ in 0..100 {
+        let id = HISTORY_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
+        let temp_path = parent.join(format!(".{name}.{}.{id}.tmp", std::process::id()));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+        {
+            Ok(file) => return Ok((temp_path, file)),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "could not allocate an activity history temporary file",
+    ))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn replace_history_file(temp_path: &Path, path: &Path) -> io::Result<()> {
+    fs::rename(temp_path, path)
+}
+
+#[cfg(target_os = "windows")]
+fn replace_history_file(temp_path: &Path, path: &Path) -> io::Result<()> {
+    match fs::rename(temp_path, path) {
+        Ok(()) => Ok(()),
+        Err(_error) if path.exists() => {
+            fs::copy(temp_path, path)?;
+            OpenOptions::new().write(true).open(path)?.sync_all()?;
+            fs::remove_file(temp_path)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn persist_history(path: &Path, history: &PersistedActivityHistory) -> io::Result<()> {
+    let parent = path.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "activity history path has no parent",
+        )
+    })?;
+    fs::create_dir_all(parent)?;
+
+    let serialized = serde_json::to_vec_pretty(history).map_err(io::Error::other)?;
+    let (temp_path, mut temp_file) = create_history_temp_file(path)?;
+    let write_result = temp_file
+        .write_all(&serialized)
+        .and_then(|()| temp_file.write_all(b"\n"))
+        .and_then(|()| temp_file.sync_all());
+    drop(temp_file);
+    if let Err(error) = write_result {
+        let _ = fs::remove_file(&temp_path);
+        return Err(error);
+    }
+
+    if let Err(error) = replace_history_file(&temp_path, path) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(error);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -317,6 +612,37 @@ pub(crate) fn get_today_activity(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_DIRECTORY_ID: AtomicU64 = AtomicU64::new(0);
+
+    struct TestDirectory {
+        path: PathBuf,
+    }
+
+    impl TestDirectory {
+        fn new() -> Self {
+            for _ in 0..100 {
+                let id = TEST_DIRECTORY_ID.fetch_add(1, Ordering::Relaxed);
+                let path = std::env::temp_dir().join(format!(
+                    "unfocus-activity-tests-{}-{id}",
+                    std::process::id()
+                ));
+                match fs::create_dir(&path) {
+                    Ok(()) => return Self { path },
+                    Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+                    Err(error) => panic!("test directory should be created: {error}"),
+                }
+            }
+            panic!("could not allocate a test activity directory")
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 
     fn tracker() -> ActivityTracker {
         ActivityTracker::new(300, 25 * 60, 24 * 60 * 60, 48)
@@ -389,7 +715,9 @@ mod tests {
 
     #[test]
     fn handle_exposes_summary_for_commands() {
-        let handle = ActivityTrackerHandle::new(tracker());
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
         let t0 = 1_700_000_000_000_u64;
         handle.observe(t0, Some(0));
         handle.observe(t0 + 90_000, Some(2));
@@ -397,5 +725,150 @@ mod tests {
         assert_eq!(summary.window_label, "Last 24 hours");
         assert!(summary.active_seconds >= 90);
         assert_eq!(summary.current_kind, Some(ActivityKind::Active));
+    }
+
+    #[test]
+    fn restart_restores_segments_within_the_rolling_window() {
+        let dir = TestDirectory::new();
+        let t0 = 1_700_000_000_000_u64;
+        let path = dir.path.join(HISTORY_FILE_NAME);
+
+        let first = ActivityTrackerHandle::new_with_path(tracker(), path);
+        first.observe(t0, Some(0));
+        first.observe(t0 + 120_000, Some(0));
+        first.observe(t0 + 180_000, Some(400));
+        first.observe(t0 + 240_000, Some(450));
+
+        let before = first.summary(t0 + 240_000);
+        assert!(before.active_seconds >= 120);
+        assert!(before.afk_seconds >= 60);
+
+        // Load at the same synthetic clock the samples used so the rolling
+        // window still contains them (wall clock now would prune 2023-era ids).
+        let reloaded =
+            ActivityTrackerHandle::load_at(&dir.path, t0 + 240_000).expect("history loads");
+        let after = reloaded.summary(t0 + 240_000);
+        assert_eq!(after.active_seconds, before.active_seconds);
+        assert_eq!(after.afk_seconds, before.afk_seconds);
+        // Restored history is not treated as a live probe success.
+        assert!(!after.probe_available);
+    }
+
+    #[test]
+    fn failed_write_leaves_previous_complete_history() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let t0 = 1_700_000_000_000_u64;
+        let original_history = PersistedActivityHistory {
+            version: HISTORY_SCHEMA_VERSION,
+            segments: vec![PersistedSegment {
+                kind: PersistedKind::Active,
+                start_ms: t0,
+                end_ms: t0 + 60_000,
+            }],
+        };
+        persist_history(&path, &original_history).expect("seed history");
+        let original = fs::read(&path).expect("read seeded history");
+
+        // Parent path is a file, so create_dir_all / temp create must fail and
+        // must not rewrite the good history at `path`.
+        let blocker = dir.path.join("not-a-directory");
+        fs::write(&blocker, b"x").expect("blocker file");
+        let nested = blocker.join(HISTORY_FILE_NAME);
+        let result = persist_history(
+            &nested,
+            &PersistedActivityHistory {
+                version: HISTORY_SCHEMA_VERSION,
+                segments: vec![PersistedSegment {
+                    kind: PersistedKind::Afk,
+                    start_ms: t0,
+                    end_ms: t0 + 999_000,
+                }],
+            },
+        );
+        assert!(result.is_err(), "persist under a file parent must fail");
+        assert_eq!(fs::read(&path).expect("previous history remains"), original);
+
+        // Observe still advances in memory when disk writes fail.
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), nested);
+        handle.observe(t0, Some(0));
+        handle.observe(t0 + 90_000, Some(0));
+        assert!(handle.summary(t0 + 90_000).active_seconds >= 90);
+        assert_eq!(fs::read(&path).expect("unrelated history intact"), original);
+    }
+
+    #[test]
+    fn persisted_file_prunes_to_the_rolling_window() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let t0 = 1_700_000_000_000_u64;
+        let mut tracker = ActivityTracker::new(60, 120, 300, 3);
+        tracker.observe(t0, Some(0));
+        tracker.observe(t0 + 100_000, Some(0));
+        tracker.observe(t0 + 1_000_000, Some(0));
+        persist_history(&path, &tracker.to_persisted()).expect("persist");
+
+        let loaded = load_or_repair_history(&path, t0 + 1_000_000, 300).expect("load");
+        assert!(loaded.len() <= 2);
+        for segment in &loaded {
+            assert!(segment.end_ms > (t0 + 1_000_000) - 300_000);
+        }
+        let bytes = fs::metadata(&path).expect("meta").len();
+        assert!(bytes < 16_384, "history file should stay small after prune");
+    }
+
+    #[test]
+    fn future_timestamps_clear_history_instead_of_inventing_spans() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let now = 1_700_000_000_000_u64;
+        let history = PersistedActivityHistory {
+            version: HISTORY_SCHEMA_VERSION,
+            segments: vec![PersistedSegment {
+                kind: PersistedKind::Active,
+                start_ms: now + 60_000,
+                end_ms: now + 120_000,
+            }],
+        };
+        persist_history(&path, &history).expect("persist skewed");
+
+        let loaded = load_or_repair_history(&path, now, ACTIVITY_WINDOW_SECONDS).expect("load");
+        assert!(loaded.is_empty());
+
+        let mut tracker = tracker();
+        tracker.restore_segments(
+            vec![Segment {
+                kind: ActivityKind::Active,
+                start_ms: now + 1,
+                end_ms: now + 2,
+            }],
+            now,
+        );
+        assert!(tracker.segments.is_empty());
+        assert_eq!(tracker.last_kind, None);
+    }
+
+    #[test]
+    fn malformed_history_is_replaced_with_empty_complete_file() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        fs::write(&path, b"{not-json").expect("seed garbage");
+        let loaded = load_or_repair_history(&path, 1_700_000_000_000, ACTIVITY_WINDOW_SECONDS)
+            .expect("repair");
+        assert!(loaded.is_empty());
+        let repaired: PersistedActivityHistory =
+            serde_json::from_slice(&fs::read(&path).expect("read")).expect("valid json");
+        assert_eq!(repaired.version, HISTORY_SCHEMA_VERSION);
+        assert!(repaired.segments.is_empty());
+    }
+
+    #[test]
+    fn reverse_wall_clock_drops_live_history() {
+        let mut tracker = tracker();
+        let t0 = 1_700_000_000_000_u64;
+        tracker.observe(t0 + 60_000, Some(0));
+        tracker.observe(t0 + 120_000, Some(0));
+        tracker.observe(t0, Some(0));
+        assert!(tracker.summary(t0).active_seconds < 60);
     }
 }
