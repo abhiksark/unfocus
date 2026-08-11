@@ -5,6 +5,8 @@ released versions link to their GitHub release.
 
 ## [Unreleased]
 
+## [0.2.0-alpha.1] - 2026-08-11
+
 ### Added
 
 - Added a generated, monochrome system-tray icon with platform-specific light
@@ -67,5 +69,6 @@ released versions link to their GitHub release.
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
-[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.1.0-alpha.1...dev
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.2.0-alpha.1...dev
+[0.2.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.1.0-alpha.1...v0.2.0-alpha.1
 [0.1.0-alpha.1]: https://github.com/abhiksark/unfocus/releases/tag/v0.1.0-alpha.1
