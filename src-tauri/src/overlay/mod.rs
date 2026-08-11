@@ -416,4 +416,26 @@ mod tests {
         }
         assert_eq!(origins.intentional.len(), CLOSE_ORIGIN_CAPACITY);
     }
+
+    #[test]
+    fn intentional_close_suppresses_sibling_cascade_for_the_same_run() {
+        // Multi-monitor dismiss marks every window intentional before close so
+        // Destroyed events do not queue a second sibling-teardown pass.
+        let now = Instant::now();
+        let mut origins = CloseOriginState::default();
+        origins.mark_intentional(3, now);
+        origins.mark_intentional(3, now);
+        assert!(!origins.begin_unexpected(3, now));
+        assert!(origins.unexpected_pending.is_empty());
+        assert_eq!(origins.intentional.len(), 1);
+    }
+
+    #[test]
+    fn cancel_unexpected_clears_pending_sibling_cleanup() {
+        let now = Instant::now();
+        let mut origins = CloseOriginState::default();
+        assert!(origins.begin_unexpected(9, now));
+        origins.cancel_unexpected(9);
+        assert!(origins.begin_unexpected(9, now));
+    }
 }

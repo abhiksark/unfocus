@@ -53,17 +53,34 @@ orchestration, OS probes, timing, and diagnostics.
 - Keep timing logic pure and clock-injected so tests never require real waits.
   Test probe failure paths and prove that the timer continues.
 
+## Lifecycle qualification (issue #30)
+
+- `src/lifecycle_contract.rs` is test-only pure contract coverage for suspend
+  stalls, topology policy, evidence-status, and release tiers (issue #30).
+  Extend those tests when the shared contract changes; do not invent platform
+  claims without physical evidence.
+- Physical lifecycle and accessibility rows live in local `plans/` checklists
+  and the GitHub **Platform report** form. Automated green is not acceptance.
+
 ## Overlay lifecycle and events
 
 - Create one borderless, always-on-top, skip-taskbar overlay per monitor.
 - Compute the deadline in Rust and encode it in the window label so every
   display derives presentation from the same clock.
+- If any monitor window fails to build or finish loading, tear down the whole
+  run immediately. Never leave a partial multi-monitor cover.
 - Closing one overlay closes its siblings; closing one through the window
-  manager must never strand the rest.
+  manager (or losing a display that hosted an overlay) must never strand the
+  rest. Unexpected window loss ends the entire run so the desk is never
+  half-covered.
+- Hotplug during a break does not spawn a new overlay mid-run. The next break
+  re-enumerates monitors and covers the full set.
 - `Emitter::emit` broadcasts regardless of the calling window, and an
   untargeted JavaScript `listen()` subscribes globally. Emit per window with
   `emit_to(EventTarget::webview_window(..))`, while the overlay subscribes with
   its own label. Both sides are required to prevent cross-run delivery.
+- Multi-monitor acceptance is a real-hardware checklist under `plans/` (local
+  only). Do not claim a platform multi-monitor-qualified without that evidence.
 
 ## Tray assets
 

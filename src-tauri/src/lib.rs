@@ -1,6 +1,9 @@
 mod diagnostics;
 #[cfg(desktop)]
 mod instance;
+/// Pure lifecycle/a11y product contract for issue #30 (compiled with unit tests).
+#[cfg(test)]
+mod lifecycle_contract;
 mod overlay;
 mod probes;
 mod reminder;

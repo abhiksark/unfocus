@@ -187,9 +187,13 @@ fn start_overlay(
                 })
                 .build();
 
+        // Multi-monitor invariant: any single failure rolls back every window
+        // already opened in this run so the desk is never half-covered.
         if let Err(error) = build_result {
             controller.close_windows(app, Some(&prefix), "overlay startup failed");
-            return Err(format!("could not create overlay {index}: {error}"));
+            return Err(format!(
+                "could not create overlay {index} of {total}: {error}"
+            ));
         }
 
         // Native construction can return before the local page has initialized.
@@ -200,13 +204,15 @@ fn start_overlay(
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 controller.close_windows(app, Some(&prefix), "overlay startup failed");
                 return Err(format!(
-                    "overlay {index} did not finish loading within {} seconds",
+                    "overlay {index} of {total} did not finish loading within {} seconds",
                     OVERLAY_WINDOW_READY_TIMEOUT.as_secs()
                 ));
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 controller.close_windows(app, Some(&prefix), "overlay startup failed");
-                return Err(format!("overlay {index} closed before it finished loading"));
+                return Err(format!(
+                    "overlay {index} of {total} closed before it finished loading"
+                ));
             }
         }
     }

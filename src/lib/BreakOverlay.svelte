@@ -7,6 +7,11 @@
     remainingAt,
     type OverlayClockAnchor
   } from "$lib/overlay-clock";
+  import {
+    OVERLAY_REGION_LABEL,
+    overlayAnnouncement,
+    overlayCountdownLabel
+  } from "$lib/overlay-a11y";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
@@ -69,13 +74,8 @@
   let clock = $derived(
     new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit" }).format(wallNowMs)
   );
-  let announcement = $derived(
-    complete
-      ? "Break complete."
-      : secondsLeft === 5
-        ? "Five seconds remain in this break."
-        : ""
-  );
+  let announcement = $derived(overlayAnnouncement({ complete, secondsLeft }));
+  let countdownAccessibleLabel = $derived(overlayCountdownLabel(complete, secondsLeft));
 
   function errorMessage(value: unknown): string {
     return value instanceof Error ? value.message : String(value);
@@ -174,7 +174,7 @@
   class:closing={dismissing}
   class:complete
   class:final-seconds={finalSeconds}
-  aria-label="Eye break"
+  aria-label={OVERLAY_REGION_LABEL}
   style={presentationStyle}
 >
   <div class="atmosphere" aria-hidden="true">
@@ -201,7 +201,7 @@
       class="timer"
       role="timer"
       aria-live="off"
-      aria-label={complete ? "Break complete" : `${secondsLeft} seconds remaining`}
+      aria-label={countdownAccessibleLabel}
     >
       <svg viewBox="0 0 40 40" aria-hidden="true">
         <circle class="ring-track" cx="20" cy="20" r="15.9" pathLength="100"></circle>

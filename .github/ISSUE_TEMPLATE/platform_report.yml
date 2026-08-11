@@ -8,16 +8,15 @@ body:
       value: |
         ## Why this form exists
 
-        Linux X11 is the only backend that has had an acceptance run. macOS
-        reads idle and fullscreen through Quartz but has **never been run
-        against multiple displays**. Windows has no probes at all. Wayland is
+        Linux X11 is the only backend that has had a multi-monitor acceptance
+        run. macOS reads idle and fullscreen through Quartz but has **not**
+        completed multi-monitor acceptance. Windows has no probes. Wayland is
         unsupported.
 
-        If you ran Unfocus outside the qualified path — especially macOS with
-        two or more displays, or any setup with mixed scale factors — this form
-        turns your session into evidence. **A report that everything worked is
-        just as valuable as one that did not.** It is the only way this project
-        gets acceptance data, because nothing is collected automatically.
+        This form is the evidence format for lifecycle and accessibility
+        qualification (issue #30). Tick only what you actually tried. A full
+        pass is as valuable as a failure. Redact screenshots: no window titles,
+        credentials, or personal content.
 
   - type: dropdown
     id: platform
@@ -27,7 +26,7 @@ body:
         - "macOS — Apple silicon"
         - "macOS — Intel"
         - "Windows"
-        - "Linux — X11 on an unusual window manager"
+        - "Linux — X11 (qualified path or unusual WM)"
         - "Linux — Wayland"
         - "Something else"
     validations:
@@ -37,8 +36,10 @@ body:
     id: environment
     attributes:
       label: OS version and desktop
-      description: On Linux include the window manager or compositor. On macOS the version number is enough.
-      placeholder: "macOS 15.3"
+      description: >-
+        Include architecture, desktop/window manager, and session type
+        (X11/Wayland/Aqua). Example: Ubuntu 22.04.5 GNOME 42.9 X11, x86_64.
+      placeholder: "macOS 15.3 — Apple silicon"
     validations:
       required: true
 
@@ -46,8 +47,26 @@ body:
     id: build
     attributes:
       label: Unfocus build
-      description: Short commit from `git rev-parse --short HEAD`, and how you launched it.
-      placeholder: "5106c6a — bun run tauri dev"
+      description: >-
+        Release tag or short commit, package filename if packaged, and how you
+        launched it (AppImage, deb, dmg, `bun run tauri dev`).
+      placeholder: "v0.2.0-alpha.1 — unfocus_0.2.0-alpha.1_amd64.AppImage"
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence_header
+    attributes:
+      label: Evidence header
+      description: >-
+        One block with: commit or tag, package name, packaged vs development,
+        OS build, architecture, desktop/WM, app version, assistive settings
+        (screen reader, reduce motion, contrast, text size).
+      placeholder: |
+        commit: abc1234 / tag: v0.2.0-alpha.1
+        package: AppImage (packaged)
+        OS: Ubuntu 22.04.5 x86_64 — GNOME 42.9 X11
+        a11y: reduce-motion off, Orca not used, 100% text scale
     validations:
       required: true
 
@@ -56,12 +75,13 @@ body:
     attributes:
       label: Monitor topology
       description: >-
-        From the **Monitor topology** panel on the dashboard — one line per
-        display with the name, the pixel size, and the `x, y · scale×` text.
-        Mixed scale factors and negative origins are the interesting cases.
+        From the **Monitor topology** panel (developer mode) — one line per
+        display with name, pixel size, `x, y · scale×`, primary, and any
+        rotation/mirroring. Note topology changes you performed during the run.
       placeholder: |
-        1  Built-in Retina Display   3024 × 1964 px   0, 0 · 2×
+        1  Built-in Retina Display   3024 × 1964 px   0, 0 · 2×  (primary)
         2  LG UltraFine              3840 × 2160 px   -3840, -400 · 2×
+        Changes: unplugged display 2 during break; replugged during work
     validations:
       required: true
 
@@ -70,41 +90,76 @@ body:
     attributes:
       label: Diagnostics tiles
       description: >-
-        The four tiles across the top of the dashboard — **Session**,
-        **Displays**, **Idle time**, **Active fullscreen** — with the small
-        grey caption under each one.
+        The four tiles — **Session**, **Displays**, **Idle time**,
+        **Active fullscreen** — with the caption under each one. Include any
+        probe error text (not secrets).
       placeholder: |
-        Session: QUARTZ — Aqua
-        Displays: 2 — Quartz Compositor
-        Idle time: 11s — Quartz event source
-        Active fullscreen: No — Quartz window list
+        Session: X11 — GNOME
+        Displays: 2 — X11
+        Idle time: 11s — XScreenSaver
+        Active fullscreen: No — EWMH
     validations:
       required: true
 
   - type: checkboxes
-    id: observed
+    id: observed_core
     attributes:
-      label: What worked
-      description: >-
-        Tick everything you confirmed. Leave anything that failed unticked and
-        describe it below. Do not tick things you did not try.
+      label: Core multi-monitor and tray (tick only what you confirmed)
       options:
-        - label: The tray icon appeared and its menu worked (Open / Test overlays / Quit).
-        - label: The overlay covered every display edge to edge — no gaps, no leftover window, no visible desktop.
-        - label: The scene filled each display correctly, including HiDPI ones — no black band, no wrongly scaled scene.
-        - label: Every display showed the same countdown value at the same moment.
-        - label: Escape dismissed the overlay on every display at once, not just the focused one.
-        - label: Selecting **End break** dismissed the overlay on every display at once.
-        - label: Idle seconds on the dashboard climbed while I kept my hands off, and reset when I typed.
-        - label: Active fullscreen flipped to Yes when another app went fullscreen — and did not read Yes merely because an Unfocus overlay was up.
-        - label: Turning on the system reduce-motion setting stopped every animation in the scene.
+        - label: Cold start produced one dashboard, one tray, and one reminder (no second process).
+        - label: Closing the dashboard hid to tray (or exited with a clear tray-unavailable message).
+        - label: Tray menu showed live status and Pause / Resume / Take break / Preview / Open / Quit worked.
+        - label: The overlay covered every display edge to edge — no gaps, no leftover desktop.
+        - label: Every display showed the same countdown at the same moment.
+        - label: Escape dismissed the overlay on every display at once.
+        - label: **End break** dismissed the overlay on every display at once.
+        - label: Idle climbed while idle and reset on input; fullscreen flipped for another app, not for Unfocus overlays.
+        - label: Reduce motion stopped every looping scene animation.
+
+  - type: checkboxes
+    id: observed_lifecycle
+    attributes:
+      label: Lifecycle (tick only what you confirmed; leave blank if not tried)
+      options:
+        - label: Suspend during work, then resume — no multi-break storm; at most one phase transition.
+        - label: Suspend during a visible multi-monitor break, then resume — same run/deadline; clean close.
+        - label: Session lock/unlock during work or break — no lock-screen bypass; timer still running.
+        - label: Added a monitor before a break — next break covered the new display.
+        - label: Removed a monitor during a break — no orphan overlay; remaining behavior matched product policy.
+        - label: Changed primary, scale, or arrangement between runs without mixed deadlines.
+        - label: Closed one overlay via the window manager — siblings closed; no immediate replacement run.
+        - label: Probe failure or unavailable probe left the timer running (fail-open).
+
+  - type: checkboxes
+    id: observed_a11y
+    attributes:
+      label: Keyboard and assistive tech (tick only what you confirmed)
+      options:
+        - label: Every dashboard action usable by keyboard alone with visible focus.
+        - label: Save/Reset validation and busy/success/error states available without color alone.
+        - label: Screen reader announced break start, End break, and completion without speaking every second.
+        - label: Only one display’s screen-reader announcements (not one stream per monitor).
+        - label: Reduce motion on before launch and mid-session both stopped loops.
+        - label: Increased contrast / high contrast left copy and focus perceivable.
+        - label: ~200% display scaling or large text still left controls reachable and overlay readable.
+
+  - type: dropdown
+    id: overall
+    attributes:
+      label: Overall result for the cases you ran
+      options:
+        - "Pass — every ticked case behaved as expected"
+        - "Fail — at least one ticked case failed (describe below)"
+        - "Partial — some cases pass; others not run or failed"
+    validations:
+      required: true
 
   - type: textarea
     id: notes
     attributes:
-      label: What failed or looked wrong
+      label: What failed, was not run, or looked wrong
       description: >-
-        Anything you left unticked above, plus anything surprising. If the
-        whole list passed, say so plainly — that is the report.
+        For each failure: trigger, impact, and whether you can reproduce.
+        Explicitly list cases you did **not** run. Do not mark not-run as pass.
     validations:
       required: true
