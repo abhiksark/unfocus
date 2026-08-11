@@ -8,12 +8,39 @@ use super::{
 };
 use serde::Serialize;
 use std::{
-    sync::Mutex,
+    sync::{mpsc, Mutex},
     time::{Duration, Instant},
 };
-use tauri::{AppHandle, Emitter, EventTarget, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    webview::PageLoadEvent, AppHandle, Emitter, EventTarget, Manager, WebviewUrl,
+    WebviewWindowBuilder,
+};
 
 static OVERLAY_START_LOCK: Mutex<()> = Mutex::new(());
+const MONITOR_ENUMERATION_TIMEOUT: Duration = Duration::from_secs(5);
+const OVERLAY_WINDOW_READY_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn available_monitors(app: &AppHandle) -> Result<Vec<tauri::Monitor>, String> {
+    let (sender, receiver) = mpsc::sync_channel(1);
+    let main_app = app.clone();
+    app.run_on_main_thread(move || {
+        let _ = sender.send(main_app.available_monitors());
+    })
+    .map_err(|error| format!("could not schedule monitor enumeration: {error}"))?;
+
+    receiver
+        .recv_timeout(MONITOR_ENUMERATION_TIMEOUT)
+        .map_err(|error| match error {
+            mpsc::RecvTimeoutError::Timeout => format!(
+                "monitor enumeration did not finish within {} seconds",
+                MONITOR_ENUMERATION_TIMEOUT.as_secs()
+            ),
+            mpsc::RecvTimeoutError::Disconnected => {
+                "monitor enumeration stopped before returning a result".to_owned()
+            }
+        })?
+        .map_err(|error| format!("could not enumerate monitors: {error}"))
+}
 
 pub(super) fn close_overlay_windows(
     app: &AppHandle,
@@ -106,9 +133,10 @@ fn start_overlay(
         return Err("another overlay run is already active".into());
     }
 
-    let monitors = app
-        .available_monitors()
-        .map_err(|error| format!("could not enumerate monitors: {error}"))?;
+    // TAO's GTK monitor conversion reads X11 workarea properties directly.
+    // Always perform that operation on the application thread, even when an
+    // overlay was requested by a reminder or another background worker.
+    let monitors = available_monitors(app)?;
     if monitors.is_empty() {
         return Err("Tauri did not report any monitors".into());
     }
@@ -133,6 +161,7 @@ fn start_overlay(
         let position = monitor.position();
         let size = monitor.size();
         let label = overlay_label(run_id, index, total, duration_seconds, deadline_ms);
+        let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
 
         let build_result =
             WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
@@ -151,11 +180,34 @@ fn start_overlay(
                 .always_on_top(true)
                 .skip_taskbar(true)
                 .background_color(tauri::webview::Color(7, 19, 16, 255))
+                .on_page_load(move |_, payload| {
+                    if matches!(payload.event(), PageLoadEvent::Finished) {
+                        let _ = ready_sender.try_send(());
+                    }
+                })
                 .build();
 
         if let Err(error) = build_result {
             controller.close_windows(app, Some(&prefix), "overlay startup failed");
             return Err(format!("could not create overlay {index}: {error}"));
+        }
+
+        // Native construction can return before the local page has initialized.
+        // Wait from the background caller so the application thread remains
+        // free to realize this window before another one is queued.
+        match ready_receiver.recv_timeout(OVERLAY_WINDOW_READY_TIMEOUT) {
+            Ok(()) => {}
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                controller.close_windows(app, Some(&prefix), "overlay startup failed");
+                return Err(format!(
+                    "overlay {index} did not finish loading within {} seconds",
+                    OVERLAY_WINDOW_READY_TIMEOUT.as_secs()
+                ));
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                controller.close_windows(app, Some(&prefix), "overlay startup failed");
+                return Err(format!("overlay {index} closed before it finished loading"));
+            }
         }
     }
 
