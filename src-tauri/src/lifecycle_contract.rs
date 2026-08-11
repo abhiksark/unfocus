@@ -210,4 +210,14 @@ mod tests {
         assert!(contract.reduced_motion_stops_loops);
         assert!(contract.state_also_in_text);
     }
+
+    #[test]
+    fn topology_reconcile_never_mixes_runs_or_spawns_mid_break() {
+        // Mid-run: add display → no spawn. Remove/unexpected loss → end run.
+        assert!(!should_spawn_on_hotplug_add(true));
+        assert!(unexpected_sibling_loss_ends_run());
+        assert_eq!(max_transitions_per_tick(), 1);
+        // After the run ends, a later start may enumerate a larger topology.
+        assert!(should_spawn_on_hotplug_add(false));
+    }
 }
