@@ -1,3 +1,4 @@
+mod activity;
 mod diagnostics;
 #[cfg(desktop)]
 mod instance;
@@ -9,6 +10,7 @@ mod probes;
 mod reminder;
 mod tray;
 
+use activity::{get_today_activity, ActivityTrackerHandle};
 use diagnostics::get_diagnostics;
 #[cfg(desktop)]
 use instance::handle_secondary_launch;
@@ -49,6 +51,7 @@ pub fn run() {
         .setup(|app| {
             let settings_manager = ReminderSettingsManager::load(&app.path().app_config_dir()?)?;
             let probe_cache = ProbeCache::start()?;
+            let activity_tracker = ActivityTrackerHandle::default();
             let overlay_controller = OverlayController::start(app.handle().clone())?;
             let tray_status = TrayStatus::default();
             if !app.manage(settings_manager.clone()) {
@@ -56,6 +59,9 @@ pub fn run() {
             }
             if !app.manage(probe_cache.clone()) {
                 return Err(io::Error::other("probe cache was already managed").into());
+            }
+            if !app.manage(activity_tracker.clone()) {
+                return Err(io::Error::other("activity tracker was already managed").into());
             }
             if !app.manage(overlay_controller.clone()) {
                 return Err(io::Error::other("overlay controller was already managed").into());
@@ -66,6 +72,7 @@ pub fn run() {
             let reminder_control = start_reminder_scheduler(
                 app.handle().clone(),
                 probe_cache,
+                activity_tracker,
                 overlay_controller.clone(),
                 settings_manager,
                 tray_status.clone(),
@@ -112,6 +119,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_diagnostics,
+            get_today_activity,
             get_reminder_settings,
             get_reminder_status,
             save_reminder_settings,

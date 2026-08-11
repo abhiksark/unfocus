@@ -12,10 +12,13 @@ orchestration, OS probes, timing, and diagnostics.
 - `src/lib.rs` is the composition root: module declarations, shared main-window
   authorization, Tauri setup and managed state, window-event routing, command
   registration, and exported `run()`.
+- `src/activity.rs` owns pure continuous-activity / AFK segmentation from idle
+  samples, the rolling-window summary, and the `get_today_activity` command.
+  It never keylogs and never mutates the reminder timer.
 - `src/diagnostics.rs` owns diagnostics serialization, environment reporting,
   monitor enumeration, and the diagnostics command.
 - `src/reminder.rs` owns the pure reminder timer, probe-based presentation
-  decision, and scheduler thread.
+  decision, and scheduler thread (including observe-only activity sampling).
 - `src/tray.rs` owns tray construction, callbacks, embedded assets, and asset
   tests.
 - `src/probes/mod.rs` owns probe caches, workers, snapshots, panic containment,

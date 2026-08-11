@@ -13,6 +13,15 @@
     type ReminderSettingsValidation
   } from "$lib/reminder-settings";
   import type { ReminderActionCommand, ReminderStatus } from "$lib/reminder-status";
+  import {
+    currentKindLabel,
+    deepBlockCaption,
+    formatActivityDuration,
+    stripActiveHeight,
+    stripAfkHeight,
+    stripAriaLabel,
+    type TodayActivity
+  } from "$lib/today-activity";
 
   type SettingsResult = "saved" | "reset" | null;
 
@@ -24,6 +33,8 @@
     reminderActionResult: string | null;
     overlayRunning: boolean;
     diagnosticsReady: boolean;
+    todayActivity: TodayActivity | null;
+    todayActivityError: string | null;
     savedSettings: ReminderSettings | null;
     timingEditorExpanded: boolean;
     workMinutesInput: string;
@@ -55,6 +66,8 @@
     reminderActionResult,
     overlayRunning,
     diagnosticsReady,
+    todayActivity,
+    todayActivityError,
     savedSettings,
     timingEditorExpanded,
     workMinutesInput,
@@ -105,6 +118,16 @@
       presentation.showPause ||
       presentation.showResume ||
       reminderActionResult !== null
+  );
+  const activityKind = $derived(
+    todayActivity
+      ? currentKindLabel(todayActivity.currentKind, todayActivity.probeAvailable)
+      : todayActivityError
+        ? "Activity unavailable"
+        : "Gathering samples…"
+  );
+  const activityStripLabel = $derived(
+    todayActivity ? stripAriaLabel(todayActivity) : "Activity strip loading"
   );
 </script>
 
@@ -161,6 +184,66 @@
         </div>
       </section>
     {/if}
+
+    <section class="today" aria-labelledby="today-title">
+      <div class="today-header">
+        <div>
+          <p class="section-label">Your day</p>
+          <h2 id="today-title">{todayActivity?.windowLabel ?? "Last 24 hours"}</h2>
+          <p class="today-status">{activityKind}</p>
+        </div>
+      </div>
+
+      {#if todayActivity}
+        <div class="today-stats" role="group" aria-label="Activity totals">
+          <div>
+            <span>Active</span>
+            <strong>{formatActivityDuration(todayActivity.activeSeconds)}</strong>
+          </div>
+          <div>
+            <span>Away</span>
+            <strong>{formatActivityDuration(todayActivity.afkSeconds)}</strong>
+          </div>
+          <div>
+            <span>Longest stretch</span>
+            <strong>{formatActivityDuration(todayActivity.longestActiveSeconds)}</strong>
+          </div>
+          <div>
+            <span>Deep work</span>
+            <strong>{todayActivity.deepBlockCount}</strong>
+            <small>{deepBlockCaption(todayActivity.deepBlockCount, todayActivity.deepBlockMinSeconds)}</small>
+          </div>
+        </div>
+
+        <div
+          class="today-strip"
+          role="img"
+          aria-label={activityStripLabel}
+        >
+          {#each todayActivity.strip as bucket, index (index)}
+            <div class="strip-bucket" aria-hidden="true">
+              <span
+                class="strip-afk"
+                style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
+              ></span>
+              <span
+                class="strip-active"
+                style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
+              ></span>
+            </div>
+          {/each}
+        </div>
+        <p class="today-footnote">
+          From keyboard and mouse presence only. Gaps under {formatActivityDuration(
+            todayActivity.afkThresholdSeconds
+          )} stay inside continuous work. Nothing is keylogged.
+        </p>
+      {:else if todayActivityError}
+        <p class="today-error" role="status">{todayActivityError}</p>
+      {:else}
+        <p class="today-footnote">Collecting idle samples from this session…</p>
+      {/if}
+    </section>
 
     <section class="rhythm" aria-labelledby="rhythm-title">
       <div>
@@ -400,12 +483,124 @@
   }
 
   .actions,
+  .today,
   .rhythm,
   .preview,
   .warning {
     border: 1px solid #27332b;
     border-radius: 15px;
     background: rgba(18, 25, 20, 0.92);
+  }
+
+  .today {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    gap: 14px;
+    padding: 15px 17px 16px;
+  }
+
+  .today-header h2 {
+    margin-bottom: 4px;
+    font-size: 1.02rem;
+    font-weight: 620;
+    letter-spacing: -0.015em;
+  }
+
+  .today-status {
+    margin: 0;
+    color: #a8b7ac;
+    font-size: 0.78rem;
+  }
+
+  .today-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .today-stats div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 11px;
+    border: 1px solid #2b372e;
+    border-radius: 11px;
+    background: #0f1612;
+  }
+
+  .today-stats span {
+    color: #8f9d94;
+    font-size: 0.68rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .today-stats strong {
+    color: #e7f0e9;
+    font-size: 1.05rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+  }
+
+  .today-stats small {
+    color: #8f9d94;
+    font-size: 0.66rem;
+    line-height: 1.35;
+  }
+
+  .today-strip {
+    display: grid;
+    grid-template-columns: repeat(48, minmax(0, 1fr));
+    align-items: end;
+    gap: 2px;
+    height: 52px;
+    padding: 8px 6px 4px;
+    border: 1px solid #2b372e;
+    border-radius: 11px;
+    background:
+      linear-gradient(180deg, rgba(17, 28, 22, 0.2), rgba(8, 12, 10, 0.55)),
+      #0c130f;
+  }
+
+  .strip-bucket {
+    position: relative;
+    display: flex;
+    height: 100%;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .strip-active,
+  .strip-afk {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    min-height: 0;
+    border-radius: 2px 2px 0 0;
+  }
+
+  .strip-afk {
+    background: rgba(120, 99, 58, 0.55);
+  }
+
+  .strip-active {
+    background: #6fbf86;
+  }
+
+  .today-footnote,
+  .today-error {
+    margin: 0;
+    color: #8f9d94;
+    font-size: 0.7rem;
+    line-height: 1.45;
+  }
+
+  .today-error {
+    color: #ffc4c4;
   }
 
   .actions {
@@ -440,7 +635,7 @@
 
   .rhythm {
     grid-column: 1 / -1;
-    grid-row: 2;
+    grid-row: 3;
   }
 
   .preview {
@@ -673,11 +868,16 @@
       grid-row: 1;
     }
 
+    .today,
     .rhythm,
     .preview,
     .warning {
       grid-column: 1;
       grid-row: auto;
+    }
+
+    .today-stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .duration-fields {
@@ -689,6 +889,10 @@
     .rhythm,
     .preview,
     .warning {
+      grid-template-columns: 1fr;
+    }
+
+    .today-stats {
       grid-template-columns: 1fr;
     }
 

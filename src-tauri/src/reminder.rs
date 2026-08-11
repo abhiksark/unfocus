@@ -1,4 +1,5 @@
 use crate::{
+    activity::{epoch_ms, ActivityTrackerHandle},
     authorize_main_caller,
     overlay::{
         show_overlay, show_overlay_if_idle, OverlayController, MAX_OVERLAY_DURATION_SECONDS,
@@ -1044,6 +1045,7 @@ fn present_scheduled_break(
 pub(crate) fn start_scheduler(
     app: AppHandle,
     probe_cache: ProbeCache,
+    activity_tracker: ActivityTrackerHandle,
     overlay_controller: OverlayController,
     settings_manager: ReminderSettingsManager,
     tray_status: TrayStatus,
@@ -1090,6 +1092,11 @@ pub(crate) fn start_scheduler(
                     );
                     settings_revision = latest.revision;
                 }
+
+                // Activity segmentation is observe-only: probe failures freeze
+                // classification and never change the pure reminder clock.
+                let probes = probe_cache.snapshot();
+                activity_tracker.observe(epoch_ms(SystemTime::now()), probes.idle_seconds.ok());
 
                 let now = started_at.elapsed();
                 let action_result = request.as_ref().map(|request| {
