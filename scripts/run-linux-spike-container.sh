@@ -48,13 +48,20 @@ docker build \
   --tag unfocus-linux-spike \
   .
 
+tray_runtime_dir="$(mktemp -d)"
+cleanup_tray_runtime() {
+  rm -rf -- "${tray_runtime_dir}"
+}
+trap cleanup_tray_runtime EXIT
+
 # Docker's default AppArmor profile blocks access to the host session bus. This local,
 # development-only container is unconfined so the AppIndicator tray item can register.
-exec docker run --rm \
+docker run --rm \
   --name "${container_name}" \
   --security-opt apparmor=unconfined \
   --env "DISPLAY=${DISPLAY}" \
   --env "XAUTHORITY=/tmp/unfocus.Xauthority" \
+  --env "XDG_RUNTIME_DIR=/tmp/unfocus-runtime" \
   --env "XDG_SESSION_TYPE=${XDG_SESSION_TYPE}" \
   --env "XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-}" \
   --env "DBUS_SESSION_BUS_ADDRESS=unix:path=${runtime_dir}/bus" \
@@ -63,6 +70,7 @@ exec docker run --rm \
   --volume "/tmp/.X11-unix:/tmp/.X11-unix:rw" \
   --volume "${xauthority_file}:/tmp/unfocus.Xauthority:ro" \
   --volume "${runtime_dir}/bus:${runtime_dir}/bus" \
+  --volume "${tray_runtime_dir}:/tmp/unfocus-runtime:rw" \
   --volume "${project_dir}:/workspace:ro" \
   --volume "${project_dir}/src-tauri/target:/workspace/src-tauri/target:rw" \
   --volume "${project_dir}/src-tauri/gen:/workspace/src-tauri/gen:rw" \

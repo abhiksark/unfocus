@@ -1,0 +1,208 @@
+import { describe, expect, test } from "bun:test";
+import {
+  consumerReminderPresentation,
+  consumerWarning,
+  formatMinuteDuration,
+  type ConsumerWarningInput
+} from "./consumer-dashboard";
+import type { DiagnosticsReport } from "./diagnostics";
+import type { ReminderPhase, ReminderStatus } from "./reminder-status";
+
+function status(
+  phase: ReminderPhase,
+  overrides: Partial<ReminderStatus> = {}
+): ReminderStatus {
+  return {
+    phase,
+    status: phase,
+    remainingMilliseconds: phase === "working" ? 20 * 60_000 : null,
+    pauseExpiresInMilliseconds: phase === "paused" ? 30 * 60_000 : null,
+    overlayActive: false,
+    settingsRevision: 1,
+    stateRevision: 1,
+    actionError: null,
+    pauseAction: phase === "paused" ? "resume" : "pause",
+    pauseActionLabel: phase === "paused" ? "Resume reminders" : "Pause for 30 minutes",
+    pauseActionEnabled: phase === "working" || phase === "paused",
+    takeBreakEnabled: phase === "working",
+    previewEnabled: true,
+    ...overrides
+  };
+}
+
+const report: DiagnosticsReport = {
+  operatingSystem: "linux",
+  sessionType: "x11",
+  desktop: "GNOME",
+  display: ":0",
+  monitors: [],
+  monitorError: null,
+  idleSeconds: 1,
+  idleError: null,
+  activeWindowFullscreen: false,
+  fullscreenError: null,
+  tray: { available: true, error: null }
+};
+
+function warningInput(overrides: Partial<ConsumerWarningInput> = {}): ConsumerWarningInput {
+  return {
+    report,
+    diagnosticsError: null,
+    reminderStatus: status("working"),
+    reminderStatusError: null,
+    reminderActionError: null,
+    settingsError: null,
+    settingsErrorContext: null,
+    overlayError: null,
+    ...overrides
+  };
+}
+
+describe("consumer reminder presentation", () => {
+  test.each([
+    ["working", "You’re in focus time.", true, true, false],
+    ["paused", "Reminders are paused.", false, false, true],
+    ["break", "Your eye break is in progress.", false, false, false],
+    ["stopped", "Your workday is complete.", false, false, false],
+    ["unavailable", "Reminder status is unavailable.", false, false, false]
+  ] as const)("presents %s without invalid actions", (phase, heading, take, pause, resume) => {
+    const result = consumerReminderPresentation(status(phase), null);
+    expect(result.heading).toBe(heading);
+    expect(result.showTakeBreak).toBe(take);
+    expect(result.showPause).toBe(pause);
+    expect(result.showResume).toBe(resume);
+  });
+
+  test("gives a preview precedence outside a scheduled break", () => {
+    expect(
+      consumerReminderPresentation(status("working", { overlayActive: true }), null).kind
+    ).toBe("preview");
+    expect(
+      consumerReminderPresentation(status("paused", { overlayActive: true }), null).kind
+    ).toBe("preview");
+    expect(
+      consumerReminderPresentation(status("break", { overlayActive: true }), null).kind
+    ).toBe("break");
+  });
+
+  test("treats a failed status read as unavailable even with stale state", () => {
+    const result = consumerReminderPresentation(status("working"), "IPC failed");
+    expect(result.kind).toBe("unavailable");
+    expect(result.secondary).toContain("retry automatically");
+  });
+
+  test("does not invent missing work or pause timing", () => {
+    expect(
+      consumerReminderPresentation(status("working", { remainingMilliseconds: null }), null)
+        .secondary
+    ).toBe("The next break time is unavailable.");
+    expect(
+      consumerReminderPresentation(
+        status("paused", { pauseExpiresInMilliseconds: null }),
+        null
+      ).secondary
+    ).toBe("The automatic resume time is unavailable.");
+  });
+
+  test("rounds exact, partial, and sub-minute durations with the native ceiling rule", () => {
+    expect(formatMinuteDuration(60_000)).toBe("1 min");
+    expect(formatMinuteDuration(120_000)).toBe("2 min");
+    expect(formatMinuteDuration(60_001)).toBe("2 min");
+    expect(formatMinuteDuration(59_999)).toBe("less than 1 min");
+  });
+
+  test("uses a quiet loading state before the first native response", () => {
+    const result = consumerReminderPresentation(null, null);
+    expect(result.kind).toBe("loading");
+    expect(result.showTakeBreak || result.showPause || result.showResume).toBe(false);
+  });
+});
+
+describe("consumer warnings", () => {
+  test("is absent when the dashboard is healthy", () => {
+    expect(consumerWarning(warningInput())).toBeNull();
+  });
+
+  test("gives tray failure priority and never exposes raw native errors", () => {
+    const raw = "indicator construction failed at /secret/path";
+    const warning = consumerWarning(
+      warningInput({
+        report: { ...report, tray: { available: false, error: raw } },
+        diagnosticsError: "transport secret",
+        reminderActionError: "action secret"
+      })
+    );
+    expect(warning?.kind).toBe("tray");
+    expect(warning?.message).toContain("Closing this window exits Unfocus");
+    expect(JSON.stringify(warning)).not.toContain(raw);
+    expect(JSON.stringify(warning)).not.toContain("secret");
+  });
+
+  test.each(["monitorError", "idleError", "fullscreenError"] as const)(
+    "explains a %s failure while preserving timer continuity",
+    (field) => {
+      const warning = consumerWarning(
+        warningInput({ report: { ...report, [field]: "raw probe error" } })
+      );
+      expect(warning?.kind).toBe("probes");
+      expect(warning?.message).toContain("timer keeps running");
+      expect(JSON.stringify(warning)).not.toContain("raw probe error");
+    }
+  );
+
+  test("uses one warning for multiple probe failures", () => {
+    const warning = consumerWarning(
+      warningInput({
+        report: { ...report, monitorError: "one", idleError: "two", fullscreenError: "three" }
+      })
+    );
+    expect(warning?.kind).toBe("probes");
+  });
+
+  test("only claims the timer is running after an independent reminder read", () => {
+    expect(
+      consumerWarning(warningInput({ diagnosticsError: "IPC failed" }))?.message
+    ).toContain("timer is still running");
+    expect(
+      consumerWarning(
+        warningInput({ diagnosticsError: "IPC failed", reminderStatus: null })
+      )?.message
+    ).not.toContain("timer is still running");
+    expect(
+      consumerWarning(
+        warningInput({ diagnosticsError: "IPC failed", reminderStatus: status("stopped") })
+      )?.message
+    ).not.toContain("timer is still running");
+  });
+
+  test("prioritizes direct reminder and settings failures ahead of background health", () => {
+    expect(
+      consumerWarning(
+        warningInput({ reminderActionError: "raw", diagnosticsError: "diagnostics raw" })
+      )?.kind
+    ).toBe("reminder-action");
+    expect(
+      consumerWarning(
+        warningInput({
+          settingsError: "raw",
+          settingsErrorContext: "save",
+          diagnosticsError: "diagnostics raw"
+        })
+      )?.kind
+    ).toBe("settings");
+  });
+
+  test("distinguishes settings load failure without exposing its raw error", () => {
+    const warning = consumerWarning(
+      warningInput({ settingsError: "private path", settingsErrorContext: "load" })
+    );
+    expect(warning?.heading).toBe("Saved timing is unavailable");
+    expect(JSON.stringify(warning)).not.toContain("private path");
+  });
+
+  test("recovers once the current errors clear", () => {
+    const degraded = warningInput({ reminderActionError: "raw failure" });
+    expect(consumerWarning(degraded)).not.toBeNull();
+    expect(consumerWarning({ ...degraded, reminderActionError: null })).toBeNull();
+  });
+});

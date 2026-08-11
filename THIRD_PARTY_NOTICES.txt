@@ -236,102 +236,102 @@ License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0d
 JavaScript: @typescript/typescript-aix-ppc64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-darwin-arm64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-darwin-x64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-freebsd-arm64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-freebsd-x64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-linux-arm64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-linux-arm@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-linux-loong64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-linux-mips64el@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-linux-ppc64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-linux-riscv64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-linux-s390x@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-linux-x64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-netbsd-arm64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-netbsd-x64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-openbsd-arm64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-openbsd-x64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-sunos-x64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-win32-arm64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: @typescript/typescript-win32-x64@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: acorn@8.18.0
 Declared license: MIT
@@ -552,12 +552,12 @@ License text IDs: 306fa513e39b23a6e8747520de761809d206b99800ef41907b530226574c59
 JavaScript: typescript@6.0.3
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: typescript@7.0.2
 Declared license: Apache-2.0
 Upstream authors: Microsoft Corp.
-License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
+License text IDs: 1ad8b8066682f7e8366a873d322d14ce533db9f71466f9956e8c0cabe5f3f039, 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
 
 JavaScript: undici-types@8.3.0
 Declared license: MIT
@@ -603,6 +603,56 @@ Upstream authors: Nicolas Silva <nical@fastmail.com>
 License text IDs: 216486f29671a4262efe32af6d84a75bef398127f8c5f369b5c8305983887a06, 80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e
 
 Rust: anyhow@1.0.104
+Declared license: MIT OR Apache-2.0
+Upstream authors: David Tolnay <dtolnay@gmail.com>
+License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e
+
+Rust: async-broadcast@0.7.2
+Declared license: MIT OR Apache-2.0
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>, Yoshua Wuyts <yoshuawuyts@gmail.com>, Zeeshan Ali Khan <zeeshanak@gnome.org>
+License text IDs: 24e5860bf589d8501643e6ea51ffb3df66db2867492b09033d486183efbfa970, 6b286a8c17b82bbcba94eeb9a0c883bcc9117790599a182d23b7ce666042fc38
+
+Rust: async-channel@2.5.0
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: async-executor@1.14.0
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>, John Nunley <dev@notgull.net>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: async-io@2.6.0
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: async-lock@3.4.2
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: async-process@2.5.0
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: async-recursion@1.1.1
+Declared license: MIT OR Apache-2.0
+Upstream authors: Robert Usher <266585+dcchut@users.noreply.github.com>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: async-signal@0.2.14
+Declared license: Apache-2.0 OR MIT
+Upstream authors: John Nunley <dev@notgull.net>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: async-task@4.7.1
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: async-trait@0.1.92
 Declared license: MIT OR Apache-2.0
 Upstream authors: David Tolnay <dtolnay@gmail.com>
 License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e
@@ -666,6 +716,11 @@ Rust: block2@0.6.2
 Declared license: MIT
 Upstream authors: Mads Marquart <mads@marquart.dk>
 License text IDs: 2c4b2ae80ced16e0ed3134fb816c34ac4a407051322456dd5daf8ab1ffd9d2b4
+
+Rust: blocking@1.6.2
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
 
 Rust: brotli-decompressor@5.0.3
 Declared license: BSD-3-Clause/MIT
@@ -767,6 +822,11 @@ Rust: combine@4.6.7
 Declared license: MIT
 Upstream authors: Markus Westerlind <marwes91@gmail.com>
 License text IDs: 09f1f9643769494262b9cacec3852201242b9c819f7d5316c7530be1c9855f75
+
+Rust: concurrent-queue@2.5.0
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>, Taiki Endo <te316e89@gmail.com>, John Nunley <dev@notgull.net>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
 
 Rust: cookie@0.18.1
 Declared license: MIT OR Apache-2.0
@@ -955,6 +1015,21 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: Nikolai Vazquez <hello@nikolaivazquez.com>
 License text IDs: 50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a, daacc37f680c7dd0a758ac99a109f2f57d9f21d3683df9e9245055922842a695
 
+Rust: endi@1.1.1
+Declared license: MIT
+Upstream authors: Zeeshan Ali Khan <zeenix@gmail.com>
+License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: enumflags2@0.7.12
+Declared license: MIT OR Apache-2.0
+Upstream authors: maik klein <maikklein@googlemail.com>, Maja Kądziołka <maya@compilercrim.es>
+License text IDs: 2e3edd2716fb15616e867bd53f724f0906732242e9ae76bb1faad1d88f7eeebd, 5d5050b4897d9f5b5e7055fca74329a98183620f45d803f9bed81d9e24956968
+
+Rust: enumflags2_derive@0.7.12
+Declared license: MIT OR Apache-2.0
+Upstream authors: maik klein <maikklein@googlemail.com>, Maja Kądziołka <maya@compilercrim.es>
+License text IDs: 73663aa1887e9ff1fc094f9b6fc2c06c6a9faa5d24833c8e31490afb565c9039, d13669f0eaff9b7015bff0d8637297213b53d9f239826636c07a15633acf7052
+
 Rust: equivalent@1.0.2
 Declared license: Apache-2.0 OR MIT
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 7365cc8878a1d7ce155a58c4ca09c3d7a6be413efa5334a80ea842912b669349
@@ -968,6 +1043,16 @@ Rust: errno@0.3.14
 Declared license: MIT OR Apache-2.0
 Upstream authors: Chris Wong <lambda.fairy@gmail.com>, Dan Gohman <dev@sunfishcode.online>
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 8764a597675778ddfd4e25f81b08a05dbcf089ac05662df7613fe67f150e3aa2
+
+Rust: event-listener-strategy@0.5.4
+Declared license: Apache-2.0 OR MIT
+Upstream authors: John Nunley <dev@notgull.net>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: event-listener@5.4.2
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>, John Nunley <dev@notgull.net>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
 
 Rust: fastrand@2.5.0
 Declared license: Apache-2.0 OR MIT
@@ -1038,6 +1123,11 @@ License text IDs: 6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88
 Rust: futures-io@0.3.33
 Declared license: MIT OR Apache-2.0
 License text IDs: 6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd, 8337133fbd3cd6b5de6ca9fd048a242a01045f3257add148a03c29f91e51e2b2
+
+Rust: futures-lite@2.6.1
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>, Contributors to futures-rs
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, 6226d0632e2e1a80c23597e964da9812ae193c535fe058154afb034e94167aa5
 
 Rust: futures-macro@0.3.33
 Declared license: MIT OR Apache-2.0
@@ -1182,6 +1272,11 @@ License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256a
 Rust: heck@0.5.0
 Declared license: MIT OR Apache-2.0
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0
+
+Rust: hermit-abi@0.5.2
+Declared license: MIT OR Apache-2.0
+Upstream authors: Stefan Lankes
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
 
 Rust: hex@0.4.3
 Declared license: MIT OR Apache-2.0
@@ -1571,6 +1666,11 @@ Declared license: MPL-2.0
 Upstream authors: Simon Ochsenreither <simon@ochsenreither.de>
 License text IDs: 66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172
 
+Rust: ordered-stream@0.2.0
+Declared license: MIT OR Apache-2.0
+Upstream authors: Daniel De Graaf <code@danieldg.net>, Zeeshan Ali Khan <zeeshanak@gnome.org>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
 Rust: pango-sys@0.18.0
 Declared license: MIT
 Upstream authors: The gtk-rs Project Developers
@@ -1580,6 +1680,11 @@ Rust: pango@0.18.3
 Declared license: MIT
 Upstream authors: The gtk-rs Project Developers
 License text IDs: dae402989de65164815b7e2b6bc2b9576285434c3785934c8b6ece0fa055960d, f9c4c77baa3828004ee54b8a4f2db2e88ed44a6237a493965bf551fac0fcb62d
+
+Rust: parking@2.2.1
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>, The Rust Project Developers
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, 9a6d7a3c1b8edcc706c4b6c37f8dae9a77f02c7f9051df603f975db136b55419
 
 Rust: parking_lot@0.12.5
 Declared license: MIT OR Apache-2.0
@@ -1625,6 +1730,11 @@ Rust: pin-project-lite@0.2.17
 Declared license: Apache-2.0 OR MIT
 License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
+Rust: piper@0.2.5
+Declared license: MIT OR Apache-2.0
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>, John Nunley <dev@notgull.net>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
 Rust: pkg-config@0.3.33
 Declared license: MIT OR Apache-2.0
 Upstream authors: Alex Crichton <alex@alexcrichton.com>
@@ -1644,6 +1754,11 @@ Rust: png@0.18.1
 Declared license: MIT OR Apache-2.0
 Upstream authors: The image-rs Developers
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, eaf40297c75da471f7cda1f3458e8d91b4b2ec866e609527a13acfa93b638652
+
+Rust: polling@3.11.0
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Stjepan Glavina <stjepang@gmail.com>, John Nunley <dev@notgull.net>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
 
 Rust: potential_utf@0.1.5
 Declared license: Unicode-3.0
@@ -1894,6 +2009,11 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: comex <comexk@gmail.com>, Fenhl <fenhl@fenhl.net>, Adrian Taylor <adetaylor@chromium.org>, Alex Touchet <alextouchet@outlook.com>, Daniel Parks <dp+git@oxidized.org>, Garrett Berg <googberg@gmail.com>
 License text IDs: 4455bf75a91154108304cb283e0fea9948c14f13e20d60887cf2552449dea3b1, 553fffcd9b1cb158bc3e9edc35da85ca5c3b3d7d2e61c883ebcfa8a65814b583
 
+Rust: signal-hook-registry@1.4.8
+Declared license: MIT OR Apache-2.0
+Upstream authors: Michal 'vorner' Vaner <vorner@vorner.cz>, Masaki Hara <ackie.h.gmai@gmail.com>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 503558bfefe66ca15e4e3f7955b3cb0ec87fd52f29bf24b336af7bd00e946d5c
+
 Rust: simd-adler32@0.3.10
 Declared license: MIT
 Upstream authors: Marvin Countryman <me@maar.vin>
@@ -2017,6 +2137,11 @@ Declared license: Apache-2.0 OR MIT
 Upstream authors: Tauri Programme within The Commons Conservancy
 License text IDs: 9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
+Rust: tauri-plugin-single-instance@2.4.3
+Declared license: Apache-2.0 OR MIT
+Upstream authors: Tauri Programme within The Commons Conservancy
+License text IDs: 9c1db6b7e7eb83e1cb2af973b5df2bdc63651ede0f38506ab98dfa0940487759, af76c60594af325c4efdcbcd27f5d34ff441c11f09b46b627b378d04d5aa1f1d, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
+
 Rust: tauri-runtime-wry@2.11.4
 Declared license: Apache-2.0 OR MIT
 Upstream authors: Tauri Programme within The Commons Conservancy
@@ -2041,6 +2166,11 @@ Rust: tauri@2.11.5
 Declared license: Apache-2.0 OR MIT
 Upstream authors: Tauri Programme within The Commons Conservancy
 License text IDs: 9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
+
+Rust: tempfile@3.27.0
+Declared license: MIT OR Apache-2.0
+Upstream authors: Steven Allen <steven@stebalien.com>, The Rust Project Developers, Ashley Mannix <ashleymannix@live.com.au>, Jason White <me@jasonwhite.io>
+License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 8b427f5bc501764575e52ba4f9d95673cf8f6d80a86d0d06599852e1a9a20a36
 
 Rust: tendril@0.5.1
 Declared license: MIT OR Apache-2.0
@@ -2175,6 +2305,11 @@ Declared license: MIT
 Upstream authors: Tower Maintainers <team@tower-rs.com>
 License text IDs: 4249c8e6c5ebb85f97c77e6457c6fafc1066406eb8f1ef61e796fbdc5ff18482
 
+Rust: tracing-attributes@0.1.31
+Declared license: MIT
+Upstream authors: Tokio Contributors <team@tokio.rs>, Eliza Weisman <eliza@buoyant.io>, David Barsky <dbarsky@amazon.com>
+License text IDs: 898b1ae9821e98daf8964c8d6c7f61641f5f5aa78ad500020771c0939ee0dea1
+
 Rust: tracing-core@0.1.36
 Declared license: MIT
 Upstream authors: Tokio Contributors <team@tokio.rs>
@@ -2202,6 +2337,11 @@ License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cc
 Rust: typenum@1.20.1
 Declared license: MIT OR Apache-2.0
 License text IDs: 36bb253818ac13761081556ff5c457d626da9df1eb4f56194d9ad3926c418a68, a825bd853ab71619a4923d7b4311221427848070ff44d990da39b0b274c1683f, adb48f9ee5be072e48dea05c2a289da330aae14467f7474c4a1f00a81cf8d5ef
+
+Rust: uds_windows@1.2.1
+Declared license: MIT
+Upstream authors: Azure IoT Edge Devs, Harald Hoyer <harald@redhat.com>
+License text IDs: 09c990d042f0b5c706bfcb87c741ddbf5121a4945fc88858825e3a80cd54b6d6
 
 Rust: unic-char-property@0.9.0
 Declared license: MIT/Apache-2.0
@@ -2448,6 +2588,11 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
+Rust: windows-sys@0.60.2
+Declared license: MIT OR Apache-2.0
+Upstream authors: Microsoft
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
+
 Rust: windows-sys@0.61.2
 Declared license: MIT OR Apache-2.0
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
@@ -2460,6 +2605,10 @@ License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0d
 Rust: windows-targets@0.52.6
 Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
+
+Rust: windows-targets@0.53.5
+Declared license: MIT OR Apache-2.0
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
 Rust: windows-threading@0.1.0
@@ -2486,6 +2635,10 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
+Rust: windows_aarch64_gnullvm@0.53.1
+Declared license: MIT OR Apache-2.0
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
+
 Rust: windows_aarch64_msvc@0.42.2
 Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
@@ -2494,6 +2647,10 @@ License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0d
 Rust: windows_aarch64_msvc@0.52.6
 Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
+
+Rust: windows_aarch64_msvc@0.53.1
+Declared license: MIT OR Apache-2.0
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
 Rust: windows_i686_gnu@0.42.2
@@ -2506,9 +2663,17 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
+Rust: windows_i686_gnu@0.53.1
+Declared license: MIT OR Apache-2.0
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
+
 Rust: windows_i686_gnullvm@0.52.6
 Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
+
+Rust: windows_i686_gnullvm@0.53.1
+Declared license: MIT OR Apache-2.0
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
 Rust: windows_i686_msvc@0.42.2
@@ -2521,6 +2686,10 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
+Rust: windows_i686_msvc@0.53.1
+Declared license: MIT OR Apache-2.0
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
+
 Rust: windows_x86_64_gnu@0.42.2
 Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
@@ -2529,6 +2698,10 @@ License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0d
 Rust: windows_x86_64_gnu@0.52.6
 Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
+
+Rust: windows_x86_64_gnu@0.53.1
+Declared license: MIT OR Apache-2.0
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
 Rust: windows_x86_64_gnullvm@0.42.2
@@ -2541,6 +2714,10 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
+Rust: windows_x86_64_gnullvm@0.53.1
+Declared license: MIT OR Apache-2.0
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
+
 Rust: windows_x86_64_msvc@0.42.2
 Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
@@ -2549,6 +2726,10 @@ License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0d
 Rust: windows_x86_64_msvc@0.52.6
 Declared license: MIT OR Apache-2.0
 Upstream authors: Microsoft
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
+
+Rust: windows_x86_64_msvc@0.53.1
+Declared license: MIT OR Apache-2.0
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
 Rust: winnow@0.5.40
@@ -2613,6 +2794,26 @@ Declared license: Unicode-3.0
 Upstream authors: Manish Goregaokar <manishsmail@gmail.com>
 License text IDs: f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2
 
+Rust: zbus@5.19.0
+Declared license: MIT
+Upstream authors: Zeeshan Ali Khan <zeeshanak@gnome.org>
+License text IDs: 260e4ff3fc493695880c90774283eb1e3d018f898fabe655bbd52dd2cbd2fcad
+
+Rust: zbus_macros@5.19.0
+Declared license: MIT
+Upstream authors: Marc-André Lureau <marcandre.lureau@redhat.com>, Zeeshan Ali Khan <zeeshanak@gnome.org>
+License text IDs: 260e4ff3fc493695880c90774283eb1e3d018f898fabe655bbd52dd2cbd2fcad
+
+Rust: zbus_names@4.3.4
+Declared license: MIT
+Upstream authors: Zeeshan Ali Khan <zeeshanak@gnome.org>
+License text IDs: 260e4ff3fc493695880c90774283eb1e3d018f898fabe655bbd52dd2cbd2fcad
+
+Rust: zcheapstr@1.0.0
+Declared license: MIT
+Upstream authors: Zeeshan Ali Khan <zeeshanak@gnome.org>
+License text IDs: 59871bb1612f8a0569655c10b995636827eceab42c6578cebdc45ad2922e0142
+
 Rust: zerofrom-derive@0.1.7
 Declared license: Unicode-3.0
 Upstream authors: Manish Goregaokar <manishsmail@gmail.com>
@@ -2641,6 +2842,21 @@ License text IDs: f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90
 Rust: zmij@1.0.23
 Declared license: MIT
 Upstream authors: David Tolnay <dtolnay@gmail.com>
+License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: zvariant@5.14.0
+Declared license: MIT
+Upstream authors: Zeeshan Ali Khan <zeeshanak@gnome.org>
+License text IDs: 260e4ff3fc493695880c90774283eb1e3d018f898fabe655bbd52dd2cbd2fcad
+
+Rust: zvariant_derive@5.14.0
+Declared license: MIT
+Upstream authors: Zeeshan Ali Khan <zeeshanak@gnome.org>
+License text IDs: 260e4ff3fc493695880c90774283eb1e3d018f898fabe655bbd52dd2cbd2fcad
+
+Rust: zvariant_utils@4.0.0
+Declared license: MIT
+Upstream authors: Zeeshan Ali Khan <zeeshanak@gnome.org>, turbocooler <turbocooler@cocaine.ninja>
 License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
 
 Vendored asset: Fraunces@variable font
@@ -2813,6 +3029,33 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+
+===============================================================================
+License text ID: 09c990d042f0b5c706bfcb87c741ddbf5121a4945fc88858825e3a80cd54b6d6
+Used by:
+  - Rust: uds_windows@1.2.1
+-------------------------------------------------------------------------------
+MIT License
+
+    Copyright (c) Microsoft Corporation. All rights reserved.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE
 
 ===============================================================================
 License text ID: 09f1f9643769494262b9cacec3852201242b9c819f7d5316c7530be1c9855f75
@@ -3518,17 +3761,27 @@ Creator: Person: Daniel Thompson-Yvetot
 ===============================================================================
 License text ID: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4
 Used by:
+  - Rust: async-channel@2.5.0
+  - Rust: async-executor@1.14.0
+  - Rust: async-io@2.6.0
+  - Rust: async-lock@3.4.2
+  - Rust: async-process@2.5.0
+  - Rust: async-recursion@1.1.1
+  - Rust: async-signal@0.2.14
+  - Rust: async-task@4.7.1
   - Rust: atomic-waker@1.1.2
   - Rust: autocfg@1.5.1
   - Rust: base64@0.21.7
   - Rust: base64@0.22.1
   - Rust: bitflags@1.3.2
   - Rust: bitflags@2.13.1
+  - Rust: blocking@1.6.2
   - Rust: bs58@0.5.1
   - Rust: bumpalo@3.20.3
   - Rust: camino@1.2.5
   - Rust: cc@1.4.0
   - Rust: cfg-if@1.0.4
+  - Rust: concurrent-queue@2.5.0
   - Rust: core-foundation-sys@0.8.7
   - Rust: core-foundation@0.10.1
   - Rust: core-graphics-types@0.2.0
@@ -3538,17 +3791,21 @@ Used by:
   - Rust: displaydoc@0.2.7
   - Rust: equivalent@1.0.2
   - Rust: errno@0.3.14
+  - Rust: event-listener-strategy@0.5.4
+  - Rust: event-listener@5.4.2
   - Rust: fastrand@2.5.0
   - Rust: find-msvc-tools@0.1.9
   - Rust: flate2@1.1.9
   - Rust: fnv@1.0.7
   - Rust: form_urlencoded@1.2.2
+  - Rust: futures-lite@2.6.1
   - Rust: gethostname@1.1.0
   - Rust: glob@0.3.4
   - Rust: hashbrown@0.12.3
   - Rust: hashbrown@0.17.1
   - Rust: heck@0.4.1
   - Rust: heck@0.5.0
+  - Rust: hermit-abi@0.5.2
   - Rust: html5ever@0.38.0
   - Rust: httparse@1.10.1
   - Rust: idna@1.1.0
@@ -3567,12 +3824,16 @@ Used by:
   - Rust: muda@0.19.3
   - Rust: num-traits@0.2.19
   - Rust: once_cell@1.21.4
+  - Rust: ordered-stream@0.2.0
+  - Rust: parking@2.2.1
   - Rust: parking_lot@0.12.5
   - Rust: parking_lot_core@0.9.12
   - Rust: percent-encoding@2.3.2
+  - Rust: piper@0.2.5
   - Rust: pkg-config@0.3.33
   - Rust: png@0.17.16
   - Rust: png@0.18.1
+  - Rust: polling@3.11.0
   - Rust: regex-automata@0.4.18
   - Rust: regex-syntax@0.8.11
   - Rust: regex@1.13.1
@@ -3583,6 +3844,7 @@ Used by:
   - Rust: serde_with@3.21.0
   - Rust: serde_with_macros@3.21.0
   - Rust: servo_arc@0.4.3
+  - Rust: signal-hook-registry@1.4.8
   - Rust: smallvec@1.15.2
   - Rust: socket2@0.6.5
   - Rust: stable_deref_trait@1.2.1
@@ -3591,6 +3853,7 @@ Used by:
   - Rust: syn@1.0.109
   - Rust: system-deps@6.2.2
   - Rust: tao-macros@0.1.4
+  - Rust: tempfile@3.27.0
   - Rust: tendril@0.5.1
   - Rust: toml_datetime@0.6.3
   - Rust: tray-icon@0.24.2
@@ -5720,21 +5983,41 @@ License text ID: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca
 Used by:
   - Rust: adler2@2.0.1
   - Rust: anyhow@1.0.104
+  - Rust: async-channel@2.5.0
+  - Rust: async-executor@1.14.0
+  - Rust: async-io@2.6.0
+  - Rust: async-lock@3.4.2
+  - Rust: async-process@2.5.0
+  - Rust: async-recursion@1.1.1
+  - Rust: async-signal@0.2.14
+  - Rust: async-task@4.7.1
+  - Rust: async-trait@0.1.92
   - Rust: atomic-waker@1.1.2
+  - Rust: blocking@1.6.2
   - Rust: camino@1.2.5
   - Rust: cargo-platform@0.1.9
   - Rust: cargo_metadata@0.19.2
+  - Rust: concurrent-queue@2.5.0
   - Rust: displaydoc@0.2.7
   - Rust: dtoa@1.0.11
   - Rust: dyn-clone@1.0.20
+  - Rust: endi@1.1.1
   - Rust: erased-serde@0.4.10
+  - Rust: event-listener-strategy@0.5.4
+  - Rust: event-listener@5.4.2
   - Rust: fastrand@2.5.0
+  - Rust: futures-lite@2.6.1
+  - Rust: hermit-abi@0.5.2
   - Rust: itoa@1.0.18
   - Rust: linux-raw-sys@0.12.1
   - Rust: num_enum@0.7.6
   - Rust: num_enum_derive@0.7.6
   - Rust: once_cell@1.21.4
+  - Rust: ordered-stream@0.2.0
+  - Rust: parking@2.2.1
   - Rust: pin-project-lite@0.2.17
+  - Rust: piper@0.2.5
+  - Rust: polling@3.11.0
   - Rust: proc-macro-crate@1.3.1
   - Rust: proc-macro-crate@2.0.2
   - Rust: proc-macro-crate@3.5.0
@@ -5772,6 +6055,7 @@ Used by:
   - Rust: x11-dl@2.21.0
   - Rust: x11@2.21.0
   - Rust: zmij@1.0.23
+  - Rust: zvariant_utils@4.0.0
 -------------------------------------------------------------------------------
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -5830,6 +6114,33 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ===============================================================================
+License text ID: 24e5860bf589d8501643e6ea51ffb3df66db2867492b09033d486183efbfa970
+Used by:
+  - Rust: async-broadcast@0.7.2
+-------------------------------------------------------------------------------
+The MIT License (MIT)
+
+Copyright (c) 2020 Yoshua Wuyts
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+===============================================================================
 License text ID: 2537228d9a1b44a5dc595241349cae7090b326c8de165aaf89bfddef4a00d0fc
 Used by:
   - Rust: time-core@0.1.9
@@ -5883,6 +6194,41 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+===============================================================================
+License text ID: 260e4ff3fc493695880c90774283eb1e3d018f898fabe655bbd52dd2cbd2fcad
+Used by:
+  - Rust: zbus@5.19.0
+  - Rust: zbus_macros@5.19.0
+  - Rust: zbus_names@4.3.4
+  - Rust: zvariant@5.14.0
+  - Rust: zvariant_derive@5.14.0
+-------------------------------------------------------------------------------
+Copyright (c) 2024 Zeeshan Ali Khan & zbus contributors
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
 ===============================================================================
 License text ID: 26d4779495753b2fb772445ca50f83f03b431522bcd410a1643cf1097fbcefc0
@@ -6197,6 +6543,37 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+===============================================================================
+License text ID: 2e3edd2716fb15616e867bd53f724f0906732242e9ae76bb1faad1d88f7eeebd
+Used by:
+  - Rust: enumflags2@0.7.12
+-------------------------------------------------------------------------------
+Copyright (c) 2017-2023 Maik Klein, Maja Kądziołka
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
 ===============================================================================
 License text ID: 2efd6a447c8c5d5f27b34282a9b2bfa999b2c56b450cb25e336553da6eb0d1cd
@@ -7123,27 +7500,37 @@ Used by:
   - Rust: windows-strings@0.5.1
   - Rust: windows-sys@0.45.0
   - Rust: windows-sys@0.59.0
+  - Rust: windows-sys@0.60.2
   - Rust: windows-sys@0.61.2
   - Rust: windows-targets@0.42.2
   - Rust: windows-targets@0.52.6
+  - Rust: windows-targets@0.53.5
   - Rust: windows-threading@0.1.0
   - Rust: windows-version@0.1.7
   - Rust: windows@0.61.3
   - Rust: windows_aarch64_gnullvm@0.42.2
   - Rust: windows_aarch64_gnullvm@0.52.6
+  - Rust: windows_aarch64_gnullvm@0.53.1
   - Rust: windows_aarch64_msvc@0.42.2
   - Rust: windows_aarch64_msvc@0.52.6
+  - Rust: windows_aarch64_msvc@0.53.1
   - Rust: windows_i686_gnu@0.42.2
   - Rust: windows_i686_gnu@0.52.6
+  - Rust: windows_i686_gnu@0.53.1
   - Rust: windows_i686_gnullvm@0.52.6
+  - Rust: windows_i686_gnullvm@0.53.1
   - Rust: windows_i686_msvc@0.42.2
   - Rust: windows_i686_msvc@0.52.6
+  - Rust: windows_i686_msvc@0.53.1
   - Rust: windows_x86_64_gnu@0.42.2
   - Rust: windows_x86_64_gnu@0.52.6
+  - Rust: windows_x86_64_gnu@0.53.1
   - Rust: windows_x86_64_gnullvm@0.42.2
   - Rust: windows_x86_64_gnullvm@0.52.6
+  - Rust: windows_x86_64_gnullvm@0.53.1
   - Rust: windows_x86_64_msvc@0.42.2
   - Rust: windows_x86_64_msvc@0.52.6
+  - Rust: windows_x86_64_msvc@0.53.1
 -------------------------------------------------------------------------------
 MIT License
 
@@ -10124,6 +10511,37 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ===============================================================================
+License text ID: 503558bfefe66ca15e4e3f7955b3cb0ec87fd52f29bf24b336af7bd00e946d5c
+Used by:
+  - Rust: signal-hook-registry@1.4.8
+-------------------------------------------------------------------------------
+Copyright (c) 2017 tokio-jsonrpc developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+===============================================================================
 License text ID: 5049cf464977eff4b4fcfa7988d84e74116956a3eb9d5f1d451b3f828f945233
 Used by:
   - Rust: tower-http@0.6.11
@@ -10423,6 +10841,88 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+
+===============================================================================
+License text ID: 527adf9d4c760f7367c2aeffed6a89afba8ba40ea1b0efbc8f56496ad30ea9cf
+Used by:
+  - JavaScript: @typescript/typescript-aix-ppc64@7.0.2
+  - JavaScript: @typescript/typescript-darwin-arm64@7.0.2
+  - JavaScript: @typescript/typescript-darwin-x64@7.0.2
+  - JavaScript: @typescript/typescript-freebsd-arm64@7.0.2
+  - JavaScript: @typescript/typescript-freebsd-x64@7.0.2
+  - JavaScript: @typescript/typescript-linux-arm64@7.0.2
+  - JavaScript: @typescript/typescript-linux-arm@7.0.2
+  - JavaScript: @typescript/typescript-linux-loong64@7.0.2
+  - JavaScript: @typescript/typescript-linux-mips64el@7.0.2
+  - JavaScript: @typescript/typescript-linux-ppc64@7.0.2
+  - JavaScript: @typescript/typescript-linux-riscv64@7.0.2
+  - JavaScript: @typescript/typescript-linux-s390x@7.0.2
+  - JavaScript: @typescript/typescript-linux-x64@7.0.2
+  - JavaScript: @typescript/typescript-netbsd-arm64@7.0.2
+  - JavaScript: @typescript/typescript-netbsd-x64@7.0.2
+  - JavaScript: @typescript/typescript-openbsd-arm64@7.0.2
+  - JavaScript: @typescript/typescript-openbsd-x64@7.0.2
+  - JavaScript: @typescript/typescript-sunos-x64@7.0.2
+  - JavaScript: @typescript/typescript-win32-arm64@7.0.2
+  - JavaScript: @typescript/typescript-win32-x64@7.0.2
+  - JavaScript: typescript@6.0.3
+  - JavaScript: typescript@7.0.2
+-------------------------------------------------------------------------------
+Apache License
+
+Version 2.0, January 2004
+
+http://www.apache.org/licenses/
+
+TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+1. Definitions.
+
+"License" shall mean the terms and conditions for use, reproduction, and distribution as defined by Sections 1 through 9 of this document.
+
+"Licensor" shall mean the copyright owner or entity authorized by the copyright owner that is granting the License.
+
+"Legal Entity" shall mean the union of the acting entity and all other entities that control, are controlled by, or are under common control with that entity. For the purposes of this definition, "control" means (i) the power, direct or indirect, to cause the direction or management of such entity, whether by contract or otherwise, or (ii) ownership of fifty percent (50%) or more of the outstanding shares, or (iii) beneficial ownership of such entity.
+
+"You" (or "Your") shall mean an individual or Legal Entity exercising permissions granted by this License.
+
+"Source" form shall mean the preferred form for making modifications, including but not limited to software source code, documentation source, and configuration files.
+
+"Object" form shall mean any form resulting from mechanical transformation or translation of a Source form, including but not limited to compiled object code, generated documentation, and conversions to other media types.
+
+"Work" shall mean the work of authorship, whether in Source or Object form, made available under the License, as indicated by a copyright notice that is included in or attached to the work (an example is provided in the Appendix below).
+
+"Derivative Works" shall mean any work, whether in Source or Object form, that is based on (or derived from) the Work and for which the editorial revisions, annotations, elaborations, or other modifications represent, as a whole, an original work of authorship. For the purposes of this License, Derivative Works shall not include works that remain separable from, or merely link (or bind by name) to the interfaces of, the Work and Derivative Works thereof.
+
+"Contribution" shall mean any work of authorship, including the original version of the Work and any modifications or additions to that Work or Derivative Works thereof, that is intentionally submitted to Licensor for inclusion in the Work by the copyright owner or by an individual or Legal Entity authorized to submit on behalf of the copyright owner. For the purposes of this definition, "submitted" means any form of electronic, verbal, or written communication sent to the Licensor or its representatives, including but not limited to communication on electronic mailing lists, source code control systems, and issue tracking systems that are managed by, or on behalf of, the Licensor for the purpose of discussing and improving the Work, but excluding communication that is conspicuously marked or otherwise designated in writing by the copyright owner as "Not a Contribution."
+
+"Contributor" shall mean Licensor and any individual or Legal Entity on behalf of whom a Contribution has been received by Licensor and subsequently incorporated within the Work.
+
+2. Grant of Copyright License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare Derivative Works of, publicly display, publicly perform, sublicense, and distribute the Work and such Derivative Works in Source or Object form.
+
+3. Grant of Patent License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as stated in this section) patent license to make, have made, use, offer to sell, sell, import, and otherwise transfer the Work, where such license applies only to those patent claims licensable by such Contributor that are necessarily infringed by their Contribution(s) alone or by combination of their Contribution(s) with the Work to which such Contribution(s) was submitted. If You institute patent litigation against any entity (including a cross-claim or counterclaim in a lawsuit) alleging that the Work or a Contribution incorporated within the Work constitutes direct or contributory patent infringement, then any patent licenses granted to You under this License for that Work shall terminate as of the date such litigation is filed.
+
+4. Redistribution. You may reproduce and distribute copies of the Work or Derivative Works thereof in any medium, with or without modifications, and in Source or Object form, provided that You meet the following conditions:
+
+You must give any other recipients of the Work or Derivative Works a copy of this License; and
+
+You must cause any modified files to carry prominent notices stating that You changed the files; and
+
+You must retain, in the Source form of any Derivative Works that You distribute, all copyright, patent, trademark, and attribution notices from the Source form of the Work, excluding those notices that do not pertain to any part of the Derivative Works; and
+
+If the Work includes a "NOTICE" text file as part of its distribution, then any Derivative Works that You distribute must include a readable copy of the attribution notices contained within such NOTICE file, excluding those notices that do not pertain to any part of the Derivative Works, in at least one of the following places: within a NOTICE text file distributed as part of the Derivative Works; within the Source form or documentation, if provided along with the Derivative Works; or, within a display generated by the Derivative Works, if and wherever such third-party notices normally appear. The contents of the NOTICE file are for informational purposes only and do not modify the License. You may add Your own attribution notices within Derivative Works that You distribute, alongside or as an addendum to the NOTICE text from the Work, provided that such additional attribution notices cannot be construed as modifying the License. You may add Your own copyright statement to Your modifications and may provide additional or different license terms and conditions for use, reproduction, or distribution of Your modifications, or for any such Derivative Works as a whole, provided Your use, reproduction, and distribution of the Work otherwise complies with the conditions stated in this License.
+
+5. Submission of Contributions. Unless You explicitly state otherwise, any Contribution intentionally submitted for inclusion in the Work by You to the Licensor shall be under the terms and conditions of this License, without any additional terms or conditions. Notwithstanding the above, nothing herein shall supersede or modify the terms of any separate license agreement you may have executed with Licensor regarding such Contributions.
+
+6. Trademarks. This License does not grant permission to use the trade names, trademarks, service marks, or product names of the Licensor, except as required for reasonable and customary use in describing the origin of the Work and reproducing the content of the NOTICE file.
+
+7. Disclaimer of Warranty. Unless required by applicable law or agreed to in writing, Licensor provides the Work (and each Contributor provides its Contributions) on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. You are solely responsible for determining the appropriateness of using or redistributing the Work and assume any risks associated with Your exercise of permissions under this License.
+
+8. Limitation of Liability. In no event and under no legal theory, whether in tort (including negligence), contract, or otherwise, unless required by applicable law (such as deliberate and grossly negligent acts) or agreed to in writing, shall any Contributor be liable to You for damages, including any direct, indirect, special, incidental, or consequential damages of any character arising as a result of this License or out of the use or inability to use the Work (including but not limited to damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other commercial damages or losses), even if such Contributor has been advised of the possibility of such damages.
+
+9. Accepting Warranty or Additional Liability. While redistributing the Work or Derivative Works thereof, You may choose to offer, and charge a fee for, acceptance of support, warranty, indemnity, or other liability obligations and/or rights consistent with this License. However, in accepting such obligations, You may act only on Your own behalf and on Your sole responsibility, not on behalf of any other Contributor, and only if You agree to indemnify, defend, and hold each Contributor harmless for any liability incurred by, or claims asserted against, such Contributor by reason of your accepting any such warranty or additional liability.
+
+END OF TERMS AND CONDITIONS
 
 ===============================================================================
 License text ID: 544b3aed1fd723d0cadea567affdcfe0431e43e18d997a718f9d67256b814fde
@@ -10745,6 +11245,37 @@ Used by:
 The MIT License (MIT)
 
 Copyright (c) 2019 The Crossbeam Project Developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+===============================================================================
+License text ID: 59871bb1612f8a0569655c10b995636827eceab42c6578cebdc45ad2922e0142
+Used by:
+  - Rust: zcheapstr@1.0.0
+-------------------------------------------------------------------------------
+Copyright (c) 2026 Zeeshan Ali Khan & zcheapstr contributors
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -11252,6 +11783,80 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ===============================================================================
+License text ID: 5d5050b4897d9f5b5e7055fca74329a98183620f45d803f9bed81d9e24956968
+Used by:
+  - Rust: enumflags2@0.7.12
+-------------------------------------------------------------------------------
+Apache License
+
+Version 2.0, January 2004
+
+http://www.apache.org/licenses/
+
+TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+1. Definitions.
+
+"License" shall mean the terms and conditions for use, reproduction, and distribution as defined by Sections 1 through 9 of this document.
+
+"Licensor" shall mean the copyright owner or entity authorized by the copyright owner that is granting the License.
+
+"Legal Entity" shall mean the union of the acting entity and all other entities that control, are controlled by, or are under common control with that entity. For the purposes of this definition, "control" means (i) the power, direct or indirect, to cause the direction or management of such entity, whether by contract or otherwise, or (ii) ownership of fifty percent (50%) or more of the outstanding shares, or (iii) beneficial ownership of such entity.
+
+"You" (or "Your") shall mean an individual or Legal Entity exercising permissions granted by this License.
+
+"Source" form shall mean the preferred form for making modifications, including but not limited to software source code, documentation source, and configuration files.
+
+"Object" form shall mean any form resulting from mechanical transformation or translation of a Source form, including but not limited to compiled object code, generated documentation, and conversions to other media types.
+
+"Work" shall mean the work of authorship, whether in Source or Object form, made available under the License, as indicated by a copyright notice that is included in or attached to the work (an example is provided in the Appendix below).
+
+"Derivative Works" shall mean any work, whether in Source or Object form, that is based on (or derived from) the Work and for which the editorial revisions, annotations, elaborations, or other modifications represent, as a whole, an original work of authorship. For the purposes of this License, Derivative Works shall not include works that remain separable from, or merely link (or bind by name) to the interfaces of, the Work and Derivative Works thereof.
+
+"Contribution" shall mean any work of authorship, including the original version of the Work and any modifications or additions to that Work or Derivative Works thereof, that is intentionally submitted to Licensor for inclusion in the Work by the copyright owner or by an individual or Legal Entity authorized to submit on behalf of the copyright owner. For the purposes of this definition, "submitted" means any form of electronic, verbal, or written communication sent to the Licensor or its representatives, including but not limited to communication on electronic mailing lists, source code control systems, and issue tracking systems that are managed by, or on behalf of, the Licensor for the purpose of discussing and improving the Work, but excluding communication that is conspicuously marked or otherwise designated in writing by the copyright owner as "Not a Contribution."
+
+"Contributor" shall mean Licensor and any individual or Legal Entity on behalf of whom a Contribution has been received by Licensor and subsequently incorporated within the Work.
+
+2. Grant of Copyright License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare Derivative Works of, publicly display, publicly perform, sublicense, and distribute the Work and such Derivative Works in Source or Object form.
+
+3. Grant of Patent License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as stated in this section) patent license to make, have made, use, offer to sell, sell, import, and otherwise transfer the Work, where such license applies only to those patent claims licensable by such Contributor that are necessarily infringed by their Contribution(s) alone or by combination of their Contribution(s) with the Work to which such Contribution(s) was submitted. If You institute patent litigation against any entity (including a cross-claim or counterclaim in a lawsuit) alleging that the Work or a Contribution incorporated within the Work constitutes direct or contributory patent infringement, then any patent licenses granted to You under this License for that Work shall terminate as of the date such litigation is filed.
+
+4. Redistribution. You may reproduce and distribute copies of the Work or Derivative Works thereof in any medium, with or without modifications, and in Source or Object form, provided that You meet the following conditions:
+
+You must give any other recipients of the Work or Derivative Works a copy of this License; and
+You must cause any modified files to carry prominent notices stating that You changed the files; and
+You must retain, in the Source form of any Derivative Works that You distribute, all copyright, patent, trademark, and attribution notices from the Source form of the Work, excluding those notices that do not pertain to any part of the Derivative Works; and
+If the Work includes a "NOTICE" text file as part of its distribution, then any Derivative Works that You distribute must include a readable copy of the attribution notices contained within such NOTICE file, excluding those notices that do not pertain to any part of the Derivative Works, in at least one of the following places: within a NOTICE text file distributed as part of the Derivative Works; within the Source form or documentation, if provided along with the Derivative Works; or, within a display generated by the Derivative Works, if and wherever such third-party notices normally appear. The contents of the NOTICE file are for informational purposes only and do not modify the License. You may add Your own attribution notices within Derivative Works that You distribute, alongside or as an addendum to the NOTICE text from the Work, provided that such additional attribution notices cannot be construed as modifying the License.
+
+You may add Your own copyright statement to Your modifications and may provide additional or different license terms and conditions for use, reproduction, or distribution of Your modifications, or for any such Derivative Works as a whole, provided Your use, reproduction, and distribution of the Work otherwise complies with the conditions stated in this License.
+5. Submission of Contributions. Unless You explicitly state otherwise, any Contribution intentionally submitted for inclusion in the Work by You to the Licensor shall be under the terms and conditions of this License, without any additional terms or conditions. Notwithstanding the above, nothing herein shall supersede or modify the terms of any separate license agreement you may have executed with Licensor regarding such Contributions.
+
+6. Trademarks. This License does not grant permission to use the trade names, trademarks, service marks, or product names of the Licensor, except as required for reasonable and customary use in describing the origin of the Work and reproducing the content of the NOTICE file.
+
+7. Disclaimer of Warranty. Unless required by applicable law or agreed to in writing, Licensor provides the Work (and each Contributor provides its Contributions) on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. You are solely responsible for determining the appropriateness of using or redistributing the Work and assume any risks associated with Your exercise of permissions under this License.
+
+8. Limitation of Liability. In no event and under no legal theory, whether in tort (including negligence), contract, or otherwise, unless required by applicable law (such as deliberate and grossly negligent acts) or agreed to in writing, shall any Contributor be liable to You for damages, including any direct, indirect, special, incidental, or consequential damages of any character arising as a result of this License or out of the use or inability to use the Work (including but not limited to damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other commercial damages or losses), even if such Contributor has been advised of the possibility of such damages.
+
+9. Accepting Warranty or Additional Liability. While redistributing the Work or Derivative Works thereof, You may choose to offer, and charge a fee for, acceptance of support, warranty, indemnity, or other liability obligations and/or rights consistent with this License. However, in accepting such obligations, You may act only on Your own behalf and on Your sole responsibility, not on behalf of any other Contributor, and only if You agree to indemnify, defend, and hold each Contributor harmless for any liability incurred by, or claims asserted against, such Contributor by reason of your accepting any such warranty or additional liability.
+
+END OF TERMS AND CONDITIONS
+
+
+Copyright 2017-2023 Maik Klein, Maja Kądziołka
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+===============================================================================
 License text ID: 5fde0201805ca0ffc8884fac6a3447b7f2918a6c22efb68b94019298d16bad9e
 Used by:
   - JavaScript: zimmerframe@1.1.4
@@ -11403,6 +12008,7 @@ DEALINGS IN THE SOFTWARE.
 License text ID: 6226d0632e2e1a80c23597e964da9812ae193c535fe058154afb034e94167aa5
 Used by:
   - Rust: atomic-waker@1.1.2
+  - Rust: futures-lite@2.6.1
 -------------------------------------------------------------------------------
 ===============================================================================
 
@@ -12766,6 +13372,202 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ===============================================================================
+License text ID: 6b286a8c17b82bbcba94eeb9a0c883bcc9117790599a182d23b7ce666042fc38
+Used by:
+  - Rust: async-broadcast@0.7.2
+-------------------------------------------------------------------------------
+Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   Copyright 2020 Yoshua Wuyts
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+===============================================================================
 License text ID: 6c19f173cf807e59ad48df621b2840bd2e2d7194d948d3cb1766f17b63335030
 Used by:
   - JavaScript: @standard-schema/spec@1.1.0
@@ -13105,6 +13907,80 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+
+===============================================================================
+License text ID: 73663aa1887e9ff1fc094f9b6fc2c06c6a9faa5d24833c8e31490afb565c9039
+Used by:
+  - Rust: enumflags2_derive@0.7.12
+-------------------------------------------------------------------------------
+Apache License
+
+Version 2.0, January 2004
+
+http://www.apache.org/licenses/
+
+TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+1. Definitions.
+
+"License" shall mean the terms and conditions for use, reproduction, and distribution as defined by Sections 1 through 9 of this document.
+
+"Licensor" shall mean the copyright owner or entity authorized by the copyright owner that is granting the License.
+
+"Legal Entity" shall mean the union of the acting entity and all other entities that control, are controlled by, or are under common control with that entity. For the purposes of this definition, "control" means (i) the power, direct or indirect, to cause the direction or management of such entity, whether by contract or otherwise, or (ii) ownership of fifty percent (50%) or more of the outstanding shares, or (iii) beneficial ownership of such entity.
+
+"You" (or "Your") shall mean an individual or Legal Entity exercising permissions granted by this License.
+
+"Source" form shall mean the preferred form for making modifications, including but not limited to software source code, documentation source, and configuration files.
+
+"Object" form shall mean any form resulting from mechanical transformation or translation of a Source form, including but not limited to compiled object code, generated documentation, and conversions to other media types.
+
+"Work" shall mean the work of authorship, whether in Source or Object form, made available under the License, as indicated by a copyright notice that is included in or attached to the work (an example is provided in the Appendix below).
+
+"Derivative Works" shall mean any work, whether in Source or Object form, that is based on (or derived from) the Work and for which the editorial revisions, annotations, elaborations, or other modifications represent, as a whole, an original work of authorship. For the purposes of this License, Derivative Works shall not include works that remain separable from, or merely link (or bind by name) to the interfaces of, the Work and Derivative Works thereof.
+
+"Contribution" shall mean any work of authorship, including the original version of the Work and any modifications or additions to that Work or Derivative Works thereof, that is intentionally submitted to Licensor for inclusion in the Work by the copyright owner or by an individual or Legal Entity authorized to submit on behalf of the copyright owner. For the purposes of this definition, "submitted" means any form of electronic, verbal, or written communication sent to the Licensor or its representatives, including but not limited to communication on electronic mailing lists, source code control systems, and issue tracking systems that are managed by, or on behalf of, the Licensor for the purpose of discussing and improving the Work, but excluding communication that is conspicuously marked or otherwise designated in writing by the copyright owner as "Not a Contribution."
+
+"Contributor" shall mean Licensor and any individual or Legal Entity on behalf of whom a Contribution has been received by Licensor and subsequently incorporated within the Work.
+
+2. Grant of Copyright License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare Derivative Works of, publicly display, publicly perform, sublicense, and distribute the Work and such Derivative Works in Source or Object form.
+
+3. Grant of Patent License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as stated in this section) patent license to make, have made, use, offer to sell, sell, import, and otherwise transfer the Work, where such license applies only to those patent claims licensable by such Contributor that are necessarily infringed by their Contribution(s) alone or by combination of their Contribution(s) with the Work to which such Contribution(s) was submitted. If You institute patent litigation against any entity (including a cross-claim or counterclaim in a lawsuit) alleging that the Work or a Contribution incorporated within the Work constitutes direct or contributory patent infringement, then any patent licenses granted to You under this License for that Work shall terminate as of the date such litigation is filed.
+
+4. Redistribution. You may reproduce and distribute copies of the Work or Derivative Works thereof in any medium, with or without modifications, and in Source or Object form, provided that You meet the following conditions:
+
+You must give any other recipients of the Work or Derivative Works a copy of this License; and
+You must cause any modified files to carry prominent notices stating that You changed the files; and
+You must retain, in the Source form of any Derivative Works that You distribute, all copyright, patent, trademark, and attribution notices from the Source form of the Work, excluding those notices that do not pertain to any part of the Derivative Works; and
+If the Work includes a "NOTICE" text file as part of its distribution, then any Derivative Works that You distribute must include a readable copy of the attribution notices contained within such NOTICE file, excluding those notices that do not pertain to any part of the Derivative Works, in at least one of the following places: within a NOTICE text file distributed as part of the Derivative Works; within the Source form or documentation, if provided along with the Derivative Works; or, within a display generated by the Derivative Works, if and wherever such third-party notices normally appear. The contents of the NOTICE file are for informational purposes only and do not modify the License. You may add Your own attribution notices within Derivative Works that You distribute, alongside or as an addendum to the NOTICE text from the Work, provided that such additional attribution notices cannot be construed as modifying the License.
+
+You may add Your own copyright statement to Your modifications and may provide additional or different license terms and conditions for use, reproduction, or distribution of Your modifications, or for any such Derivative Works as a whole, provided Your use, reproduction, and distribution of the Work otherwise complies with the conditions stated in this License.
+5. Submission of Contributions. Unless You explicitly state otherwise, any Contribution intentionally submitted for inclusion in the Work by You to the Licensor shall be under the terms and conditions of this License, without any additional terms or conditions. Notwithstanding the above, nothing herein shall supersede or modify the terms of any separate license agreement you may have executed with Licensor regarding such Contributions.
+
+6. Trademarks. This License does not grant permission to use the trade names, trademarks, service marks, or product names of the Licensor, except as required for reasonable and customary use in describing the origin of the Work and reproducing the content of the NOTICE file.
+
+7. Disclaimer of Warranty. Unless required by applicable law or agreed to in writing, Licensor provides the Work (and each Contributor provides its Contributions) on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. You are solely responsible for determining the appropriateness of using or redistributing the Work and assume any risks associated with Your exercise of permissions under this License.
+
+8. Limitation of Liability. In no event and under no legal theory, whether in tort (including negligence), contract, or otherwise, unless required by applicable law (such as deliberate and grossly negligent acts) or agreed to in writing, shall any Contributor be liable to You for damages, including any direct, indirect, special, incidental, or consequential damages of any character arising as a result of this License or out of the use or inability to use the Work (including but not limited to damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other commercial damages or losses), even if such Contributor has been advised of the possibility of such damages.
+
+9. Accepting Warranty or Additional Liability. While redistributing the Work or Derivative Works thereof, You may choose to offer, and charge a fee for, acceptance of support, warranty, indemnity, or other liability obligations and/or rights consistent with this License. However, in accepting such obligations, You may act only on Your own behalf and on Your sole responsibility, not on behalf of any other Contributor, and only if You agree to indemnify, defend, and hold each Contributor harmless for any liability incurred by, or claims asserted against, such Contributor by reason of your accepting any such warranty or additional liability.
+
+END OF TERMS AND CONDITIONS
+
+
+Copyright [2017] [Maik Klein]
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 ===============================================================================
 License text ID: 74f180f4d19f51aede780e1884b37d02c19cbbad872f8ca3b6450288db66e5cd
@@ -14147,6 +15023,7 @@ SOFTWARE.
 ===============================================================================
 License text ID: 898b1ae9821e98daf8964c8d6c7f61641f5f5aa78ad500020771c0939ee0dea1
 Used by:
+  - Rust: tracing-attributes@0.1.31
   - Rust: tracing-core@0.1.36
   - Rust: tracing@0.1.44
 -------------------------------------------------------------------------------
@@ -14203,6 +15080,37 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+===============================================================================
+License text ID: 8b427f5bc501764575e52ba4f9d95673cf8f6d80a86d0d06599852e1a9a20a36
+Used by:
+  - Rust: tempfile@3.27.0
+-------------------------------------------------------------------------------
+Copyright (c) 2015 Steven Allen
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
 ===============================================================================
 License text ID: 8b43ce8accd61e9d370b5ca9e9c4f953279b5c239926c62315b40e24df51b726
@@ -14536,6 +15444,21 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ===============================================================================
+License text ID: 9a6d7a3c1b8edcc706c4b6c37f8dae9a77f02c7f9051df603f975db136b55419
+Used by:
+  - Rust: parking@2.2.1
+-------------------------------------------------------------------------------
+===============================================================================
+
+Copyright 2014-2020 The Rust Project Developers
+
+Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+<LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+option. All files in the project carrying such notice may not be
+copied, modified, or distributed except according to those terms.
+
+===============================================================================
 License text ID: 9a9edad7baae52622bddf3c15b2ef8a33d2c89f2d25408ad13e8a7481c6b0c97
 Used by:
   - JavaScript: clsx@2.1.1
@@ -14757,6 +15680,32 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+===============================================================================
+License text ID: 9c1db6b7e7eb83e1cb2af973b5df2bdc63651ede0f38506ab98dfa0940487759
+Used by:
+  - Rust: tauri-plugin-single-instance@2.4.3
+-------------------------------------------------------------------------------
+SPDXVersion: SPDX-2.1
+DataLicense: CC0-1.0
+PackageName: tauri
+DataFormat: SPDXRef-1
+PackageSupplier: Organization: The Tauri Programme in the Commons Conservancy
+PackageHomePage: https://tauri.app
+PackageLicenseDeclared: Apache-2.0
+PackageLicenseDeclared: MIT
+PackageCopyrightText: 2019-2022, The Tauri Programme in the Commons Conservancy
+PackageSummary: <text>Tauri is a rust project that enables developers to make secure
+and small desktop applications using a web frontend.
+                </text>
+PackageComment: <text>The package includes the following libraries; see
+Relationship information.
+                </text>
+Created: 2019-05-20T09:00:00Z
+PackageDownloadLocation: git://github.com/tauri-apps/tauri
+PackageDownloadLocation: git+https://github.com/tauri-apps/tauri.git
+PackageDownloadLocation: git+ssh://github.com/tauri-apps/tauri.git
+Creator: Person: Daniel Thompson-Yvetot
 
 ===============================================================================
 License text ID: 9c5a80639a57c1c945570e7ebbca0706305849ce3c098021325cca9db2f7acc4
@@ -15347,88 +16296,6 @@ Apache License
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
-
-===============================================================================
-License text ID: a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61
-Used by:
-  - JavaScript: @typescript/typescript-aix-ppc64@7.0.2
-  - JavaScript: @typescript/typescript-darwin-arm64@7.0.2
-  - JavaScript: @typescript/typescript-darwin-x64@7.0.2
-  - JavaScript: @typescript/typescript-freebsd-arm64@7.0.2
-  - JavaScript: @typescript/typescript-freebsd-x64@7.0.2
-  - JavaScript: @typescript/typescript-linux-arm64@7.0.2
-  - JavaScript: @typescript/typescript-linux-arm@7.0.2
-  - JavaScript: @typescript/typescript-linux-loong64@7.0.2
-  - JavaScript: @typescript/typescript-linux-mips64el@7.0.2
-  - JavaScript: @typescript/typescript-linux-ppc64@7.0.2
-  - JavaScript: @typescript/typescript-linux-riscv64@7.0.2
-  - JavaScript: @typescript/typescript-linux-s390x@7.0.2
-  - JavaScript: @typescript/typescript-linux-x64@7.0.2
-  - JavaScript: @typescript/typescript-netbsd-arm64@7.0.2
-  - JavaScript: @typescript/typescript-netbsd-x64@7.0.2
-  - JavaScript: @typescript/typescript-openbsd-arm64@7.0.2
-  - JavaScript: @typescript/typescript-openbsd-x64@7.0.2
-  - JavaScript: @typescript/typescript-sunos-x64@7.0.2
-  - JavaScript: @typescript/typescript-win32-arm64@7.0.2
-  - JavaScript: @typescript/typescript-win32-x64@7.0.2
-  - JavaScript: typescript@6.0.3
-  - JavaScript: typescript@7.0.2
--------------------------------------------------------------------------------
-Apache License
-
-Version 2.0, January 2004
-
-http://www.apache.org/licenses/ 
-
-TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
-
-1. Definitions.
-
-"License" shall mean the terms and conditions for use, reproduction, and distribution as defined by Sections 1 through 9 of this document.
-
-"Licensor" shall mean the copyright owner or entity authorized by the copyright owner that is granting the License.
-
-"Legal Entity" shall mean the union of the acting entity and all other entities that control, are controlled by, or are under common control with that entity. For the purposes of this definition, "control" means (i) the power, direct or indirect, to cause the direction or management of such entity, whether by contract or otherwise, or (ii) ownership of fifty percent (50%) or more of the outstanding shares, or (iii) beneficial ownership of such entity.
-
-"You" (or "Your") shall mean an individual or Legal Entity exercising permissions granted by this License.
-
-"Source" form shall mean the preferred form for making modifications, including but not limited to software source code, documentation source, and configuration files.
-
-"Object" form shall mean any form resulting from mechanical transformation or translation of a Source form, including but not limited to compiled object code, generated documentation, and conversions to other media types.
-
-"Work" shall mean the work of authorship, whether in Source or Object form, made available under the License, as indicated by a copyright notice that is included in or attached to the work (an example is provided in the Appendix below).
-
-"Derivative Works" shall mean any work, whether in Source or Object form, that is based on (or derived from) the Work and for which the editorial revisions, annotations, elaborations, or other modifications represent, as a whole, an original work of authorship. For the purposes of this License, Derivative Works shall not include works that remain separable from, or merely link (or bind by name) to the interfaces of, the Work and Derivative Works thereof.
-
-"Contribution" shall mean any work of authorship, including the original version of the Work and any modifications or additions to that Work or Derivative Works thereof, that is intentionally submitted to Licensor for inclusion in the Work by the copyright owner or by an individual or Legal Entity authorized to submit on behalf of the copyright owner. For the purposes of this definition, "submitted" means any form of electronic, verbal, or written communication sent to the Licensor or its representatives, including but not limited to communication on electronic mailing lists, source code control systems, and issue tracking systems that are managed by, or on behalf of, the Licensor for the purpose of discussing and improving the Work, but excluding communication that is conspicuously marked or otherwise designated in writing by the copyright owner as "Not a Contribution."
-
-"Contributor" shall mean Licensor and any individual or Legal Entity on behalf of whom a Contribution has been received by Licensor and subsequently incorporated within the Work.
-
-2. Grant of Copyright License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare Derivative Works of, publicly display, publicly perform, sublicense, and distribute the Work and such Derivative Works in Source or Object form.
-
-3. Grant of Patent License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as stated in this section) patent license to make, have made, use, offer to sell, sell, import, and otherwise transfer the Work, where such license applies only to those patent claims licensable by such Contributor that are necessarily infringed by their Contribution(s) alone or by combination of their Contribution(s) with the Work to which such Contribution(s) was submitted. If You institute patent litigation against any entity (including a cross-claim or counterclaim in a lawsuit) alleging that the Work or a Contribution incorporated within the Work constitutes direct or contributory patent infringement, then any patent licenses granted to You under this License for that Work shall terminate as of the date such litigation is filed.
-
-4. Redistribution. You may reproduce and distribute copies of the Work or Derivative Works thereof in any medium, with or without modifications, and in Source or Object form, provided that You meet the following conditions:
-
-You must give any other recipients of the Work or Derivative Works a copy of this License; and
-
-You must cause any modified files to carry prominent notices stating that You changed the files; and
-
-You must retain, in the Source form of any Derivative Works that You distribute, all copyright, patent, trademark, and attribution notices from the Source form of the Work, excluding those notices that do not pertain to any part of the Derivative Works; and
-
-If the Work includes a "NOTICE" text file as part of its distribution, then any Derivative Works that You distribute must include a readable copy of the attribution notices contained within such NOTICE file, excluding those notices that do not pertain to any part of the Derivative Works, in at least one of the following places: within a NOTICE text file distributed as part of the Derivative Works; within the Source form or documentation, if provided along with the Derivative Works; or, within a display generated by the Derivative Works, if and wherever such third-party notices normally appear. The contents of the NOTICE file are for informational purposes only and do not modify the License. You may add Your own attribution notices within Derivative Works that You distribute, alongside or as an addendum to the NOTICE text from the Work, provided that such additional attribution notices cannot be construed as modifying the License. You may add Your own copyright statement to Your modifications and may provide additional or different license terms and conditions for use, reproduction, or distribution of Your modifications, or for any such Derivative Works as a whole, provided Your use, reproduction, and distribution of the Work otherwise complies with the conditions stated in this License.
-
-5. Submission of Contributions. Unless You explicitly state otherwise, any Contribution intentionally submitted for inclusion in the Work by You to the Licensor shall be under the terms and conditions of this License, without any additional terms or conditions. Notwithstanding the above, nothing herein shall supersede or modify the terms of any separate license agreement you may have executed with Licensor regarding such Contributions.
-
-6. Trademarks. This License does not grant permission to use the trade names, trademarks, service marks, or product names of the Licensor, except as required for reasonable and customary use in describing the origin of the Work and reproducing the content of the NOTICE file.
-
-7. Disclaimer of Warranty. Unless required by applicable law or agreed to in writing, Licensor provides the Work (and each Contributor provides its Contributions) on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. You are solely responsible for determining the appropriateness of using or redistributing the Work and assume any risks associated with Your exercise of permissions under this License.
-
-8. Limitation of Liability. In no event and under no legal theory, whether in tort (including negligence), contract, or otherwise, unless required by applicable law (such as deliberate and grossly negligent acts) or agreed to in writing, shall any Contributor be liable to You for damages, including any direct, indirect, special, incidental, or consequential damages of any character arising as a result of this License or out of the use or inability to use the Work (including but not limited to damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other commercial damages or losses), even if such Contributor has been advised of the possibility of such damages.
-
-9. Accepting Warranty or Additional Liability. While redistributing the Work or Derivative Works thereof, You may choose to offer, and charge a fee for, acceptance of support, warranty, indemnity, or other liability obligations and/or rights consistent with this License. However, in accepting such obligations, You may act only on Your own behalf and on Your sole responsibility, not on behalf of any other Contributor, and only if You agree to indemnify, defend, and hold each Contributor harmless for any liability incurred by, or claims asserted against, such Contributor by reason of your accepting any such warranty or additional liability.
-
-END OF TERMS AND CONDITIONS
 
 ===============================================================================
 License text ID: a6db8096b2707bc0102d256917d4d33f298ba36d8c3f25de067a2b5bb379db27
@@ -16250,6 +17117,33 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+
+===============================================================================
+License text ID: af76c60594af325c4efdcbcd27f5d34ff441c11f09b46b627b378d04d5aa1f1d
+Used by:
+  - Rust: tauri-plugin-single-instance@2.4.3
+-------------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2017 - Present The Tauri Programme in the Commons Conservancy
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ===============================================================================
 License text ID: af975c9737b3bdcdcf7ec3512b3dc936f91cc58a3c9152a8e4b0803f667df6b9
@@ -17081,6 +17975,7 @@ THIS SOFTWARE.
 License text ID: b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e
 Used by:
   - Rust: anyhow@1.0.104
+  - Rust: async-trait@0.1.92
   - Rust: dtoa@1.0.11
   - Rust: dyn-clone@1.0.20
   - Rust: erased-serde@0.4.10
@@ -17462,6 +18357,7 @@ Used by:
   - Rust: tauri-build@2.6.3
   - Rust: tauri-codegen@2.6.3
   - Rust: tauri-macros@2.6.3
+  - Rust: tauri-plugin-single-instance@2.4.3
   - Rust: tauri-runtime-wry@2.11.4
   - Rust: tauri-runtime@2.11.3
   - Rust: tauri-utils@2.9.3
@@ -18371,27 +19267,37 @@ Used by:
   - Rust: windows-strings@0.5.1
   - Rust: windows-sys@0.45.0
   - Rust: windows-sys@0.59.0
+  - Rust: windows-sys@0.60.2
   - Rust: windows-sys@0.61.2
   - Rust: windows-targets@0.42.2
   - Rust: windows-targets@0.52.6
+  - Rust: windows-targets@0.53.5
   - Rust: windows-threading@0.1.0
   - Rust: windows-version@0.1.7
   - Rust: windows@0.61.3
   - Rust: windows_aarch64_gnullvm@0.42.2
   - Rust: windows_aarch64_gnullvm@0.52.6
+  - Rust: windows_aarch64_gnullvm@0.53.1
   - Rust: windows_aarch64_msvc@0.42.2
   - Rust: windows_aarch64_msvc@0.52.6
+  - Rust: windows_aarch64_msvc@0.53.1
   - Rust: windows_i686_gnu@0.42.2
   - Rust: windows_i686_gnu@0.52.6
+  - Rust: windows_i686_gnu@0.53.1
   - Rust: windows_i686_gnullvm@0.52.6
+  - Rust: windows_i686_gnullvm@0.53.1
   - Rust: windows_i686_msvc@0.42.2
   - Rust: windows_i686_msvc@0.52.6
+  - Rust: windows_i686_msvc@0.53.1
   - Rust: windows_x86_64_gnu@0.42.2
   - Rust: windows_x86_64_gnu@0.52.6
+  - Rust: windows_x86_64_gnu@0.53.1
   - Rust: windows_x86_64_gnullvm@0.42.2
   - Rust: windows_x86_64_gnullvm@0.52.6
+  - Rust: windows_x86_64_gnullvm@0.53.1
   - Rust: windows_x86_64_msvc@0.42.2
   - Rust: windows_x86_64_msvc@0.52.6
+  - Rust: windows_x86_64_msvc@0.53.1
 -------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004
@@ -18702,6 +19608,37 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+===============================================================================
+License text ID: d13669f0eaff9b7015bff0d8637297213b53d9f239826636c07a15633acf7052
+Used by:
+  - Rust: enumflags2_derive@0.7.12
+-------------------------------------------------------------------------------
+Copyright (c) 2017 Maik Klein
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
 ===============================================================================
 License text ID: d5c22aa3118d240e877ad41c5d9fa232f9c77d757d4aac0c2f943afc0a95e0ef

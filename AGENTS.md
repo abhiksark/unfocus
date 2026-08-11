@@ -75,8 +75,8 @@ static/      icon source and vendored fonts
 - Prefer existing dependencies and platform APIs. A new dependency needs a
   concrete benefit, compatibility review, and the dependency metadata gates.
 - `plans/` and other working notes stay untracked. Tracked Markdown is limited
-  to `README.md` and the `CLAUDE.md`/`AGENTS.md` instruction set unless the user
-  explicitly approves another document.
+  to `README.md`, `CHANGELOG.md`, and the `CLAUDE.md`/`AGENTS.md` instruction
+  set unless the user explicitly approves another document.
 - Commit messages are short, plain, imperative summaries with no emoji or tool
   attribution.
 

@@ -16,7 +16,11 @@ const report: DiagnosticsReport = {
   idleSeconds: 1,
   idleError: null,
   activeWindowFullscreen: false,
-  fullscreenError: null
+  fullscreenError: null,
+  tray: {
+    available: true,
+    error: null
+  }
 };
 
 describe("diagnostics presentation", () => {
@@ -30,6 +34,30 @@ describe("diagnostics presentation", () => {
     expect(diagnosticsHealth({ ...report, monitorError: "enumeration failed" }, null)).toBe(
       "degraded"
     );
+  });
+
+  test("degrades when the native tray is known to be unavailable", () => {
+    expect(
+      diagnosticsHealth(
+        {
+          ...report,
+          tray: { available: false, error: "indicator construction failed" }
+        },
+        null
+      )
+    ).toBe("degraded");
+  });
+
+  test("degrades when the native tray is unavailable without a current error", () => {
+    expect(
+      diagnosticsHealth(
+        {
+          ...report,
+          tray: { available: false, error: null }
+        },
+        null
+      )
+    ).toBe("degraded");
   });
 
   test("does not guess X11 for unsupported platforms", () => {

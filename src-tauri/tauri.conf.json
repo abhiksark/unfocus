@@ -1,12 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Unfocus",
-  "version": "0.1.0-alpha.1",
+  "version": "0.2.0-alpha.1",
   "identifier": "com.unfocus.desktop",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "bun run build",
+    "beforeBundleCommand": "bun run debian:metadata",
     "frontendDist": "../build"
   },
   "app": {
@@ -27,6 +28,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "category": "Utility",
     "licenseFile": "../LICENSE",
     "resources": {
       "../THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt"
@@ -38,9 +40,20 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "linux": {
+      "deb": {
+        "depends": ["libc6"],
+        "files": {
+          "/usr/share/doc/unfocus/changelog.Debian.gz": "target/release/debian-metadata/changelog.Debian.gz",
+          "/usr/share/doc/unfocus/changelog.gz": "target/release/debian-metadata/changelog.gz",
+          "/usr/share/doc/unfocus/copyright": "../LICENSE"
+        },
+        "section": "utils"
+      }
+    },
     "windows": {
       "wix": {
-        "version": "0.1.0"
+        "version": "0.2.0"
       }
     }
   }

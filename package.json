@@ -1,7 +1,7 @@
 {
   "name": "unfocus",
   "private": true,
-  "version": "0.1.0-alpha.1",
+  "version": "0.2.0-alpha.1",
   "description": "A local-first eye-break reminder",
   "packageManager": "bun@1.3.5",
   "engines": {
@@ -18,8 +18,14 @@
     "tauri": "tauri",
     "dependencies:check": "bun run scripts/audit-bun.js",
     "dependencies:audit-rust": "bun run scripts/audit-rust.js",
+    "debian:finalize": "bun run scripts/debian-package.js finalize",
+    "debian:metadata": "bun run scripts/generate-debian-metadata.js",
+    "debian:qualify-published": "bun run scripts/debian-package.js qualify-published",
+    "debian:verify": "bun run scripts/debian-package.js verify",
     "notices:check": "bun run scripts/generate-third-party-notices.js --check",
     "notices:generate": "bun run scripts/generate-third-party-notices.js",
+    "release:assemble": "bun run scripts/assemble-release-artifacts.js",
+    "release:notes": "bun run scripts/extract-release-notes.js",
     "sbom:generate": "bun run scripts/generate-sbom.js",
     "toolchains:check": "bun run scripts/check-toolchain-versions.js",
     "tray:generate": "bun run scripts/gen-tray-icons.js",

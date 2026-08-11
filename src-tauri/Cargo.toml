@@ -1,8 +1,8 @@
 [package]
 name = "unfocus"
-version = "0.1.0-alpha.1"
-description = "A local-first eye-break reminder"
-authors = ["Unfocus contributors"]
+version = "0.2.0-alpha.1"
+description = "Local-first eye-break reminder"
+authors = ["Unfocus contributors <14940119+abhiksark@users.noreply.github.com>"]
 edition = "2021"
 license = "MIT"
 publish = false
@@ -23,6 +23,9 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+[target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = { version = "0.14", features = ["screensaver"] }
