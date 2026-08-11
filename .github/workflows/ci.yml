@@ -133,10 +133,24 @@ jobs:
       - run: bun run build
       - run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked
 
+  release-rehearsal:
+    name: Release rehearsal
+    if: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref == 'dev' && github.event.pull_request.head.repo.full_name == github.repository }}
+    # Reusable workflows cannot raise the caller's permission ceiling. The
+    # called workflow resets build jobs to read-only and keeps publication
+    # tag-only, but its skipped publisher must still validate at dispatch.
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/release.yml
+    with:
+      rehearsal: true
+
   required:
     name: Required CI
     if: ${{ always() }}
-    needs: [branch-policy, versions, check, dependency-audit, platform-check]
+    needs: [branch-policy, versions, check, dependency-audit, platform-check, release-rehearsal]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
@@ -146,10 +160,21 @@ jobs:
           CHECK_RESULT: ${{ needs.check.result }}
           DEPENDENCY_AUDIT_RESULT: ${{ needs.dependency-audit.result }}
           PLATFORM_CHECK_RESULT: ${{ needs.platform-check.result }}
+          RELEASE_REHEARSAL_RESULT: ${{ needs.release-rehearsal.result }}
           VERSIONS_RESULT: ${{ needs.versions.result }}
+          BASE_REF: ${{ github.base_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           test "$BRANCH_POLICY_RESULT" = success
           test "$VERSIONS_RESULT" = success
           test "$CHECK_RESULT" = success
           test "$DEPENDENCY_AUDIT_RESULT" = success
           test "$PLATFORM_CHECK_RESULT" = success
+          if [ "$EVENT_NAME" = pull_request ] && [ "$BASE_REF" = main ] && [ "$HEAD_REF" = dev ] && [ "$HEAD_REPOSITORY" = "$REPOSITORY" ]; then
+            test "$RELEASE_REHEARSAL_RESULT" = success
+          else
+            test "$RELEASE_REHEARSAL_RESULT" = skipped
+          fi

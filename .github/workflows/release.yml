@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_call:
+    inputs:
+      rehearsal:
+        description: Build and assemble release candidates without publishing
+        required: true
+        type: boolean
 
 permissions:
   contents: read
@@ -23,7 +29,29 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Validate the release invocation
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          REF: ${{ github.ref }}
+          REHEARSAL: ${{ inputs.rehearsal }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$REHEARSAL" = true ]; then
+            if [ "$EVENT_NAME" != pull_request ] || [ "$BASE_REF" != main ] || [ "$HEAD_REF" != dev ] || [ "$HEAD_REPOSITORY" != "$REPOSITORY" ]; then
+              echo "Release rehearsals are limited to this repository's dev-to-main promotion pull request." >&2
+              exit 1
+            fi
+          elif [ "$EVENT_NAME" != push ] || [[ "$REF" != refs/tags/v* ]]; then
+            echo "Publishing release builds require a v-prefixed tag push." >&2
+            exit 1
+          fi
+
       - name: Require the tagged commit to belong to main
+        if: ${{ !inputs.rehearsal }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin main:refs/remotes/origin/main
@@ -38,14 +66,20 @@ jobs:
           no-cache: true
 
       - name: Tag matches the declared version
+        if: ${{ !inputs.rehearsal }}
         env:
           EXPECTED_TAG: ${{ github.ref_name }}
         run: bun run scripts/version.js check --expect "$EXPECTED_TAG"
+
+      - name: Rehearsal version declarations agree
+        if: ${{ inputs.rehearsal }}
+        run: bun run version:check
 
       - name: Toolchain declarations agree
         run: bun run toolchains:check
 
       - name: Refuse to mutate an existing published release
+        if: ${{ !inputs.rehearsal }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
@@ -130,7 +164,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev lintian
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -156,6 +190,26 @@ jobs:
           TAURI_ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
         run: bun run scripts/collect-release-artifacts.js release-artifacts
 
+      - name: Qualify the finalized Debian package
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r .version package.json)
+          mapfile -t DEBIAN_PACKAGES < <(find release-artifacts -maxdepth 1 -type f -name '*.deb' -print)
+          if [ "${#DEBIAN_PACKAGES[@]}" -ne 1 ]; then
+            echo "Expected exactly one Debian package, found ${#DEBIAN_PACKAGES[@]}." >&2
+            exit 1
+          fi
+          bun run debian:verify "${DEBIAN_PACKAGES[0]}" "$VERSION"
+          bun run debian:qualify-published "${DEBIAN_PACKAGES[0]}" "$VERSION" "$GITHUB_REPOSITORY"
+          # This upstream desktop alpha has no CLI manual or Debian BTS bug,
+          # and release symbols remain available for cross-platform diagnostics.
+          lintian --fail-on error \
+            --suppress-tags initial-upload-closes-no-bugs,no-manual-page,unstripped-binary-or-object \
+            "${DEBIAN_PACKAGES[0]}"
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-${{ matrix.name }}
@@ -164,8 +218,41 @@ jobs:
           retention-days: 7
           compression-level: 0
 
-  publish:
+  assemble:
     needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+          no-cache: true
+
+      # Downloaded per artifact rather than merged: merge-multiple flattens
+      # every job into one directory and a same-named asset from two platforms
+      # would overwrite silently instead of failing.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-*
+          path: release-downloads
+
+      - name: Assemble and verify the release candidate
+        run: bun run release:assemble release-downloads release-assets
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-candidate
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  publish:
+    needs: assemble
+    if: ${{ !inputs.rehearsal && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-24.04
     environment: release
     permissions:
@@ -178,39 +265,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # Downloaded per artifact rather than merged: merge-multiple flattens
-      # every job into one directory and a same-named asset from two platforms
-      # would overwrite silently instead of failing.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: release-*
-          path: release-downloads
-
-      - name: Collect assets and reject name collisions
-        run: |
-          set -euo pipefail
-          mkdir -p release-assets
-          while IFS= read -r -d '' SOURCE; do
-            NAME=$(basename "$SOURCE")
-            if [ -e "release-assets/$NAME" ]; then
-              echo "Two build jobs produced an asset named $NAME." >&2
-              exit 1
-            fi
-            mv "$SOURCE" "release-assets/$NAME"
-          done < <(find release-downloads -type f -print0 | sort -z)
-          test -n "$(ls -A release-assets)"
-          ls -1 release-assets
-
-      - name: Generate and verify checksums
-        working-directory: release-assets
-        run: |
-          set -euo pipefail
-          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' \
-            | sort -z \
-            | xargs -0 sha256sum > SHA256SUMS
-          test -s SHA256SUMS
-          sha256sum --check --strict SHA256SUMS
-          cat SHA256SUMS
+          name: release-candidate
+          path: release-assets
 
       - name: Attest release assets
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -222,8 +280,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          PREV=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
-          if [ -n "$PREV" ]; then RANGE="$PREV..$TAG"; else RANGE="$TAG"; fi
+          node scripts/extract-release-notes.js "$TAG" > changes.md
 
           {
             echo "These early builds are not code-signed or notarized. Verify downloads with SHA256SUMS and the GitHub build-provenance attestations."
@@ -235,8 +292,7 @@ jobs:
             echo
             echo "## Changes"
             echo
-            git log --no-merges --pretty=format:'- %s' "$RANGE"
-            echo
+            cat changes.md
           } > notes.md
 
       - name: Create or update a draft release
