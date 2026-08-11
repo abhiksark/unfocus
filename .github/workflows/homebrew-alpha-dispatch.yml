@@ -44,8 +44,8 @@ jobs:
 
           ID=$(jq -r '.id // empty' <<<"$RELEASE")
           TAG=$(jq -r '.tag_name // empty' <<<"$RELEASE")
-          DRAFT=$(jq -r '.draft // empty' <<<"$RELEASE")
-          PRERELEASE=$(jq -r '.prerelease // empty' <<<"$RELEASE")
+          DRAFT=$(jq -r '.draft | if type == "boolean" then tostring else empty end' <<<"$RELEASE")
+          PRERELEASE=$(jq -r '.prerelease | if type == "boolean" then tostring else empty end' <<<"$RELEASE")
           PUBLISHED_AT=$(jq -r '.published_at // empty' <<<"$RELEASE")
 
           [[ "$ID" =~ ^[0-9]+$ ]] || {
