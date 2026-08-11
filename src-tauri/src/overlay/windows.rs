@@ -153,9 +153,29 @@ fn start_overlay(
                 .background_color(tauri::webview::Color(7, 19, 16, 255))
                 .build();
 
-        if let Err(error) = build_result {
-            controller.close_windows(app, Some(&prefix), "overlay startup failed");
-            return Err(format!("could not create overlay {index}: {error}"));
+        let window = match build_result {
+            Ok(window) => window,
+            Err(error) => {
+                controller.close_windows(app, Some(&prefix), "overlay startup failed");
+                return Err(format!("could not create overlay {index}: {error}"));
+            }
+        };
+
+        // Building through an AppHandle can enqueue native window creation and
+        // return before GTK realizes the window. Querying visibility is a
+        // runtime barrier, so each monitor window is fully realized before the
+        // next one starts. Without this serialization GTK can interleave its
+        // X11 monitor-workarea queries and abort the whole process.
+        match window.is_visible() {
+            Ok(true) => {}
+            Ok(false) => {
+                controller.close_windows(app, Some(&prefix), "overlay startup failed");
+                return Err(format!("overlay {index} was created hidden"));
+            }
+            Err(error) => {
+                controller.close_windows(app, Some(&prefix), "overlay startup failed");
+                return Err(format!("could not confirm overlay {index}: {error}"));
+            }
         }
     }
 
