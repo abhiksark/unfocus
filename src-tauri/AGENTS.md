@@ -13,8 +13,9 @@ orchestration, OS probes, timing, and diagnostics.
   authorization, Tauri setup and managed state, window-event routing, command
   registration, and exported `run()`.
 - `src/activity.rs` owns pure continuous-activity / AFK segmentation from idle
-  samples, the rolling-window summary, and the `get_today_activity` command.
-  It never keylogs and never mutates the reminder timer.
+  samples, local atomic history persistence, the rolling-window summary, and
+  the `get_today_activity` command. It never keylogs and never mutates the
+  reminder timer.
 - `src/diagnostics.rs` owns diagnostics serialization, environment reporting,
   monitor enumeration, and the diagnostics command.
 - `src/reminder.rs` owns the pure reminder timer, probe-based presentation

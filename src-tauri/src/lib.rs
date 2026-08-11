@@ -49,9 +49,14 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            let settings_manager = ReminderSettingsManager::load(&app.path().app_config_dir()?)?;
+            let config_dir = app.path().app_config_dir()?;
+            let settings_manager = ReminderSettingsManager::load(&config_dir)?;
             let probe_cache = ProbeCache::start()?;
-            let activity_tracker = ActivityTrackerHandle::default();
+            let activity_tracker =
+                ActivityTrackerHandle::load(&config_dir).unwrap_or_else(|error| {
+                    eprintln!("could not load activity history: {error}; starting empty");
+                    ActivityTrackerHandle::default()
+                });
             let overlay_controller = OverlayController::start(app.handle().clone())?;
             let tray_status = TrayStatus::default();
             if !app.manage(settings_manager.clone()) {

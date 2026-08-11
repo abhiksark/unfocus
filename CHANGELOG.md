@@ -11,7 +11,10 @@ released versions link to their GitHub release.
   last-24-hour active and away totals, longest continuous stretch, deep-block
   count, and a half-hour presence strip derived from the idle probe without
   keylogging. Probe failures freeze classification and never change the break
-  timer. History is in-memory for this release and resets on quit.
+  timer.
+- Persisted activity segments locally across restarts (atomic JSON next to app
+  settings, pruned to the rolling window). Write failures keep the previous
+  complete history and leave the reminder timer unchanged.
 
 ## [0.2.0-alpha.1] - 2026-08-11
 
