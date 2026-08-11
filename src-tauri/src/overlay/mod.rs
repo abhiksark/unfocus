@@ -5,7 +5,9 @@ mod windows;
 pub(crate) use labels::{
     overlay_run_id_from_label, MAX_OVERLAY_DURATION_SECONDS, MIN_OVERLAY_DURATION_SECONDS,
 };
-pub(crate) use windows::{schedule_automatic_overlay_test, show_overlay, show_overlay_if_idle};
+#[cfg(debug_assertions)]
+pub(crate) use windows::schedule_automatic_overlay_test;
+pub(crate) use windows::{show_overlay, show_overlay_if_idle};
 
 use crate::authorize_main_caller;
 use labels::authorize_overlay_close_caller;

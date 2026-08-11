@@ -48,6 +48,18 @@ describe("diagnostics presentation", () => {
     ).toBe("degraded");
   });
 
+  test("degrades when the native tray is unavailable without a current error", () => {
+    expect(
+      diagnosticsHealth(
+        {
+          ...report,
+          tray: { available: false, error: null }
+        },
+        null
+      )
+    ).toBe("degraded");
+  });
+
   test("does not guess X11 for unsupported platforms", () => {
     expect(probeBackend({ ...report, operatingSystem: "windows", sessionType: null })).toBe(
       "windows (unsupported)"

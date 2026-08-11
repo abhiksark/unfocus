@@ -9,9 +9,10 @@ mod tray;
 use diagnostics::get_diagnostics;
 #[cfg(desktop)]
 use instance::handle_secondary_launch;
+#[cfg(debug_assertions)]
+use overlay::schedule_automatic_overlay_test;
 use overlay::{
-    close_overlay_test, overlay_run_id_from_label, schedule_automatic_overlay_test,
-    show_overlay_test, OverlayController,
+    close_overlay_test, overlay_run_id_from_label, show_overlay_test, OverlayController,
 };
 use probes::ProbeCache;
 use reminder::{
@@ -73,6 +74,7 @@ pub fn run() {
             if !app.manage(tray_runtime) {
                 return Err(io::Error::other("tray runtime was already managed").into());
             }
+            #[cfg(debug_assertions)]
             schedule_automatic_overlay_test(app, overlay_controller.clone());
             Ok(())
         })

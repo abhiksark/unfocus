@@ -157,7 +157,7 @@ impl PersistedReminderSettings {
 
     fn into_state(self, now: SystemTime) -> Result<(PersistedReminderState, bool), String> {
         let mut needs_repair = match self.version {
-            LEGACY_SETTINGS_SCHEMA_VERSION if self.pause_until_unix_milliseconds.is_none() => true,
+            LEGACY_SETTINGS_SCHEMA_VERSION => true,
             SETTINGS_SCHEMA_VERSION => false,
             _ => {
                 return Err(format!(
@@ -1266,6 +1266,36 @@ mod tests {
         assert_eq!(migrated.work_minutes, 45);
         assert_eq!(migrated.break_seconds, 12);
         assert_eq!(migrated.pause_until_unix_milliseconds, None);
+    }
+
+    #[test]
+    fn legacy_settings_with_a_bounded_pause_are_migrated_without_losing_values() {
+        let directory = TestDirectory::new();
+        let path = directory.settings_path();
+        let pause_until =
+            system_time_to_unix_milliseconds(SystemTime::now() + Duration::from_secs(60)).unwrap();
+        fs::write(
+            &path,
+            serde_json::to_vec(&json!({
+                "version": LEGACY_SETTINGS_SCHEMA_VERSION,
+                "workMinutes": 45,
+                "breakSeconds": 12,
+                "pauseUntilUnixMilliseconds": pause_until,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let manager = ReminderSettingsManager::load(&directory.path).unwrap();
+        assert_eq!(manager.current(), settings(45, 12));
+        assert!(manager.snapshot().pause_until.is_some());
+
+        let migrated: PersistedReminderSettings =
+            serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(migrated.version, SETTINGS_SCHEMA_VERSION);
+        assert_eq!(migrated.work_minutes, 45);
+        assert_eq!(migrated.break_seconds, 12);
+        assert_eq!(migrated.pause_until_unix_milliseconds, Some(pause_until));
     }
 
     #[test]

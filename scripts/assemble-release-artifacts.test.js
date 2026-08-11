@@ -65,11 +65,19 @@ describe("release artifact assembly", () => {
     );
   });
 
-  linuxPackaging("rejects missing and unexpected files", () => {
+  linuxPackaging("rejects unexpected files", () => {
     const version = "0.2.0-alpha.1";
     const { downloads, output } = populateInventory(version);
     writeFileSync(join(downloads, "unexpected.zip"), "unexpected\n");
     expect(() => assembleReleaseArtifacts(downloads, output, version)).toThrow("unexpected: unexpected.zip");
+  });
+
+  linuxPackaging("rejects missing files", () => {
+    const version = "0.2.0-alpha.1";
+    const { downloads, output } = populateInventory(version);
+    const [missing] = expectedReleaseFilenames(version);
+    rmSync(join(downloads, "artifact-0"), { recursive: true, force: true });
+    expect(() => assembleReleaseArtifacts(downloads, output, version)).toThrow(`missing: ${missing}`);
   });
 
   linuxPackaging("rejects basename collisions from separate build jobs", () => {

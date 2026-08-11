@@ -120,6 +120,12 @@ describe("Debian ordering", () => {
       expect(debianVersionIsGreater(ordered[index], ordered[index])).toBe(false);
     }
   });
+
+  linuxPackaging("surfaces invalid dpkg comparisons", () => {
+    expect(() => debianVersionIsGreater("not a version", "1")).toThrow(
+      "dpkg --compare-versions not a version gt 1 could not run (exit 2)",
+    );
+  });
 });
 
 describe("Debian package finalization", () => {

@@ -177,10 +177,12 @@ fn start_overlay(
     Ok(total)
 }
 
+#[cfg(debug_assertions)]
 fn environment_value(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|value| !value.is_empty())
 }
 
+#[cfg(debug_assertions)]
 pub(crate) fn schedule_automatic_overlay_test(app: &tauri::App, controller: OverlayController) {
     if environment_value("UNFOCUS_SPIKE_AUTO_OVERLAY").as_deref() != Some("1") {
         return;
