@@ -85,10 +85,17 @@ not just whether a package can be produced.
 | Linux Wayland | Unsupported | No Wayland probes or acceptance coverage |
 
 On launch, the consumer dashboard leads with the current reminder state, the
-next break, and the saved focus-to-rest rhythm. Timing can be edited inline;
-expand **Advanced** in that editor and select **Open developer mode** for live
-platform signals, monitor coordinates, raw probe errors, and manual refresh.
-The selected consumer or developer view is remembered on this device.
+next break, and the saved focus-to-rest rhythm. Where the idle probe is
+available, a **Your day** card shows a rolling last-24-hour view of continuous
+computer use versus time away from the keyboard (presence only — no keylogging).
+Gaps under five minutes stay inside continuous work; stretches of at least
+twenty-five minutes of continuous activity are counted as deep blocks. That
+summary is observe-only: it does not pause, skip, or advance the break timer,
+and it resets when Unfocus quits until local persistence lands. Timing can be
+edited inline; expand **Advanced** in that editor and select **Open developer
+mode** for live platform signals, monitor coordinates, raw probe errors, and
+manual refresh. The selected consumer or developer view is remembered on this
+device.
 
 Closing the dashboard leaves the reminder running in the system tray. Where a
 tray is available, its menu shows the current work countdown or break phase and

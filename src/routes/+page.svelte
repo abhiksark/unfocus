@@ -22,6 +22,7 @@
     type ReminderActionCommand,
     type ReminderStatus
   } from "$lib/reminder-status";
+  import type { TodayActivity } from "$lib/today-activity";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
@@ -53,6 +54,8 @@
   let reminderActionPending = $state<ReminderActionCommand | null>(null);
   let reminderActionResult = $state<string | null>(null);
   let reminderRefreshGeneration = 0;
+  let todayActivity = $state<TodayActivity | null>(null);
+  let todayActivityError = $state<string | null>(null);
 
   function errorMessage(value: unknown): string {
     return value instanceof Error ? value.message : String(value);
@@ -100,9 +103,10 @@
     if (refreshing) return;
     refreshing = true;
     const reminderGeneration = reminderRefreshGeneration;
-    const [diagnostics, reminder] = await Promise.allSettled([
+    const [diagnostics, reminder, activity] = await Promise.allSettled([
       invoke<DiagnosticsReport>("get_diagnostics"),
-      invoke<ReminderStatus>("get_reminder_status")
+      invoke<ReminderStatus>("get_reminder_status"),
+      invoke<TodayActivity>("get_today_activity")
     ]);
 
     if (diagnostics.status === "fulfilled") {
@@ -126,6 +130,12 @@
       reminderGeneration === reminderRefreshGeneration
     ) {
       reminderStatusError = errorMessage(reminder.reason);
+    }
+    if (activity.status === "fulfilled") {
+      todayActivity = activity.value;
+      todayActivityError = null;
+    } else {
+      todayActivityError = errorMessage(activity.reason);
     }
     refreshing = false;
   }
@@ -370,6 +380,8 @@
     {reminderActionResult}
     {overlayRunning}
     diagnosticsReady={report !== null}
+    {todayActivity}
+    {todayActivityError}
     {savedSettings}
     {timingEditorExpanded}
     {workMinutesInput}
