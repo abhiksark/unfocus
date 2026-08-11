@@ -1,7 +1,13 @@
 # Unfocus
 
 Unfocus is a local-first eye-break reminder built with Tauri 2, a Rust core,
-SvelteKit 2, Svelte 5 runes, and Bun.
+SvelteKit 2, Svelte 5 runes, and Bun. Current alpha: `0.2.0-alpha.1`. Toolchain
+pins: Bun `1.3.5` (`.bun-version`), Rust `1.97.1` (`rust-toolchain.toml`).
+
+This is the repository root project-rules file. Grok loads it automatically
+(along with any matching `AGENTS.md` / `CLAUDE.md` files from the repo root
+down to the working directory). Keep repository-wide policy here and
+implementation rules in the closest child file.
 
 ## Instruction scope and routing
 
@@ -25,12 +31,44 @@ SvelteKit 2, Svelte 5 runes, and Bun.
 ## Repository map
 
 ```text
-src/         SvelteKit dashboard and break overlay
-src-tauri/   Rust core, tray, windows, and OS probes
-scripts/     generators and repository-integrity gates
-static/      icon source and vendored fonts
-.github/     CI, releases, Dependabot, and issue templates
+src/              SvelteKit dashboard and break overlay
+  routes/         Single page: window label routes dashboard vs overlay
+  lib/            UI, pure helpers, tests, generated scene.svg
+src-tauri/        Rust core, tray, windows, probes, reminder scheduler
+  src/lib.rs      Composition root, command registration, window events
+  src/reminder.rs Pure timer, settings, pause/resume, scheduler thread
+  src/overlay/    Multi-monitor overlays, labels, lifecycle, events
+  src/probes/     Platform idle/fullscreen probes (Linux X11, macOS)
+  src/tray.rs     System tray, status menu, hide-or-exit dashboard policy
+  src/diagnostics.rs  Environment, monitors, probe snapshot for developer UI
+scripts/          Generators and repository-integrity gates
+static/           Icon source and vendored Fraunces font
+.github/          CI, releases, Dependabot, issue templates, SECURITY.md
+plans/            Local working notes only (gitignored; not tracked docs)
 ```
+
+## Runtime shape
+
+- One desktop process. `tauri-plugin-single-instance` activates the existing
+  main window on a secondary launch; it does not start another tray or timer.
+- Window labels route the frontend: `main` is the dashboard; labels of the form
+  `overlay-<run>-<index>-<count>-<duration>-<deadline>` render `BreakOverlay`.
+  The label is the only channel for overlay parameters; keep Rust and TypeScript
+  parsers synchronized.
+- Reminder defaults: 20-minute work interval, 20-second break. Valid ranges:
+  work 1–120 minutes, break 3–30 seconds. Settings live in local app config as
+  `reminder-settings.json` (schema v2; includes bounded pause expiry).
+- Pause is a fixed 30-minute local pause. Resume starts a fresh work interval.
+- Closing the dashboard hides into the tray when the tray is available; if tray
+  setup failed, closing the dashboard exits so a silent unreachable process
+  cannot keep running.
+- Dashboard has consumer mode (default) and developer mode (platform signals,
+  monitors, raw probe errors). Mode is remembered on device.
+- Tauri commands registered on the main window: `get_diagnostics`,
+  `get_reminder_settings`, `get_reminder_status`, `save_reminder_settings`,
+  `reset_reminder_settings`, `pause_reminders`, `resume_reminders`,
+  `take_break_now`, `show_overlay_test`, `close_overlay_test`. Overlay windows
+  only get the minimal event/window permissions in `capabilities/overlay.json`.
 
 ## Product invariants
 
@@ -48,6 +86,8 @@ static/      icon source and vendored fonts
   runtime network calls.
 - No mascots or characters. Scene lighting carries state: cool green while
   resting and amber dawn while returning or complete.
+- `src/lib/scene.svg` and tray PNGs are generated. Edit generators and
+  regenerate; never hand-edit those outputs.
 
 ## Working contract
 
@@ -94,6 +134,9 @@ static/      icon source and vendored fonts
 - Run the smallest complete gate for every area changed. Start with focused
   tests while iterating, then run the full applicable child-file gate before
   declaring the work complete.
+- Frontend gate (`src/**`): `bun run test`, `bun run check`, `bun run build`.
+- Rust gate (`src-tauri/**`): `cargo fmt --check`, `cargo clippy ... -D warnings`,
+  `cargo test` with the manifests and flags in `src-tauri/AGENTS.md`.
 - Every change needs `git diff --check` and a final diff review.
 - Documentation-only changes require verification of every changed command,
   path, version, link, and behavioral claim. Application builds are unnecessary

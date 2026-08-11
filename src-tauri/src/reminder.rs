@@ -808,6 +808,24 @@ impl ReminderTimer {
         true
     }
 
+    /// Credit a natural break after the timer has already entered `Break`.
+    /// Used when idle probes show the user already rested long enough that
+    /// showing a multi-monitor overlay would be wrong — and sitting in a
+    /// silent break phase would feel broken.
+    fn credit_natural_break(&mut self, now: Duration) -> bool {
+        if self.phase != ReminderPhase::Break {
+            return false;
+        }
+        self.phase = ReminderPhase::Working;
+        self.phase_started_at = now;
+        self.paused_until = None;
+        if let Some(settings) = self.pending_settings.take() {
+            self.settings = settings;
+        }
+        self.state_revision = self.state_revision.wrapping_add(1);
+        true
+    }
+
     fn tick(&mut self, now: Duration) -> Option<ReminderTransition> {
         if self.phase == ReminderPhase::Paused {
             let paused_until = self.paused_until.unwrap_or(self.phase_started_at);
@@ -889,19 +907,39 @@ impl ReminderTimer {
     }
 }
 
+/// Why a due break was or was not shown. Probe data only affects presentation
+/// (and natural-break credit for idle); it never advances the pure clock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BreakPresentation {
+    Show,
+    /// Idle long enough that the user already rested; credit the break.
+    NaturalIdle,
+    /// Fullscreen/presentation active; keep the break phase without overlay.
+    SuppressFullscreen,
+}
+
 /// Probe data can suppress presentation of a due break, but it cannot mutate
-/// the timer. Errors fail open so an unavailable probe never disables breaks.
-fn should_present_break(probes: &ProbeSnapshot, break_duration: Duration) -> bool {
+/// the timer by itself. Errors fail open so an unavailable probe never
+/// disables breaks. Idle long enough for a natural break is reported separately
+/// so the scheduler can credit work without a silent break phase.
+fn break_presentation(probes: &ProbeSnapshot, break_duration: Duration) -> BreakPresentation {
     let user_is_already_resting = probes
         .idle_seconds
         .as_ref()
         .is_ok_and(|seconds| *seconds >= break_duration.as_secs());
+    if user_is_already_resting {
+        return BreakPresentation::NaturalIdle;
+    }
+
     let presentation_is_active = probes
         .active_window_fullscreen
         .as_ref()
         .is_ok_and(|fullscreen| *fullscreen);
+    if presentation_is_active {
+        return BreakPresentation::SuppressFullscreen;
+    }
 
-    !user_is_already_resting && !presentation_is_active
+    BreakPresentation::Show
 }
 
 fn execute_reminder_action(
@@ -982,24 +1020,25 @@ fn present_scheduled_break(
     probe_cache: &ProbeCache,
     overlay_controller: &OverlayController,
     break_duration: Duration,
-) {
+) -> BreakPresentation {
     let probes = probe_cache.snapshot();
-    if !should_present_break(&probes, break_duration) {
-        if probes
-            .idle_seconds
-            .as_ref()
-            .is_ok_and(|seconds| *seconds >= break_duration.as_secs())
-        {
-            eprintln!("scheduled break stayed hidden because the user is already idle");
-        } else {
-            eprintln!("scheduled break stayed hidden while fullscreen is active");
+    let decision = break_presentation(&probes, break_duration);
+    match decision {
+        BreakPresentation::NaturalIdle => {
+            eprintln!("scheduled break credited as natural rest because the user is already idle");
+            return decision;
         }
-        return;
+        BreakPresentation::SuppressFullscreen => {
+            eprintln!("scheduled break stayed hidden while fullscreen is active");
+            return decision;
+        }
+        BreakPresentation::Show => {}
     }
 
     if let Err(error) = show_overlay(app, overlay_controller, break_duration.as_secs()) {
         eprintln!("could not present scheduled break: {error}");
     }
+    decision
 }
 
 pub(crate) fn start_scheduler(
@@ -1084,12 +1123,16 @@ pub(crate) fn start_scheduler(
                         action_health.record_failure(attempt_id, error);
                     }
                 } else if transition == Some(ReminderTransition::StartBreak) {
-                    present_scheduled_break(
+                    let presentation = present_scheduled_break(
                         &app,
                         &probe_cache,
                         &overlay_controller,
                         timer.break_duration(),
                     );
+                    if presentation == BreakPresentation::NaturalIdle {
+                        let credited = timer.credit_natural_break(now);
+                        debug_assert!(credited);
+                    }
                 }
 
                 let snapshot = timer
@@ -1761,8 +1804,14 @@ mod tests {
             active_window_fullscreen: Ok(false),
         };
 
-        assert!(!should_present_break(&idle, Duration::from_secs(8)));
-        assert!(should_present_break(&idle, Duration::from_secs(20)));
+        assert_eq!(
+            break_presentation(&idle, Duration::from_secs(8)),
+            BreakPresentation::NaturalIdle
+        );
+        assert_eq!(
+            break_presentation(&idle, Duration::from_secs(20)),
+            BreakPresentation::Show
+        );
     }
 
     #[test]
@@ -1785,16 +1834,28 @@ mod tests {
             active_window_fullscreen: Err("fullscreen failed".into()),
         };
 
-        assert!(should_present_break(&active, break_duration));
-        assert!(!should_present_break(&idle, break_duration));
-        assert!(!should_present_break(&fullscreen, break_duration));
-        assert!(should_present_break(&failed, break_duration));
+        assert_eq!(
+            break_presentation(&active, break_duration),
+            BreakPresentation::Show
+        );
+        assert_eq!(
+            break_presentation(&idle, break_duration),
+            BreakPresentation::NaturalIdle
+        );
+        assert_eq!(
+            break_presentation(&fullscreen, break_duration),
+            BreakPresentation::SuppressFullscreen
+        );
+        assert_eq!(
+            break_presentation(&failed, break_duration),
+            BreakPresentation::Show
+        );
 
-        // Timer advancement has no probe input and is identical whether the
-        // presentation decision above succeeds, suppresses, or errors.
+        // Pure timer advancement has no probe input. Natural-break credit is a
+        // separate scheduler step after StartBreak, not inside tick().
         for probes in [&active, &idle, &fullscreen, &failed] {
             let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 3));
-            let _ = should_present_break(probes, Duration::from_secs(3));
+            let _ = break_presentation(probes, Duration::from_secs(3));
             assert_eq!(
                 timer.tick(Duration::from_secs(60)),
                 Some(ReminderTransition::StartBreak)
@@ -1804,5 +1865,51 @@ mod tests {
                 Some(ReminderTransition::EndBreak)
             );
         }
+    }
+
+    #[test]
+    fn natural_break_credit_returns_to_fresh_work_immediately() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 20));
+        assert_eq!(
+            timer.tick(Duration::from_secs(60)),
+            Some(ReminderTransition::StartBreak)
+        );
+        assert_eq!(timer.phase, ReminderPhase::Break);
+
+        assert!(timer.credit_natural_break(Duration::from_secs(60)));
+        assert_eq!(timer.phase, ReminderPhase::Working);
+        let snapshot = timer.tray_snapshot(Duration::from_secs(60), 0, false);
+        assert_eq!(snapshot.phase, TrayPhase::Working);
+        assert_eq!(snapshot.remaining_milliseconds, Some(60_000));
+        assert_eq!(snapshot.state_revision, 2);
+
+        assert!(!timer.credit_natural_break(Duration::from_secs(61)));
+    }
+
+    #[test]
+    fn natural_break_credit_applies_pending_settings() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 20));
+        assert_eq!(
+            timer.tick(Duration::from_secs(60)),
+            Some(ReminderTransition::StartBreak)
+        );
+        timer.apply_settings(settings(2, 10), Duration::from_secs(61));
+        assert!(timer.credit_natural_break(Duration::from_secs(62)));
+        assert_eq!(timer.phase, ReminderPhase::Working);
+        assert_eq!(timer.settings, settings(2, 10));
+        let snapshot = timer.tray_snapshot(Duration::from_secs(62), 1, false);
+        assert_eq!(snapshot.remaining_milliseconds, Some(120_000));
+    }
+
+    #[test]
+    fn idle_outranks_fullscreen_for_natural_break() {
+        let both = ProbeSnapshot {
+            idle_seconds: Ok(30),
+            active_window_fullscreen: Ok(true),
+        };
+        assert_eq!(
+            break_presentation(&both, Duration::from_secs(20)),
+            BreakPresentation::NaturalIdle
+        );
     }
 }
