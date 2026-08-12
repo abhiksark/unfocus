@@ -1,5 +1,6 @@
 import type { DiagnosticsReport } from "./diagnostics";
 import type { ReminderStatus } from "./reminder-status";
+import type { ReminderSettings } from "./reminder-settings";
 
 export type ConsumerReminderKind =
   | "loading"
@@ -50,6 +51,27 @@ const MILLISECONDS_PER_MINUTE = 60_000;
 export function formatMinuteDuration(milliseconds: number): string {
   if (milliseconds < MILLISECONDS_PER_MINUTE) return "less than 1 min";
   return `${Math.ceil(milliseconds / MILLISECONDS_PER_MINUTE)} min`;
+}
+
+/**
+ * Fraction of the current work interval already elapsed, for the dashboard
+ * progress bar. Returns null whenever there is no live working interval to
+ * report, which includes paused, break, stopped, unavailable, and an open
+ * preview overlay.
+ */
+export function focusProgress(
+  status: ReminderStatus | null,
+  settings: ReminderSettings | null
+): number | null {
+  if (!status || !settings) return null;
+  if (status.phase !== "working" || status.overlayActive) return null;
+  if (status.remainingMilliseconds === null) return null;
+
+  const totalMilliseconds = settings.workMinutes * MILLISECONDS_PER_MINUTE;
+  if (totalMilliseconds <= 0) return null;
+
+  const elapsed = (totalMilliseconds - status.remainingMilliseconds) / totalMilliseconds;
+  return Math.min(1, Math.max(0, elapsed));
 }
 
 function timedSecondary(

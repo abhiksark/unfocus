@@ -419,14 +419,51 @@
 {/if}
 
 <style>
+  :global(:root) {
+    --bg: #0b100d;
+    --line: #1d2620;
+    --line-2: #2a3730;
+    --ink: #e9f0ea;
+    --ink-2: #9aa7a0;
+    --ink-3: #7f8d85;
+    --accent: #7fd79a;
+    --accent-ink: #07130b;
+    --accent-hover: #98e5aa;
+    --away: #7a93a8;
+    --warn: #d9b573;
+
+    --s1: 4px;
+    --s2: 8px;
+    --s3: 12px;
+    --s4: 16px;
+    --s5: 24px;
+    --s6: 32px;
+
+    --r-control: 8px;
+    --r-button: 999px;
+
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Helvetica Neue", sans-serif;
+    --serif: "Fraunces", Georgia, serif;
+  }
+
+  @media (prefers-contrast: more) {
+    :global(:root) {
+      --ink-2: #d3ded6;
+      --ink-3: #bccbc2;
+      --line: #58665e;
+      --line-2: #7d8d84;
+    }
+  }
+
   :global(*) {
     box-sizing: border-box;
   }
 
   :global(html) {
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    color: #e8f0e9;
-    background: #0d110e;
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--bg);
     font-synthesis: none;
   }
 
@@ -434,9 +471,7 @@
     margin: 0;
     min-width: 320px;
     min-height: 100vh;
-    background:
-      radial-gradient(circle at 85% 5%, rgba(104, 183, 126, 0.11), transparent 28rem),
-      #0d110e;
+    background: var(--bg);
   }
 
   .invalid-overlay {

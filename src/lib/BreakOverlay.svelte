@@ -410,7 +410,7 @@
     max-width: 960px;
     margin: 0;
     color: #e9f3ec;
-    font-family: "Fraunces", Georgia, serif;
+    font-family: var(--serif);
     font-size: clamp(2.4rem, 4.6vw, 4.2rem);
     font-weight: 380;
     letter-spacing: 0.002em;
@@ -494,7 +494,7 @@
     min-height: 46px;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--s2);
     border: 1px solid rgba(209, 234, 219, 0.16);
     border-radius: 999px;
     padding: 11px 20px;

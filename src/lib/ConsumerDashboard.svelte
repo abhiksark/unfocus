@@ -1,9 +1,10 @@
 <script lang="ts">
-  import scene from "$lib/scene.svg?raw";
-  import type {
-    ConsumerReminderPresentation,
-    ConsumerWarning
+  import {
+    focusProgress,
+    type ConsumerReminderPresentation,
+    type ConsumerWarning
   } from "$lib/consumer-dashboard";
+  import { DASHBOARD_REMINDER_ACTIONS_LABEL } from "$lib/dashboard-a11y";
   import {
     MAX_BREAK_SECONDS,
     MAX_WORK_MINUTES,
@@ -108,6 +109,14 @@
     onOpenDeveloperMode
   }: Props = $props();
 
+  const progress = $derived(focusProgress(reminderStatus, savedSettings));
+  const pauseLabel = $derived(
+    reminderActionPending === "pause_reminders"
+      ? "Pausing…"
+      : reminderActionPending === "resume_reminders"
+        ? "Resuming…"
+        : (reminderStatus?.pauseActionLabel ?? "Pause for 30 minutes")
+  );
   const previewDisabled = $derived(
     overlayRunning || !diagnosticsReady || !reminderStatus || !reminderStatus.previewEnabled
   );
@@ -161,367 +170,464 @@
   const weekCaption = $derived(breakSummary ? weekBreakCaption(breakSummary) : "");
 </script>
 
-<main class="consumer-dashboard">
-  <section class="hero" aria-labelledby="consumer-state-title">
-    <div class="hero-scene" aria-hidden="true">{@html scene}</div>
-    <div class="hero-shade" aria-hidden="true"></div>
-    <div class="hero-copy">
-      <p class="eyebrow">Unfocus · local reminder</p>
-      <div class="state-copy" aria-live="polite" aria-atomic="true">
-        <h1 id="consumer-state-title">{presentation.heading}</h1>
-        <p>{presentation.secondary}</p>
+<main class="wrap">
+  <header class="top">
+    <span class="mark"><span class="dot" aria-hidden="true"></span>Unfocus</span>
+  </header>
+
+  <section class="state" aria-labelledby="consumer-state-title">
+    <div class="state-copy" aria-live="polite" aria-atomic="true">
+      <h1 id="consumer-state-title" class="t-display">{presentation.heading}</h1>
+      <div class="meter">
+        <p class="t-lead">{presentation.secondary}</p>
+        {#if progress !== null}
+          <div class="progress" aria-hidden="true">
+            <i style={`width: ${Math.round(progress * 100)}%`}></i>
+          </div>
+        {/if}
       </div>
     </div>
-  </section>
 
-  <div class="consumer-content" class:without-actions={!hasReminderActions}>
     {#if hasReminderActions}
-      <section class="actions" aria-label="Reminder actions">
-      {#if presentation.showTakeBreak}
-        <button
-          class="primary"
-          type="button"
-          onclick={onTakeBreak}
-          disabled={!reminderStatus?.takeBreakEnabled || reminderActionPending !== null}
-        >
-          {reminderActionPending === "take_break_now" ? "Starting…" : "Take a break"}
-        </button>
-      {/if}
-      {#if presentation.showPause}
-        <button
-          class="secondary"
-          type="button"
-          onclick={onPauseAction}
-          disabled={!reminderStatus?.pauseActionEnabled || reminderActionPending !== null}
-        >
-          {reminderActionPending === "pause_reminders"
-            ? "Pausing…"
-            : "Pause for 30 minutes"}
-        </button>
-      {/if}
-      {#if presentation.showResume}
-        <button
-          class="primary"
-          type="button"
-          onclick={onPauseAction}
-          disabled={!reminderStatus?.pauseActionEnabled || reminderActionPending !== null}
-        >
-          {reminderActionPending === "resume_reminders" ? "Resuming…" : "Resume reminders"}
-        </button>
-      {/if}
-        <div class="action-feedback" aria-live="polite">
+      <section class="cta" aria-label={DASHBOARD_REMINDER_ACTIONS_LABEL}>
+        {#if presentation.showTakeBreak}
+          <button
+            class="btn-primary"
+            type="button"
+            onclick={onTakeBreak}
+            disabled={!reminderStatus?.takeBreakEnabled || reminderActionPending !== null}
+          >
+            {reminderActionPending === "take_break_now" ? "Starting…" : "Take a break"}
+          </button>
+        {/if}
+        {#if presentation.showPause || presentation.showResume}
+          <button
+            class={presentation.showResume ? "btn-primary" : "btn-ghost"}
+            type="button"
+            onclick={onPauseAction}
+            disabled={!reminderStatus?.pauseActionEnabled || reminderActionPending !== null}
+          >
+            {pauseLabel}
+          </button>
+        {/if}
+        <div class="action-feedback t-micro" aria-live="polite">
           {reminderActionResult ?? ""}
         </div>
       </section>
     {/if}
+  </section>
 
-    <section class="today" aria-labelledby="today-title">
-      <div class="today-header">
-        <div>
-          <p class="section-label">Your day</p>
-          <h2 id="today-title">{todayActivity?.windowLabel ?? "Last 24 hours"}</h2>
-          <p class="today-status">{activityKind}</p>
+  <hr class="rule" />
+
+  <section class="section" aria-labelledby="today-title">
+    <div class="section-head">
+      <h2 id="today-title" class="t-title">Your day</h2>
+      <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
+    </div>
+
+    {#if todayActivity}
+      <div class="stats" role="group" aria-label="Activity totals for the rolling window">
+        <div class="stat" class:is-zero={todayActivity.activeSeconds <= 0}>
+          <span class="num">{formatActivityDuration(todayActivity.activeSeconds)}</span>
+          <span class="t-micro">Active</span>
         </div>
-      </div>
-
-      {#if todayActivity}
-        <div class="today-stats" role="group" aria-label="Activity totals for the rolling window">
-          <div class:is-zero={todayActivity.activeSeconds <= 0}>
-            <span>Active</span>
-            <strong>{formatActivityDuration(todayActivity.activeSeconds)}</strong>
-          </div>
-          <div class:is-zero={todayActivity.afkSeconds <= 0}>
-            <span>Away</span>
-            <strong>{formatActivityDuration(todayActivity.afkSeconds)}</strong>
-          </div>
-          <div class:is-zero={todayActivity.longestActiveSeconds <= 0}>
-            <span>Longest stretch</span>
-            <strong>{formatActivityDuration(todayActivity.longestActiveSeconds)}</strong>
-          </div>
-          <div class:is-zero={todayActivity.deepBlockCount <= 0}>
-            <span>Deep work</span>
-            <strong>{todayActivity.deepBlockCount}</strong>
-            <small
-              >{deepBlockCaption(
-                todayActivity.deepBlockCount,
-                todayActivity.deepBlockMinSeconds
-              )}</small
-            >
-          </div>
+        <div class="stat" class:is-zero={todayActivity.afkSeconds <= 0}>
+          <span class="num">{formatActivityDuration(todayActivity.afkSeconds)}</span>
+          <span class="t-micro">Away</span>
         </div>
-
-        <div class="today-strip-block">
-          <div class="today-strip" role="img" aria-label={activityStripLabel}>
-            {#each todayActivity.strip as bucket, index (index)}
-              <div class="strip-bucket" aria-hidden="true">
-                <span
-                  class="strip-afk"
-                  style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
-                ></span>
-                <span
-                  class="strip-active"
-                  style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
-                ></span>
-              </div>
-            {/each}
-          </div>
-          <ul class="strip-legend" aria-hidden="true">
-            <li><span class="legend-swatch legend-active"></span> Active</li>
-            <li><span class="legend-swatch legend-afk"></span> Away</li>
-          </ul>
+        <div class="stat" class:is-zero={todayActivity.longestActiveSeconds <= 0}>
+          <span class="num">{formatActivityDuration(todayActivity.longestActiveSeconds)}</span>
+          <span class="t-micro">Longest stretch</span>
         </div>
-
-        {#if activityEmpty}
-          <p class="today-footnote" role="status">
-            No active or away time classified in this window yet.
-          </p>
-        {/if}
-        <p class="today-footnote">{activityFootnote(todayActivity.afkThresholdSeconds)}</p>
-      {:else if todayActivityError}
-        <p class="today-error" role="status">{todayErrorCaption(todayActivityError)}</p>
-      {:else}
-        <p class="today-footnote" role="status">{todayLoadingCaption()}</p>
-      {/if}
-
-      <div class="break-history" aria-labelledby="break-history-title">
-        <div class="break-history-header">
-          <p class="section-label" id="break-history-title">Break outcomes</p>
-          {#if breakSummary}
-            <p class="break-window">{breakSummary.windowLabel}</p>
-          {/if}
-        </div>
-        {#if breakSummary}
-          <div
-            class="break-counts"
-            class:is-empty={breakDayEmpty}
-            role="group"
-            aria-label="Break outcome counts for the last day"
+        <div class="stat" class:is-zero={todayActivity.deepBlockCount <= 0}>
+          <span class="num">{todayActivity.deepBlockCount}</span>
+          <span class="t-micro">Deep work</span>
+          <span class="t-micro"
+            >{deepBlockCaption(
+              todayActivity.deepBlockCount,
+              todayActivity.deepBlockMinSeconds
+            )}</span
           >
-            {#each breakStats as stat (stat.kind)}
-              <div class:is-zero={stat.count <= 0} title={stat.hint}>
-                <span>{stat.label}</span>
-                <strong aria-label={`${stat.count} ${stat.label.toLowerCase()}. ${stat.hint}`}
-                  >{stat.count}</strong
-                >
-              </div>
-            {/each}
-          </div>
-          <p class="today-footnote">{breakCaption}</p>
-          <p class="today-footnote today-footnote-secondary">{weekCaption}</p>
-        {:else if breakSummaryError}
-          <p class="today-error" role="status">{breakErrorCaption(breakSummaryError)}</p>
-        {:else}
-          <p class="today-footnote" role="status">{breakLoadingCaption()}</p>
-        {/if}
+        </div>
       </div>
-    </section>
 
-    <section class="rhythm" aria-labelledby="rhythm-title">
-      <div>
-        <p class="section-label">Your rhythm</p>
-        <h2 id="rhythm-title">{rhythm}</h2>
+      <div class="strip" role="img" aria-label={activityStripLabel}>
+        {#each todayActivity.strip as bucket, index (index)}
+          <div class="strip-bucket" aria-hidden="true">
+            <span
+              class="strip-afk"
+              style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
+            ></span>
+            <span
+              class="strip-active"
+              style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
+            ></span>
+          </div>
+        {/each}
       </div>
+      <ul class="legend" aria-hidden="true">
+        <li><span class="legend-swatch legend-active"></span> Active</li>
+        <li><span class="legend-swatch legend-afk"></span> Away</li>
+      </ul>
+
+      {#if activityEmpty}
+        <p class="t-micro" role="status">
+          No active or away time classified in this window yet.
+        </p>
+      {/if}
+      <p class="t-micro">{activityFootnote(todayActivity.afkThresholdSeconds)}</p>
+    {:else if todayActivityError}
+      <p class="t-micro is-error" role="status">{todayErrorCaption(todayActivityError)}</p>
+    {:else}
+      <p class="t-micro" role="status">{todayLoadingCaption()}</p>
+    {/if}
+  </section>
+
+  <hr class="rule" />
+
+  <section class="section" aria-labelledby="break-history-title">
+    <div class="section-head">
+      <h2 id="break-history-title" class="t-title">Breaks</h2>
+      {#if breakSummary}
+        <p class="t-micro">{breakSummary.windowLabel}</p>
+      {/if}
+    </div>
+
+    {#if breakSummary}
+      <div
+        class="stats"
+        class:is-empty={breakDayEmpty}
+        role="group"
+        aria-label="Break outcome counts for the last day"
+      >
+        {#each breakStats as stat (stat.kind)}
+          <div class="stat" class:is-zero={stat.count <= 0} title={stat.hint}>
+            <span class="num" aria-label={`${stat.count} ${stat.label.toLowerCase()}. ${stat.hint}`}
+              >{stat.count}</span
+            >
+            <span class="t-micro">{stat.label}</span>
+          </div>
+        {/each}
+      </div>
+      <p class="t-micro">{breakCaption}</p>
+      <p class="t-micro">{weekCaption}</p>
+    {:else if breakSummaryError}
+      <p class="t-micro is-error" role="status">{breakErrorCaption(breakSummaryError)}</p>
+    {:else}
+      <p class="t-micro" role="status">{breakLoadingCaption()}</p>
+    {/if}
+  </section>
+
+  <hr class="rule" />
+
+  <section class="foot" aria-labelledby="rhythm-title">
+    <div>
+      <h2 id="rhythm-title" class="t-label">Your rhythm</h2>
+      <p class="t-micro">{rhythm}</p>
+    </div>
+    <div class="foot-actions">
       <button
-        class="text-button"
+        class="btn-text"
         type="button"
         aria-expanded={timingEditorExpanded}
         aria-controls="timing-editor"
         onclick={onToggleTimingEditor}
         disabled={settingsLoading}
       >
-        {timingEditorExpanded ? "Close" : "Edit"}
+        {timingEditorExpanded ? "Close" : "Edit timing"}
       </button>
-
-      {#if timingEditorExpanded}
-        <div id="timing-editor" class="timing-editor">
-          <form
-            novalidate
-            onsubmit={(event) => {
-              event.preventDefault();
-              onSaveSettings();
-            }}
-          >
-            <div class="duration-fields">
-              <div class="duration-field">
-                <label for="consumer-work-duration">Focus duration</label>
-                <div class="duration-input" class:invalid={workMinutesError}>
-                  <input
-                    id="consumer-work-duration"
-                    type="text"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
-                    autocomplete="off"
-                    value={workMinutesInput}
-                    disabled={settingsLoading || settingsSaving}
-                    aria-invalid={workMinutesError ? "true" : "false"}
-                    aria-describedby={workMinutesError
-                      ? "consumer-work-help consumer-work-error"
-                      : "consumer-work-help"}
-                    oninput={(event) =>
-                      onWorkMinutesInput((event.currentTarget as HTMLInputElement).value)}
-                  />
-                  <span>minutes</span>
-                </div>
-                <small id="consumer-work-help">{MIN_WORK_MINUTES}–{MAX_WORK_MINUTES} whole minutes</small>
-                {#if workMinutesError}
-                  <small id="consumer-work-error" class="field-error">{workMinutesError}</small>
-                {/if}
-              </div>
-
-              <div class="duration-field">
-                <label for="consumer-break-duration">Rest duration</label>
-                <div class="duration-input" class:invalid={breakSecondsError}>
-                  <input
-                    id="consumer-break-duration"
-                    type="text"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
-                    autocomplete="off"
-                    value={breakSecondsInput}
-                    disabled={settingsLoading || settingsSaving}
-                    aria-invalid={breakSecondsError ? "true" : "false"}
-                    aria-describedby={breakSecondsError
-                      ? "consumer-break-help consumer-break-error"
-                      : "consumer-break-help"}
-                    oninput={(event) =>
-                      onBreakSecondsInput((event.currentTarget as HTMLInputElement).value)}
-                  />
-                  <span>seconds</span>
-                </div>
-                <small id="consumer-break-help">{MIN_BREAK_SECONDS}–{MAX_BREAK_SECONDS} whole seconds</small>
-                {#if breakSecondsError}
-                  <small id="consumer-break-error" class="field-error">{breakSecondsError}</small>
-                {/if}
-              </div>
-            </div>
-
-            <div class="settings-actions">
-              <button
-                class="primary"
-                type="submit"
-                disabled={settingsLoading || settingsSaving || !settingsValidation.settings}
-              >
-                {settingsSaving ? "Saving…" : "Save timing"}
-              </button>
-              <button
-                class="secondary"
-                type="button"
-                onclick={onResetSettings}
-                disabled={settingsLoading || settingsSaving}
-              >
-                Reset to defaults
-              </button>
-            </div>
-
-            {#if settingsError}
-              <p class="form-error" role="alert">
-                {settingsErrorContext === "load"
-                  ? "We couldn’t load your saved timing."
-                  : settingsErrorContext === "reset"
-                    ? "We couldn’t restore the default timing. Your previous rhythm was retained."
-                    : "We couldn’t save this timing. Your previous rhythm was retained."}
-              </p>
-            {/if}
-          </form>
-
-          <details class="advanced">
-            <summary>Advanced</summary>
-            <p>Open technical health details and native probe controls.</p>
-            <button class="secondary" type="button" onclick={onOpenDeveloperMode}>
-              Open developer mode
-            </button>
-          </details>
-        </div>
-      {/if}
-      <div class="settings-confirmation" aria-live="polite">
-        {settingsConfirmation ?? ""}
-      </div>
-    </section>
-
-    <section class="preview" aria-labelledby="preview-title">
-      <div>
-        <p class="section-label">Break screen</p>
-        <h2 id="preview-title">Eight-second preview</h2>
-      </div>
-      <button class="secondary" type="button" onclick={onPreview} disabled={previewDisabled}>
+      <button class="btn-text" type="button" onclick={onPreview} disabled={previewDisabled}>
         {previewLabel}
       </button>
-    </section>
+    </div>
 
-    {#if warning}
-      <section class="warning" role="status" aria-labelledby="warning-title">
-        <div>
-          <p class="section-label">Needs attention</p>
-          <h2 id="warning-title">{warning.heading}</h2>
-          <p>{warning.message}</p>
-        </div>
-        <button class="text-button" type="button" onclick={onOpenDeveloperMode}>
-          View details
-        </button>
-      </section>
+    {#if timingEditorExpanded}
+      <div id="timing-editor" class="timing-editor">
+        <form
+          novalidate
+          onsubmit={(event) => {
+            event.preventDefault();
+            onSaveSettings();
+          }}
+        >
+          <div class="duration-fields">
+            <div class="duration-field">
+              <label for="consumer-work-duration">Focus duration</label>
+              <div class="duration-input" class:invalid={workMinutesError}>
+                <input
+                  id="consumer-work-duration"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  autocomplete="off"
+                  value={workMinutesInput}
+                  disabled={settingsLoading || settingsSaving}
+                  aria-invalid={workMinutesError ? "true" : "false"}
+                  aria-describedby={workMinutesError
+                    ? "consumer-work-help consumer-work-error"
+                    : "consumer-work-help"}
+                  oninput={(event) =>
+                    onWorkMinutesInput((event.currentTarget as HTMLInputElement).value)}
+                />
+                <span>minutes</span>
+              </div>
+              <small id="consumer-work-help">{MIN_WORK_MINUTES}–{MAX_WORK_MINUTES} whole minutes</small>
+              {#if workMinutesError}
+                <small id="consumer-work-error" class="field-error">{workMinutesError}</small>
+              {/if}
+            </div>
+
+            <div class="duration-field">
+              <label for="consumer-break-duration">Rest duration</label>
+              <div class="duration-input" class:invalid={breakSecondsError}>
+                <input
+                  id="consumer-break-duration"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  autocomplete="off"
+                  value={breakSecondsInput}
+                  disabled={settingsLoading || settingsSaving}
+                  aria-invalid={breakSecondsError ? "true" : "false"}
+                  aria-describedby={breakSecondsError
+                    ? "consumer-break-help consumer-break-error"
+                    : "consumer-break-help"}
+                  oninput={(event) =>
+                    onBreakSecondsInput((event.currentTarget as HTMLInputElement).value)}
+                />
+                <span>seconds</span>
+              </div>
+              <small id="consumer-break-help">{MIN_BREAK_SECONDS}–{MAX_BREAK_SECONDS} whole seconds</small>
+              {#if breakSecondsError}
+                <small id="consumer-break-error" class="field-error">{breakSecondsError}</small>
+              {/if}
+            </div>
+          </div>
+
+          <div class="settings-actions">
+            <button
+              class="btn-primary"
+              type="submit"
+              disabled={settingsLoading || settingsSaving || !settingsValidation.settings}
+            >
+              {settingsSaving ? "Saving…" : "Save timing"}
+            </button>
+            <button
+              class="btn-ghost"
+              type="button"
+              onclick={onResetSettings}
+              disabled={settingsLoading || settingsSaving}
+            >
+              Reset to defaults
+            </button>
+          </div>
+
+          {#if settingsError}
+            <p class="form-error" role="alert">
+              {settingsErrorContext === "load"
+                ? "We couldn’t load your saved timing."
+                : settingsErrorContext === "reset"
+                  ? "We couldn’t restore the default timing. Your previous rhythm was retained."
+                  : "We couldn’t save this timing. Your previous rhythm was retained."}
+            </p>
+          {/if}
+        </form>
+
+        <details class="advanced">
+          <summary>Advanced</summary>
+          <p>Open technical health details and native probe controls.</p>
+          <button class="btn-ghost" type="button" onclick={onOpenDeveloperMode}>
+            Open developer mode
+          </button>
+        </details>
+      </div>
     {/if}
-  </div>
+    <div class="settings-confirmation t-micro" aria-live="polite">
+      {settingsConfirmation ?? ""}
+    </div>
+  </section>
+
+  {#if warning}
+    <section class="warn" role="status" aria-labelledby="warning-title">
+      <h2 id="warning-title" class="t-label">{warning.heading}</h2>
+      <p class="t-micro">{warning.message}</p>
+      <button class="btn-text" type="button" onclick={onOpenDeveloperMode}>
+        View details
+      </button>
+    </section>
+  {/if}
 </main>
 
 <style>
-  .consumer-dashboard {
-    width: min(100%, 920px);
-    min-height: 100vh;
-    margin: 0 auto;
-    padding: 22px 28px 26px;
-  }
-
-  .hero {
-    position: relative;
-    min-height: 270px;
-    overflow: hidden;
-    border: 1px solid #294637;
-    border-radius: 22px;
-    background: #07120f;
-    isolation: isolate;
-  }
-
-  .hero-scene,
-  .hero-shade {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-  }
-
-  .hero-scene {
-    overflow: hidden;
-  }
-
-  .hero-scene :global(.scene) {
-    display: block;
-    width: 100%;
-    height: 100%;
-  }
-
-  .hero-shade {
-    background: linear-gradient(90deg, rgba(4, 12, 9, 0.92) 0%, rgba(5, 14, 11, 0.74) 48%, rgba(5, 14, 11, 0.18) 82%);
-  }
-
-  .hero-copy {
-    position: relative;
-    z-index: 1;
+  .wrap {
     display: flex;
-    min-height: 270px;
-    max-width: 650px;
+    width: min(100%, 780px);
+    min-height: 100vh;
     flex-direction: column;
-    justify-content: center;
-    padding: 30px 38px;
+    gap: var(--s4);
+    margin: 0 auto;
+    padding: var(--s5) var(--s6) var(--s6);
   }
 
-  .eyebrow,
-  .section-label {
-    margin: 0 0 9px;
-    color: #85d79b;
-    font-size: 0.7rem;
-    font-weight: 750;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
+  .top {
+    display: flex;
+    align-items: center;
+  }
+
+  .mark {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s2);
+    color: var(--ink-2);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .rule {
+    height: 1px;
+    margin: 0;
+    border: 0;
+    background: var(--line);
+  }
+
+  .state,
+  .state-copy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s5);
+  }
+
+  .meter {
+    display: flex;
+    max-width: 46ch;
+    flex-direction: column;
+    gap: var(--s2);
+  }
+
+  .progress {
+    overflow: hidden;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--line-2);
+  }
+
+  .progress i {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+    transition: width 400ms linear;
+  }
+
+  .cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s2);
+  }
+
+  .action-feedback {
+    width: 100%;
+    color: var(--ink-2);
+  }
+
+  .action-feedback:empty {
+    display: none;
+  }
+
+  .t-display {
+    max-width: 20ch;
+    margin: 0;
+    font-family: var(--serif);
+    font-size: clamp(2rem, 4.4vw, 2.9rem);
+    font-weight: 400;
+    letter-spacing: -0.012em;
+    line-height: 1.05;
+  }
+
+  .t-lead {
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 1.02rem;
+    line-height: 1.5;
+  }
+
+  .t-micro {
+    margin: 0;
+    color: var(--ink-3);
+    font-size: 0.74rem;
+    line-height: 1.45;
+  }
+
+  .t-label {
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  button {
+    border: 0;
+    border-radius: var(--r-button);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  button:focus-visible,
+  summary:focus-visible {
+    outline: 3px solid #d9efdf;
+    outline-offset: 3px;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.52;
+  }
+
+  .btn-primary {
+    padding: 11px 22px;
+    color: var(--accent-ink);
+    background: var(--accent);
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+
+  .btn-ghost {
+    border: 1px solid var(--line-2);
+    padding: 11px 18px;
+    color: var(--ink-2);
+    background: transparent;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    border-color: var(--ink-3);
+    color: var(--ink);
+  }
+
+  .btn-text {
+    padding: 6px 2px;
+    color: var(--ink-2);
+    background: transparent;
+    font-size: 0.85rem;
+    text-decoration: underline;
+    text-decoration-color: var(--line-2);
+    text-underline-offset: 4px;
+  }
+
+  .btn-text:hover:not(:disabled) {
+    color: var(--ink);
   }
 
   h1,
@@ -530,167 +636,103 @@
     margin-top: 0;
   }
 
-  h1 {
-    max-width: 620px;
-    margin-bottom: 13px;
-    font-family: "Fraunces", Georgia, serif;
-    font-size: clamp(2.7rem, 7vw, 4.4rem);
-    font-weight: 420;
-    line-height: 0.98;
-  }
-
-  .state-copy p {
-    margin-bottom: 0;
-    color: #c7d5ca;
-    font-size: clamp(1.05rem, 2.5vw, 1.28rem);
-    line-height: 1.5;
-  }
-
-  .consumer-content {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(250px, 0.62fr);
-    gap: 10px;
-    margin-top: 12px;
-  }
-
-  .actions,
-  .today,
-  .rhythm,
-  .preview,
-  .warning {
-    border: 1px solid #27332b;
-    border-radius: 15px;
-    background: rgba(18, 25, 20, 0.92);
-  }
-
-  .today {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    display: grid;
-    gap: 14px;
-    padding: 15px 17px 16px;
-  }
-
-  .today-header h2 {
-    margin-bottom: 4px;
-    font-size: 1.02rem;
-    font-weight: 620;
-    letter-spacing: -0.015em;
-  }
-
-  .today-status {
+  .t-title {
     margin: 0;
-    color: #a8b7ac;
-    font-size: 0.78rem;
+    font-size: 1.3rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
   }
 
-  .today-stats {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .today-stats div {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 4px;
-    padding: 10px 11px;
-    border: 1px solid #2b372e;
-    border-radius: 11px;
-    background: #0f1612;
-  }
-
-  .today-stats span {
-    color: #8f9d94;
-    font-size: 0.68rem;
-    font-weight: 650;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .today-stats strong {
-    color: #e7f0e9;
-    font-size: 1.05rem;
-    font-weight: 650;
+  .num {
+    color: var(--ink);
+    font-size: 1.45rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
   }
 
-  .today-stats small {
-    color: #8f9d94;
-    font-size: 0.66rem;
-    line-height: 1.35;
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
   }
 
-  .today-stats .is-zero strong,
-  .break-counts .is-zero strong {
-    color: #6f7c73;
-    font-weight: 550;
+  .section-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s1) var(--s4);
   }
 
-  .today-stats .is-zero,
-  .break-counts .is-zero {
-    border-color: #243029;
-    background: rgba(12, 18, 14, 0.72);
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s5) var(--s6);
   }
 
-  .today-strip-block {
+  .stats.is-empty {
+    opacity: 0.72;
+  }
+
+  .stat {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat.is-zero .num {
+    color: var(--ink-3);
+    font-weight: 400;
+  }
+
+  .strip {
     display: grid;
-    gap: 6px;
-  }
-
-  .today-strip {
-    display: grid;
-    grid-template-columns: repeat(48, minmax(0, 1fr));
+    height: 64px;
     align-items: end;
     gap: 2px;
-    height: 52px;
-    padding: 8px 6px 4px;
-    border: 1px solid #2b372e;
-    border-radius: 11px;
-    background:
-      linear-gradient(180deg, rgba(17, 28, 22, 0.2), rgba(8, 12, 10, 0.55)),
-      #0c130f;
+    grid-template-columns: repeat(48, minmax(0, 1fr));
   }
 
   .strip-bucket {
     position: relative;
-    display: flex;
     height: 100%;
-    align-items: flex-end;
-    justify-content: center;
   }
 
   .strip-active,
   .strip-afk {
     position: absolute;
+    right: 0;
     bottom: 0;
     left: 0;
-    right: 0;
     min-height: 0;
     border-radius: 2px 2px 0 0;
   }
 
-  .strip-afk {
-    background: rgba(120, 99, 58, 0.55);
-  }
-
   .strip-active {
-    background: #6fbf86;
+    background: var(--accent);
+    opacity: 0.85;
   }
 
-  .strip-legend {
+  .strip-afk {
+    background: var(--away);
+    opacity: 0.7;
+  }
+
+  .legend {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--s4);
     margin: 0;
     padding: 0;
+    color: var(--ink-3);
+    font-size: 0.74rem;
     list-style: none;
-    color: #8f9d94;
-    font-size: 0.66rem;
   }
 
-  .strip-legend li {
+  .legend li {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -698,165 +740,53 @@
 
   .legend-swatch {
     display: inline-block;
-    width: 9px;
-    height: 9px;
+    width: 8px;
+    height: 8px;
     border-radius: 2px;
   }
 
   .legend-active {
-    background: #6fbf86;
+    background: var(--accent);
   }
 
   .legend-afk {
-    background: rgba(120, 99, 58, 0.75);
+    background: var(--away);
   }
 
-  .today-footnote,
-  .today-error {
-    margin: 0;
-    color: #8f9d94;
-    font-size: 0.7rem;
-    line-height: 1.45;
-  }
-
-  .today-footnote-secondary {
-    color: #7a8880;
-    font-size: 0.66rem;
-  }
-
-  .today-error {
+  .is-error {
     color: #ffc4c4;
   }
 
-  .break-history {
+  .foot {
     display: grid;
-    gap: 10px;
-    border-top: 1px solid #2b372e;
-    padding-top: 14px;
-  }
-
-  .break-history-header {
-    display: flex;
-    flex-wrap: wrap;
     align-items: baseline;
-    justify-content: space-between;
-    gap: 6px 12px;
+    gap: var(--s3) var(--s4);
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .break-history .section-label {
-    margin-bottom: 0;
-  }
-
-  .break-window {
-    margin: 0;
-    color: #8f9d94;
-    font-size: 0.68rem;
-  }
-
-  .break-counts {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .break-counts.is-empty {
-    opacity: 0.72;
-  }
-
-  .break-counts div {
+  .foot-actions {
     display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 3px;
-    padding: 8px 10px;
-    border: 1px solid #2b372e;
-    border-radius: 10px;
-    background: #0f1612;
-  }
-
-  .break-counts span {
-    color: #8f9d94;
-    font-size: 0.66rem;
-    font-weight: 650;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .break-counts strong {
-    color: #e7f0e9;
-    font-size: 1rem;
-    font-weight: 650;
-  }
-
-  .actions {
-    display: flex;
-    min-height: 76px;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 9px;
-    padding: 14px 16px;
+    gap: var(--s4);
   }
 
-  .action-feedback {
-    width: 100%;
-    min-height: 0;
-    color: #b9ddc2;
-    font-size: 0.72rem;
+  .warn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s1);
+    border-left: 2px solid var(--warn);
+    padding-left: var(--s3);
   }
 
-  .action-feedback:empty {
-    display: none;
-  }
-
-  .rhythm,
-  .preview,
-  .warning {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 18px;
-    padding: 15px 17px;
-  }
-
-  .rhythm {
-    grid-column: 1 / -1;
-    grid-row: 3;
-  }
-
-  .preview {
-    grid-column: 2;
-    grid-row: 1;
-    grid-template-columns: 1fr;
-    align-content: center;
-    gap: 10px;
-  }
-
-  .preview button {
-    width: 100%;
-  }
-
-  .consumer-content.without-actions .preview {
-    grid-column: 1 / -1;
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .consumer-content.without-actions .preview button {
-    width: auto;
-  }
-
-  .rhythm h2,
-  .preview h2,
-  .warning h2 {
-    margin-bottom: 0;
-    font-size: 1.02rem;
-    font-weight: 620;
-    letter-spacing: -0.015em;
+  .warn .t-label {
+    color: var(--warn);
   }
 
   .timing-editor {
     grid-column: 1 / -1;
-    border-top: 1px solid #2b372e;
-    padding-top: 17px;
+    border-top: 1px solid var(--line);
+    padding-top: var(--s4);
   }
 
   .duration-fields {
@@ -868,7 +798,7 @@
   .duration-field label {
     display: block;
     margin-bottom: 7px;
-    color: #e0eae2;
+    color: var(--ink);
     font-size: 0.78rem;
     font-weight: 620;
   }
@@ -876,14 +806,14 @@
   .duration-input {
     display: flex;
     align-items: center;
-    border: 1px solid #405044;
-    border-radius: 9px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-control);
     background: #0c130f;
   }
 
   .duration-input:focus-within {
-    border-color: #8be0a2;
-    box-shadow: 0 0 0 3px rgba(117, 211, 142, 0.18);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(127, 215, 154, 0.18);
   }
 
   .duration-input.invalid {
@@ -896,21 +826,21 @@
     border: 0;
     outline: 0;
     padding: 10px 5px 10px 12px;
-    color: #edf5ef;
+    color: var(--ink);
     background: transparent;
     font: inherit;
   }
 
   .duration-input span {
     padding-right: 11px;
-    color: #9da8a0;
+    color: var(--ink-2);
     font-size: 0.7rem;
   }
 
   .duration-field small {
     display: block;
     margin-top: 6px;
-    color: #9da8a0;
+    color: var(--ink-2);
     font-size: 0.68rem;
   }
 
@@ -933,15 +863,15 @@
 
   .advanced {
     margin-top: 17px;
-    border-top: 1px solid #2b372e;
+    border-top: 1px solid var(--line);
     padding-top: 14px;
-    color: #b2beb5;
+    color: var(--ink-2);
   }
 
   .advanced summary {
     width: fit-content;
     cursor: pointer;
-    color: #dfe9e1;
+    color: var(--ink);
     font-size: 0.78rem;
     font-weight: 650;
   }
@@ -953,117 +883,20 @@
 
   .settings-confirmation {
     grid-column: 1 / -1;
-    min-height: 0;
-    color: #b9ddc2;
-    font-size: 0.72rem;
+    color: var(--ink-2);
   }
 
   .settings-confirmation:empty {
     display: none;
   }
 
-  .warning {
-    grid-column: 1 / -1;
-    border-color: #78633a;
-    background: #251f14;
-  }
-
-  .warning .section-label {
-    color: #e2c487;
-  }
-
-  .warning p:not(.section-label) {
-    max-width: 660px;
-    margin: 8px 0 0;
-    color: #d5c7a9;
-    font-size: 0.8rem;
-    line-height: 1.45;
-  }
-
-  button {
-    border: 0;
-    border-radius: 9px;
-    padding: 11px 16px;
-    font: inherit;
-    font-weight: 650;
-    cursor: pointer;
-  }
-
-  button:focus-visible,
-  summary:focus-visible {
-    outline: 3px solid #d9efdf;
-    outline-offset: 3px;
-  }
-
-  button:disabled {
-    cursor: not-allowed;
-    opacity: 0.52;
-  }
-
-  .primary {
-    color: #07120a;
-    background: #80d997;
-  }
-
-  .primary:hover:not(:disabled) {
-    background: #98e5aa;
-  }
-
-  .secondary {
-    border: 1px solid #46564a;
-    color: #e1eae3;
-    background: #18211b;
-  }
-
-  .secondary:hover:not(:disabled) {
-    border-color: #6c8171;
-    background: #202c24;
-  }
-
-  .text-button {
-    padding: 8px 4px;
-    color: #a8dcb5;
-    background: transparent;
-    font-size: 0.78rem;
-  }
-
-  .text-button:hover:not(:disabled) {
-    color: #d4efdb;
-  }
-
   @media (max-width: 760px) {
-    .consumer-dashboard {
-      padding: 14px 16px 22px;
+    .wrap {
+      padding: var(--s4) var(--s4) var(--s6);
     }
 
-    .hero,
-    .hero-copy {
-      min-height: 280px;
-    }
-
-    .hero-copy {
-      padding: 24px 28px;
-    }
-
-    .consumer-content {
-      grid-template-columns: 1fr;
-    }
-
-    .actions {
-      grid-row: 1;
-    }
-
-    .today,
-    .rhythm,
-    .preview,
-    .warning {
-      grid-column: 1;
-      grid-row: auto;
-    }
-
-    .today-stats,
-    .break-counts {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+    .stats {
+      gap: var(--s4) var(--s5);
     }
 
     .duration-fields {
@@ -1072,33 +905,25 @@
   }
 
   @media (max-width: 520px) {
-    .rhythm,
-    .preview,
-    .warning {
+    .foot {
       grid-template-columns: 1fr;
     }
 
-    .today-stats,
-    .break-counts {
-      grid-template-columns: 1fr;
-    }
-
-    .rhythm > .text-button,
-    .warning > .text-button {
-      width: fit-content;
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
 
   @media (prefers-contrast: more) {
-    .hero-shade {
-      background: rgba(3, 9, 7, 0.86);
+    .rule {
+      height: 2px;
     }
+  }
 
-    .actions,
-    .rhythm,
-    .preview,
-    .warning {
-      border-color: #829187;
+  @media (prefers-reduced-motion: reduce) {
+    .progress i {
+      transition: none;
     }
   }
 </style>

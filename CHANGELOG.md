@@ -5,10 +5,36 @@ released versions link to their GitHub release.
 
 ## [Unreleased]
 
+## [0.3.1-alpha.1] - 2026-08-12
+
+### Added
+
+- Added an elapsed-progress indicator to the consumer dashboard, showing how
+  much of the current work interval has passed. It appears only during an active
+  work interval and stays hidden while paused, during a break or preview, and
+  whenever the reminder status is unavailable.
+
 ### Changed
 
+- Rebuilt the consumer dashboard as a single quiet column. The scene-led hero is
+  gone, bordered sections became plain text separated by hairline rules, and
+  uppercase letterspaced labels became sentence case. The break screen keeps its
+  layout and behavior and now draws its display type from the shared font token.
+- Moved the dashboard onto a shared token layer for color, spacing, radius, and
+  type, and pinned body text to the system font stack. The previous stylesheet
+  asked for Inter, which was never vendored and could not be fetched, so body
+  text rendered in whatever font each machine happened to supply.
+- Raised dashboard label and caption contrast to meet WCAG AA at their rendered
+  sizes, and corrected increased-contrast mode so hover states raise contrast
+  instead of lowering it.
 - Described Unfocus as both a break app and a local reflection surface in the
   README and package metadata (Your day and break outcomes remain observe-only).
+- Updated the frontend toolchain to Vite 8.2.1, svelte-check 4.7.5, the Svelte
+  Vite plugin 7.3.0, and Node type definitions 26.2.0, and regenerated the
+  dependency license notices.
+- Fixed SBOM generation when a dependency update leaves two copies of a package
+  in the lockfile. Each dependency now resolves the way the runtime would, so a
+  nested copy serves its own owner while everything else sees the root copy.
 
 ## [0.3.0-alpha.1] - 2026-08-12
 
@@ -117,7 +143,8 @@ released versions link to their GitHub release.
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
-[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...dev
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.3.1-alpha.1...dev
+[0.3.1-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.3.1-alpha.1
 [0.3.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.2.0-alpha.1...v0.3.0-alpha.1
 [0.2.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.1.0-alpha.1...v0.2.0-alpha.1
 [0.1.0-alpha.1]: https://github.com/abhiksark/unfocus/releases/tag/v0.1.0-alpha.1
