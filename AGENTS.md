@@ -1,7 +1,9 @@
 # Unfocus
 
-Unfocus is a local-first eye-break reminder built with Tauri 2, a Rust core,
-SvelteKit 2, Svelte 5 runes, and Bun. Current alpha: `0.2.0-alpha.1`. Toolchain
+Unfocus is a local-first break and reflection app built with Tauri 2, a Rust
+core, SvelteKit 2, Svelte 5 runes, and Bun. Breaks cover every monitor so the
+eyes can rest far away; reflection is the observe-only Your day strip and break
+outcomes, never gamified and never a timer control surface. Current alpha: `0.2.0-alpha.1`. Toolchain
 pins: Bun `1.3.5` (`.bun-version`), Rust `1.97.1` (`rust-toolchain.toml`).
 
 This is the repository root project-rules file. Grok loads it automatically
