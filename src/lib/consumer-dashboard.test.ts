@@ -2,11 +2,13 @@ import { describe, expect, test } from "bun:test";
 import {
   consumerReminderPresentation,
   consumerWarning,
+  focusProgress,
   formatMinuteDuration,
   type ConsumerWarningInput
 } from "./consumer-dashboard";
 import type { DiagnosticsReport } from "./diagnostics";
 import type { ReminderPhase, ReminderStatus } from "./reminder-status";
+import type { ReminderSettings } from "./reminder-settings";
 
 function status(
   phase: ReminderPhase,
@@ -204,5 +206,57 @@ describe("consumer warnings", () => {
     const degraded = warningInput({ reminderActionError: "raw failure" });
     expect(consumerWarning(degraded)).not.toBeNull();
     expect(consumerWarning({ ...degraded, reminderActionError: null })).toBeNull();
+  });
+});
+
+const settings: ReminderSettings = { workMinutes: 20, breakSeconds: 20 };
+
+describe("focusProgress", () => {
+  test("returns null without a status", () => {
+    expect(focusProgress(null, settings)).toBeNull();
+  });
+
+  test("returns null without settings", () => {
+    expect(focusProgress(status("working"), null)).toBeNull();
+  });
+
+  test("returns null when the remaining time is unavailable", () => {
+    expect(
+      focusProgress(status("working", { remainingMilliseconds: null }), settings)
+    ).toBeNull();
+  });
+
+  test("returns null outside the working phase", () => {
+    for (const phase of ["paused", "break", "stopped", "unavailable"] as const) {
+      expect(focusProgress(status(phase), settings)).toBeNull();
+    }
+  });
+
+  test("returns null while a preview overlay is open", () => {
+    expect(
+      focusProgress(status("working", { overlayActive: true }), settings)
+    ).toBeNull();
+  });
+
+  test("reports the elapsed fraction of the work interval", () => {
+    expect(
+      focusProgress(status("working", { remainingMilliseconds: 10 * 60_000 }), settings)
+    ).toBe(0.5);
+  });
+
+  test("clamps to zero when remaining exceeds the interval", () => {
+    expect(
+      focusProgress(status("working", { remainingMilliseconds: 40 * 60_000 }), settings)
+    ).toBe(0);
+  });
+
+  test("clamps to one when remaining is negative", () => {
+    expect(
+      focusProgress(status("working", { remainingMilliseconds: -5_000 }), settings)
+    ).toBe(1);
+  });
+
+  test("returns null for a non-positive work interval", () => {
+    expect(focusProgress(status("working"), { workMinutes: 0, breakSeconds: 20 })).toBeNull();
   });
 });

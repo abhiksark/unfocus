@@ -5,8 +5,26 @@ released versions link to their GitHub release.
 
 ## [Unreleased]
 
+### Added
+
+- Added an elapsed-progress indicator to the consumer dashboard, showing how
+  much of the current work interval has passed. It appears only during an active
+  work interval and stays hidden while paused, during a break or preview, and
+  whenever the reminder status is unavailable.
+
 ### Changed
 
+- Rebuilt the consumer dashboard as a single quiet column. The scene-led hero is
+  gone, bordered sections became plain text separated by hairline rules, and
+  uppercase letterspaced labels became sentence case. The break screen is
+  unchanged.
+- Moved the dashboard onto a shared token layer for color, spacing, radius, and
+  type, and pinned body text to the system font stack. The previous stylesheet
+  asked for Inter, which was never vendored and could not be fetched, so body
+  text rendered in whatever font each machine happened to supply.
+- Raised dashboard label and caption contrast to meet WCAG AA at their rendered
+  sizes, and corrected increased-contrast mode so hover states raise contrast
+  instead of lowering it.
 - Described Unfocus as both a break app and a local reflection surface in the
   README and package metadata (Your day and break outcomes remain observe-only).
 
