@@ -9,7 +9,7 @@ released versions link to their GitHub release.
 
 - Added slow drift and twinkle to the break scene's stars. The sky now holds
   24 slightly brighter stars, each stepping through its own baked 10-18 second
-  cadence on the scene's existing 2-4 second repaint rhythm, and the starfield
+  cadence within the scene's stepped repaint rhythm, and the starfield
   fades as the dawn state gathers. Reduced-motion preferences stop the motion
   entirely, leaving the stars at their resting brightness.
 

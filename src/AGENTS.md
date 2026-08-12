@@ -65,7 +65,8 @@ as `export let` or `$:` reactive statements.
   effects, full-width gradient bands, or drop-shadow halos.
 - Full-viewport layers stay static; a repainted full-screen gradient previously
   reached 217% CPU. Continuous motion is limited to transform/opacity on small
-  layers and stepped with `steps()` so repaints land every 2-3 seconds; state
+  layers and stepped with `steps()` so no layer repaints more often than about
+  every two seconds; current layers land between two and five seconds. State
   changes use one-shot opacity transitions.
 - `prefers-reduced-motion` stops every loop and reduces state fades to 120 ms.
   `prefers-contrast: more` must keep copy legible over the scene.
