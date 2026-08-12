@@ -2,7 +2,7 @@
   "name": "unfocus",
   "private": true,
   "version": "0.3.0-alpha.1",
-  "description": "A local-first eye-break reminder",
+  "description": "Local-first break and reflection app: look away when it is time, and see how your day went",
   "packageManager": "bun@1.3.5",
   "engines": {
     "bun": "1.3.5"
