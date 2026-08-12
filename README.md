@@ -86,7 +86,7 @@ the next work phase.
 
 ### Reflection (Your day)
 
-Where the idle probe is available, a **Your day** card on the consumer
+Where the idle probe is available, a **Your day** summary on the consumer
 dashboard shows a rolling last-24-hour view of continuous computer use versus
 time away from the keyboard:
 
@@ -99,7 +99,7 @@ time away from the keyboard:
   fullscreen) for the last day, with a quieter seven-day total
 - Segment history and the ledger live next to other Unfocus settings on this
   device, pruned to the rolling window, and are never uploaded
-- Observe-only: the card does not pause, skip, or advance the break timer
+- Observe-only: it does not pause, skip, or advance the break timer
 
 Scheduled break presentation may use that same local presence history so a long
 continuous stretch requires a real away period before natural credit, while a

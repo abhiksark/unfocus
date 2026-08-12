@@ -8,6 +8,27 @@ SvelteKit 2 uses the static adapter and Svelte 5 runes. Write runes syntax
 (`$props()`, `$state()`, `$derived()`); do not introduce Svelte 4 patterns such
 as `export let` or `$:` reactive statements.
 
+## Design tokens
+
+- Color, spacing, radius, and font tokens are declared once, as `:global(:root)`
+  in `src/routes/+page.svelte`. Never declare them again from a component. Two
+  `:global(:root)` blocks leave the winner dependent on stylesheet order, which
+  Svelte does not guarantee.
+- Spacing is `--s1` to `--s6` (4, 8, 12, 16, 24, 32). Radius is `--r-control`
+  and `--r-button` only. `--sans` and `--serif` are the only font stacks.
+- Use a token where one matches the value exactly. Where none matches, keep the
+  literal rather than snapping to the nearest step; the overlay's spacing is
+  tuned against monitor height and a 2px snap moves it.
+- `--accent` is reserved for the live state dot, whichever single button is
+  currently primary, and the day strip's active bars. Never two accent buttons
+  at once.
+- `prefers-contrast: more` raises the token values in `+page.svelte`. A color a
+  component hardcodes is excluded from that and can invert the intent, so check
+  hover and focus states against the raised values, not just the resting ones.
+- Declare a rule only in the component whose own markup uses it. Svelte warns on
+  a selector that matches nothing and the gate runs at zero warnings, so a class
+  cannot be declared ahead of its first use.
+
 ## Activity strip and break ledger
 
 - `today-activity.ts` formats the rolling-window summary from
