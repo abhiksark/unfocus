@@ -10,6 +10,7 @@ A local-first **break** and **reflection** app: it asks you to look far away whe
 it is time to rest, and it shows a calm picture of how your day went.
 
 [Releases](https://github.com/abhiksark/unfocus/releases) ·
+[Install guide](docs/install.md) ·
 [Changelog](CHANGELOG.md) ·
 [Report a bug](https://github.com/abhiksark/unfocus/issues/new?template=bug_report.yml) ·
 [Request a feature](https://github.com/abhiksark/unfocus/issues/new?template=feature_request.yml) ·
@@ -35,6 +36,9 @@ is that you can see the rhythm without turning it into a score.
 
 ## Download the alpha
 
+**Step-by-step install for each OS and package type:** [docs/install.md](docs/install.md)
+(verify downloads, first run, tray notes, uninstall, troubleshooting).
+
 Download the current alpha from [GitHub Releases](https://github.com/abhiksark/unfocus/releases)
 and choose the package for your system:
 
@@ -55,6 +59,7 @@ These early builds are not code-signed or notarized. Download only from the
 official releases page, read the release notes, and verify packages with the
 accompanying `SHA256SUMS` file and GitHub build-provenance attestations.
 Unfocus does not update itself yet, so check the releases page for new builds.
+Full verify and install commands live in the [install guide](docs/install.md).
 
 ## How it works
 
@@ -147,10 +152,12 @@ closing that dashboard exits instead of hiding an unreachable process.
 
 ## Build from source
 
-Install the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
-for your platform (the listed system libraries on Linux or the Xcode command
-line tools on macOS) plus the Bun and Rust versions declared in `.bun-version`
-and `rust-toolchain.toml`, then:
+End users should prefer a [release package](docs/install.md). To develop or
+build from source, install the
+[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your
+platform (the listed system libraries on Linux or the Xcode command line tools
+on macOS) plus the Bun and Rust versions declared in `.bun-version` and
+`rust-toolchain.toml`, then:
 
 ```sh
 bun install --frozen-lockfile
