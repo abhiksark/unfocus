@@ -355,7 +355,7 @@
   .wordmark {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--s2);
     color: rgba(235, 246, 239, 0.78);
     font-size: 0.72rem;
     font-weight: 650;
@@ -397,7 +397,7 @@
   }
 
   .eyebrow {
-    margin: 0 0 26px;
+    margin: 0 0 var(--s5);
     color: rgba(190, 232, 205, 0.82);
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 0.7rem;
@@ -410,7 +410,7 @@
     max-width: 960px;
     margin: 0;
     color: #e9f3ec;
-    font-family: "Fraunces", Georgia, serif;
+    font-family: var(--serif);
     font-size: clamp(2.4rem, 4.6vw, 4.2rem);
     font-weight: 380;
     letter-spacing: 0.002em;
@@ -424,7 +424,7 @@
 
   .guidance {
     max-width: 520px;
-    margin: 20px 0 0;
+    margin: var(--s5) 0 0;
     color: rgba(226, 239, 230, 0.76);
     font-size: clamp(0.82rem, 1.05vw, 1rem);
     line-height: 1.55;
@@ -434,7 +434,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: var(--s2);
     margin-top: clamp(26px, 4.5vh, 46px);
   }
 
@@ -494,7 +494,7 @@
     min-height: 46px;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--s2);
     border: 1px solid rgba(209, 234, 219, 0.16);
     border-radius: 999px;
     padding: 11px 20px;
