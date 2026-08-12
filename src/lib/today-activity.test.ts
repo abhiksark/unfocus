@@ -145,15 +145,47 @@ describe("stripAxisTicks", () => {
     expect(ticks.filter((tick) => tick.showLabel)).toHaveLength(ticks.length - 1);
   });
 
-  test("keeps a daylight-saving length window in range", () => {
-    const ticks = stripAxisTicks(25 * 60 * 60, JANUARY_NOON_MS);
+  test("suppresses a label that would overflow the strip's left edge", () => {
+    const base = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS);
+    const firstBoundaryMs = base[0].timestampMs;
+    // Starting the window exactly on an hour boundary puts that tick at ~0%.
+    const ticks = stripAxisTicks(DAY_SECONDS, firstBoundaryMs + DAY_SECONDS * 1_000);
+    const first = ticks[0];
 
-    expect(ticks.length).toBeGreaterThanOrEqual(6);
-    expect(ticks.length).toBeLessThanOrEqual(7);
-    expect(new Set(ticks.map((tick) => tick.timestampMs)).size).toBe(ticks.length);
-    for (const tick of ticks) {
-      expect(tick.positionPercent).toBeGreaterThanOrEqual(0);
-      expect(tick.positionPercent).toBeLessThanOrEqual(100);
+    expect(first.timestampMs).toBe(firstBoundaryMs);
+    expect(first.positionPercent).toBeLessThan(2);
+    expect(first.showLabel).toBe(false);
+    expect(ticks).toContain(first);
+  });
+
+  test("walks local wall-clock hours across daylight-saving transitions", () => {
+    const previousTz = process.env.TZ;
+    process.env.TZ = "America/New_York";
+    try {
+      const assertHourWalk = (ticks: ReturnType<typeof stripAxisTicks>) => {
+        expect(ticks.length).toBeGreaterThan(0);
+        const seen = new Set<number>();
+        for (const tick of ticks) {
+          expect(tick.positionPercent).toBeGreaterThanOrEqual(0);
+          expect(tick.positionPercent).toBeLessThanOrEqual(100);
+          const at = new Date(tick.timestampMs);
+          expect(at.getHours() % 4).toBe(0);
+          expect(at.getMinutes()).toBe(0);
+          seen.add(tick.timestampMs);
+        }
+        expect(seen.size).toBe(ticks.length);
+      };
+
+      // Spring forward: 2026-03-08 02:00 EST jumps to 03:00 EDT (a 23-hour day).
+      const springForwardNowMs = new Date(2026, 2, 9, 12, 0, 0).getTime();
+      assertHourWalk(stripAxisTicks(48 * 60 * 60, springForwardNowMs));
+
+      // Fall back: 2026-11-01 02:00 EDT repeats as 02:00 EST (a 25-hour day).
+      const fallBackNowMs = new Date(2026, 10, 2, 12, 0, 0).getTime();
+      assertHourWalk(stripAxisTicks(48 * 60 * 60, fallBackNowMs));
+    } finally {
+      if (previousTz === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTz;
     }
   });
 

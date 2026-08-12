@@ -130,6 +130,8 @@ export function stripAfkHeight(bucket: StripBucket): number {
 const AXIS_HOUR_STEP = 4;
 /** Above this percent a label would collide with the "now" anchor. */
 const AXIS_LABEL_LIMIT = 94;
+/** Below this percent a label, centered on its tick, would overflow the strip's left edge. */
+const AXIS_LABEL_FLOOR = 2;
 /** Defensive bound so an absurd window cannot spin the hour walk. */
 const AXIS_MAX_STEPS = 400;
 
@@ -173,7 +175,7 @@ export function stripAxisTicks(windowSeconds: number, nowMs: number): StripAxisT
         timestampMs,
         positionPercent,
         label: hourLabel.format(cursor),
-        showLabel: positionPercent <= AXIS_LABEL_LIMIT
+        showLabel: positionPercent >= AXIS_LABEL_FLOOR && positionPercent <= AXIS_LABEL_LIMIT
       });
     }
     cursor.setHours(cursor.getHours() + 1);
