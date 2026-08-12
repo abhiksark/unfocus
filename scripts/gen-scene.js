@@ -64,13 +64,20 @@ function ridge({ seed, base, amp, peaks, broadW, detail }) {
 
 function stars(seed, count) {
   const rand = mulberry32(seed);
+  // Separate stream for twinkle timing so adding it left every star where the
+  // accepted composition placed it.
+  const timing = mulberry32(seed + 1);
   let out = "";
   for (let i = 0; i < count; i++) {
     const x = (rand() * W).toFixed(0);
     const y = (rand() * 320 + 40).toFixed(0);
-    const r = (0.7 + rand() * 0.8).toFixed(1);
-    const o = (0.1 + rand() * 0.24).toFixed(2);
-    out += `    <circle cx="${x}" cy="${y}" r="${r}" fill="#d7ecdc" opacity="${o}"/>\n`;
+    const r = (0.8 + rand() * 1.0).toFixed(1);
+    const o = (0.14 + rand() * 0.3).toFixed(2);
+    const dur = (10 + timing() * 8).toFixed(1);
+    const delay = (-timing() * 18).toFixed(1);
+    // The opacity attribute is the resting value when animations are off;
+    // the custom properties drive the stepped twinkle in BreakOverlay.svelte.
+    out += `    <circle class="star" cx="${x}" cy="${y}" r="${r}" fill="#d7ecdc" opacity="${o}" style="--o:${o};--tw-dur:${dur}s;--tw-delay:${delay}s"/>\n`;
   }
   return out;
 }
@@ -143,7 +150,7 @@ const svg = `<svg class="scene" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMi
 
   <rect width="${W}" height="${H}" fill="url(#sky)"/>
   <g class="stars">
-${stars(99, 12)}  </g>
+${stars(99, 24)}  </g>
   <circle class="moonbody" cx="1178" cy="162" r="30" fill="#d7ecdc" opacity="0.85" mask="url(#crescent)"/>
 
   <!-- moonlit haze gathers behind the far summit; swaps warm at dawn -->
