@@ -135,11 +135,11 @@ JavaScript: @sveltejs/kit@2.70.2
 Declared license: MIT
 License text IDs: 3572965e1f08277c2edc0cca242bc4c27a50ec1d5bbe5b0918511e3d2a467178
 
-JavaScript: @sveltejs/load-config@0.2.1
+JavaScript: @sveltejs/load-config@0.2.2
 Declared license: MIT
 License text IDs: ada595bb2ec8d71616dde1b956edb8fbad63eadab32b8d9ab9310a1aef08e5c5
 
-JavaScript: @sveltejs/vite-plugin-svelte@7.2.0
+JavaScript: @sveltejs/vite-plugin-svelte@7.3.0
 Declared license: MIT
 License text IDs: 26d4779495753b2fb772445ca50f83f03b431522bcd410a1643cf1097fbcefc0
 
@@ -224,6 +224,11 @@ Upstream authors: RReverser
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
 
 JavaScript: @types/node@26.1.2
+Declared license: MIT
+Upstream authors: Microsoft TypeScript, Alberto Schiabel, Andrew Makarov, Benjamin Toueg, David Junger, Mohsen Azimi, Nikita Galkin, Sebastian Silbermann, Wilco Bakker, Marcin Kopacz, Trivikram Kamat, Junxiao Shi, Ilia Baryshnikov, ExE Boss, Piotr Błażejewicz, Anna Henningsen, Victor Perin, NodeJS Contributors, Linus Unnebäck, wafuwafu13, Matteo Collina, Dmitry Semigradsky, René, Yagiz Nizipli
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
+
+JavaScript: @types/node@26.2.0
 Declared license: MIT
 Upstream authors: Microsoft TypeScript, Alberto Schiabel, Andrew Makarov, Benjamin Toueg, David Junger, Mohsen Azimi, Nikita Galkin, Sebastian Silbermann, Wilco Bakker, Marcin Kopacz, Trivikram Kamat, Junxiao Shi, Ilia Baryshnikov, ExE Boss, Piotr Błażejewicz, Anna Henningsen, Victor Perin, NodeJS Contributors, Linus Unnebäck, wafuwafu13, Matteo Collina, Dmitry Semigradsky, René, Yagiz Nizipli
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
@@ -466,6 +471,11 @@ Declared license: MIT
 Upstream authors: Rich Harris
 License text IDs: 1cbe51b907662f6cb1492b16c359384a595180bf0e4d101603ed525e75c4e484
 
+JavaScript: magic-string@1.1.0
+Declared license: MIT
+Upstream authors: Rich Harris
+License text IDs: 1cbe51b907662f6cb1492b16c359384a595180bf0e4d101603ed525e75c4e484
+
 JavaScript: mri@1.2.0
 Declared license: MIT
 Upstream authors: Luke Edwards
@@ -530,7 +540,7 @@ Declared license: BSD-3-Clause
 Upstream authors: Valentin 7rulnik Semirulnik <v7rulnik@gmail.com>, Nick Fitzgerald <nfitzgerald@mozilla.com>, Tobias Koppers <tobias.koppers@googlemail.com>, Duncan Beevers <duncan@dweebd.com>, Stephen Crane <scrane@mozilla.com>, Ryan Seddon <seddon.ryan@gmail.com>, Miles Elam <miles.elam@deem.com>, Mihai Bazon <mihai.bazon@gmail.com>, Michael Ficarra <github.public.email@michael.ficarra.me>, Todd Wolfson <todd@twolfson.com>, Alexander Solovyov <alexander@solovyov.net>, Felix Gnass <fgnass@gmail.com>, Conrad Irwin <conrad.irwin@gmail.com>, usrbincc <usrbincc@yahoo.com>, David Glasser <glasser@davidglasser.net>, Chase Douglas <chase@newrelic.com>, Evan Wallace <evan.exe@gmail.com>, Heather Arthur <fayearthur@gmail.com>, Hugh Kennedy <hughskennedy@gmail.com>, David Glasser <glasser@davidglasser.net>, Simon Lydell <simon.lydell@gmail.com>, Jmeas Smith <jellyes2@gmail.com>, Michael Z Goddard <mzgoddard@gmail.com>, azu <azu@users.noreply.github.com>, John Gozde <john@gozde.ca>, Adam Kirkton <akirkton@truefitinnovation.com>, Chris Montgomery <christopher.montgomery@dowjones.com>, J. Ryan Stinnett <jryans@gmail.com>, Jack Herrington <jherrington@walmartlabs.com>, Chris Truter <jeffpalentine@gmail.com>, Daniel Espeset <daniel@danielespeset.com>, Jamie Wong <jamie.lf.wong@gmail.com>, Eddy Bruël <ejpbruel@mozilla.com>, Hawken Rives <hawkrives@gmail.com>, Gilad Peleg <giladp007@gmail.com>, djchie <djchie.dev@gmail.com>, Gary Ye <garysye@gmail.com>, Nicolas Lalevée <nicolas.lalevee@hibnet.org>
 License text IDs: c9d85a24226fa4dd8c0756961de362cee34f6e9b1d19938bd480239950ad9a93
 
-JavaScript: svelte-check@4.7.4
+JavaScript: svelte-check@4.7.5
 Declared license: MIT
 Upstream authors: The Svelte Community
 License text IDs: ada595bb2ec8d71616dde1b956edb8fbad63eadab32b8d9ab9310a1aef08e5c5
@@ -564,10 +574,10 @@ Declared license: MIT
 Upstream authors: Daniele Belardi, Ethan Arrowood, Matteo Collina, Matthew Aitken, Robert Nagy, Szymon Marczak, Tomas Della Vedova
 License text IDs: a6db8096b2707bc0102d256917d4d33f298ba36d8c3f25de067a2b5bb379db27
 
-JavaScript: vite@8.2.0
+JavaScript: vite@8.2.1
 Declared license: MIT
 Upstream authors: Evan You
-License text IDs: 3dc7a1f261771c2a2899f077d16ec82bf0e054febe218612bb037ab1a0228a33
+License text IDs: 387dd7baa307083401a27c58c362c30832f5ba1dba84f10cc22c33401523f45c
 
 JavaScript: vitefu@1.1.3
 Declared license: MIT
@@ -5004,6 +5014,7 @@ THE SOFTWARE.
 License text ID: 1cbe51b907662f6cb1492b16c359384a595180bf0e4d101603ed525e75c4e484
 Used by:
   - JavaScript: magic-string@0.30.21
+  - JavaScript: magic-string@1.1.0
 -------------------------------------------------------------------------------
 Copyright 2018 Rich Harris
 
@@ -6384,7 +6395,7 @@ DEALINGS IN THE SOFTWARE.
 ===============================================================================
 License text ID: 26d4779495753b2fb772445ca50f83f03b431522bcd410a1643cf1097fbcefc0
 Used by:
-  - JavaScript: @sveltejs/vite-plugin-svelte@7.2.0
+  - JavaScript: @sveltejs/vite-plugin-svelte@7.3.0
 -------------------------------------------------------------------------------
 MIT License
 
@@ -7543,172 +7554,9 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ===============================================================================
-License text ID: 39fa265207450e77c62e90c5594a06c085b655d8374c7ced4bf7894b6bd95dd2
+License text ID: 387dd7baa307083401a27c58c362c30832f5ba1dba84f10cc22c33401523f45c
 Used by:
-  - Rust: dlopen2@0.8.2
-  - Rust: dlopen2_derive@0.4.3
--------------------------------------------------------------------------------
-MIT License
-
-Copyright (c) 2017 Szymon Wieloch
-Copyright (C) 2019 Ahmed Masud <ahmed.masud@saf.ai>
-Copyright (C) 2022 OpenByte <development.openbyte@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-===============================================================================
-License text ID: 3c125f249fc6fb19f2415d027a0d9a170860583960ea53d08ea1d2b3f269d153
-Used by:
-  - Rust: stable_deref_trait@1.2.1
--------------------------------------------------------------------------------
-Copyright (c) 2017 Robert Grosse
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-===============================================================================
-License text ID: 3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94
-Used by:
-  - Rust: brotli@8.0.4
--------------------------------------------------------------------------------
-Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-===============================================================================
-License text ID: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
-Used by:
-  - JavaScript: @types/bun@1.3.14
-  - JavaScript: @types/cookie@0.6.0
-  - JavaScript: @types/estree@1.0.9
-  - JavaScript: @types/node@26.1.2
-  - JavaScript: @types/trusted-types@2.0.7
-  - Rust: windows-collections@0.2.0
-  - Rust: windows-core@0.61.2
-  - Rust: windows-core@0.62.2
-  - Rust: windows-future@0.2.1
-  - Rust: windows-implement@0.60.2
-  - Rust: windows-interface@0.59.3
-  - Rust: windows-link@0.1.3
-  - Rust: windows-link@0.2.1
-  - Rust: windows-numerics@0.2.0
-  - Rust: windows-result@0.3.4
-  - Rust: windows-result@0.4.1
-  - Rust: windows-strings@0.4.2
-  - Rust: windows-strings@0.5.1
-  - Rust: windows-sys@0.45.0
-  - Rust: windows-sys@0.59.0
-  - Rust: windows-sys@0.60.2
-  - Rust: windows-sys@0.61.2
-  - Rust: windows-targets@0.42.2
-  - Rust: windows-targets@0.52.6
-  - Rust: windows-targets@0.53.5
-  - Rust: windows-threading@0.1.0
-  - Rust: windows-version@0.1.7
-  - Rust: windows@0.61.3
-  - Rust: windows_aarch64_gnullvm@0.42.2
-  - Rust: windows_aarch64_gnullvm@0.52.6
-  - Rust: windows_aarch64_gnullvm@0.53.1
-  - Rust: windows_aarch64_msvc@0.42.2
-  - Rust: windows_aarch64_msvc@0.52.6
-  - Rust: windows_aarch64_msvc@0.53.1
-  - Rust: windows_i686_gnu@0.42.2
-  - Rust: windows_i686_gnu@0.52.6
-  - Rust: windows_i686_gnu@0.53.1
-  - Rust: windows_i686_gnullvm@0.52.6
-  - Rust: windows_i686_gnullvm@0.53.1
-  - Rust: windows_i686_msvc@0.42.2
-  - Rust: windows_i686_msvc@0.52.6
-  - Rust: windows_i686_msvc@0.53.1
-  - Rust: windows_x86_64_gnu@0.42.2
-  - Rust: windows_x86_64_gnu@0.52.6
-  - Rust: windows_x86_64_gnu@0.53.1
-  - Rust: windows_x86_64_gnullvm@0.42.2
-  - Rust: windows_x86_64_gnullvm@0.52.6
-  - Rust: windows_x86_64_gnullvm@0.53.1
-  - Rust: windows_x86_64_msvc@0.42.2
-  - Rust: windows_x86_64_msvc@0.52.6
-  - Rust: windows_x86_64_msvc@0.53.1
--------------------------------------------------------------------------------
-MIT License
-
-    Copyright (c) Microsoft Corporation.
-
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE
-
-===============================================================================
-License text ID: 3dc7a1f261771c2a2899f077d16ec82bf0e054febe218612bb037ab1a0228a33
-Used by:
-  - JavaScript: vite@8.2.0
+  - JavaScript: vite@8.2.1
 -------------------------------------------------------------------------------
 # Vite core license
 Vite is released under the MIT license:
@@ -8968,7 +8816,7 @@ Repository: https://github.com/lydell/js-tokens
 
 > The MIT License (MIT)
 > 
-> Copyright (c) 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 Simon Lydell
+> Copyright (c) 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 Simon Lydell
 > 
 > Permission is hereby granted, free of charge, to any person obtaining a copy
 > of this software and associated documentation files (the "Software"), to deal
@@ -10032,6 +9880,170 @@ Repository: https://github.com/sveltejs/zimmerframe
 > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
+
+===============================================================================
+License text ID: 39fa265207450e77c62e90c5594a06c085b655d8374c7ced4bf7894b6bd95dd2
+Used by:
+  - Rust: dlopen2@0.8.2
+  - Rust: dlopen2_derive@0.4.3
+-------------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2017 Szymon Wieloch
+Copyright (C) 2019 Ahmed Masud <ahmed.masud@saf.ai>
+Copyright (C) 2022 OpenByte <development.openbyte@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+===============================================================================
+License text ID: 3c125f249fc6fb19f2415d027a0d9a170860583960ea53d08ea1d2b3f269d153
+Used by:
+  - Rust: stable_deref_trait@1.2.1
+-------------------------------------------------------------------------------
+Copyright (c) 2017 Robert Grosse
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+===============================================================================
+License text ID: 3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94
+Used by:
+  - Rust: brotli@8.0.4
+-------------------------------------------------------------------------------
+Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+===============================================================================
+License text ID: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
+Used by:
+  - JavaScript: @types/bun@1.3.14
+  - JavaScript: @types/cookie@0.6.0
+  - JavaScript: @types/estree@1.0.9
+  - JavaScript: @types/node@26.1.2
+  - JavaScript: @types/node@26.2.0
+  - JavaScript: @types/trusted-types@2.0.7
+  - Rust: windows-collections@0.2.0
+  - Rust: windows-core@0.61.2
+  - Rust: windows-core@0.62.2
+  - Rust: windows-future@0.2.1
+  - Rust: windows-implement@0.60.2
+  - Rust: windows-interface@0.59.3
+  - Rust: windows-link@0.1.3
+  - Rust: windows-link@0.2.1
+  - Rust: windows-numerics@0.2.0
+  - Rust: windows-result@0.3.4
+  - Rust: windows-result@0.4.1
+  - Rust: windows-strings@0.4.2
+  - Rust: windows-strings@0.5.1
+  - Rust: windows-sys@0.45.0
+  - Rust: windows-sys@0.59.0
+  - Rust: windows-sys@0.60.2
+  - Rust: windows-sys@0.61.2
+  - Rust: windows-targets@0.42.2
+  - Rust: windows-targets@0.52.6
+  - Rust: windows-targets@0.53.5
+  - Rust: windows-threading@0.1.0
+  - Rust: windows-version@0.1.7
+  - Rust: windows@0.61.3
+  - Rust: windows_aarch64_gnullvm@0.42.2
+  - Rust: windows_aarch64_gnullvm@0.52.6
+  - Rust: windows_aarch64_gnullvm@0.53.1
+  - Rust: windows_aarch64_msvc@0.42.2
+  - Rust: windows_aarch64_msvc@0.52.6
+  - Rust: windows_aarch64_msvc@0.53.1
+  - Rust: windows_i686_gnu@0.42.2
+  - Rust: windows_i686_gnu@0.52.6
+  - Rust: windows_i686_gnu@0.53.1
+  - Rust: windows_i686_gnullvm@0.52.6
+  - Rust: windows_i686_gnullvm@0.53.1
+  - Rust: windows_i686_msvc@0.42.2
+  - Rust: windows_i686_msvc@0.52.6
+  - Rust: windows_i686_msvc@0.53.1
+  - Rust: windows_x86_64_gnu@0.42.2
+  - Rust: windows_x86_64_gnu@0.52.6
+  - Rust: windows_x86_64_gnu@0.53.1
+  - Rust: windows_x86_64_gnullvm@0.42.2
+  - Rust: windows_x86_64_gnullvm@0.52.6
+  - Rust: windows_x86_64_gnullvm@0.53.1
+  - Rust: windows_x86_64_msvc@0.42.2
+  - Rust: windows_x86_64_msvc@0.52.6
+  - Rust: windows_x86_64_msvc@0.53.1
+-------------------------------------------------------------------------------
+MIT License
+
+    Copyright (c) Microsoft Corporation.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE
 
 ===============================================================================
 License text ID: 3f39c032be4639be635da96d77c4d0f4393c3595a164450ffd86f3d17701ec10
@@ -16774,8 +16786,8 @@ Apache License
 ===============================================================================
 License text ID: ada595bb2ec8d71616dde1b956edb8fbad63eadab32b8d9ab9310a1aef08e5c5
 Used by:
-  - JavaScript: @sveltejs/load-config@0.2.1
-  - JavaScript: svelte-check@4.7.4
+  - JavaScript: @sveltejs/load-config@0.2.2
+  - JavaScript: svelte-check@4.7.5
 -------------------------------------------------------------------------------
 Copyright (c) 2020-Present [these people](https://github.com/sveltejs/language-tools/graphs/contributors) 
 
