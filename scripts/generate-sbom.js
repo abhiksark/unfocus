@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolveBunDependency } from "./sbom-dependencies.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const output = process.argv[2] ? resolve(root, process.argv[2]) : resolve(root, "unfocus.cdx.json");
@@ -201,18 +202,7 @@ function dependencyEntries(manifest, field, owner) {
   return Object.entries(value).sort(([left], [right]) => compareText(left, right));
 }
 
-function resolveBunDependency(owner, name, range, optional) {
-  if (typeof range !== "string" || range.length === 0) {
-    throw new Error(`${owner} has an invalid dependency range for ${name}`);
-  }
-  const candidates = bunPackagesByName.get(name) ??
-    (bunPackagesByLockKey.has(name) ? [bunPackagesByLockKey.get(name)] : []);
-  const matches = candidates.filter((candidate) => Bun.semver.satisfies(candidate.version, range));
-  if (matches.length === 1) return matches[0].ref;
-  if (matches.length === 0 && optional && candidates.length === 0) return null;
-  const detail = matches.length === 0 ? "no matching locked package" : "multiple matching locked packages";
-  throw new Error(`${owner} dependency ${name}@${range} has ${detail}`);
-}
+const bunPackageIndex = { byName: bunPackagesByName, byLockKey: bunPackagesByLockKey };
 
 function collectBunDependencies(owner, manifest, includeDevDependencies = false) {
   const dependencies = new Set();
@@ -235,6 +225,7 @@ function collectBunDependencies(owner, manifest, includeDevDependencies = false)
   for (const [field, optional] of fields) {
     for (const [name, range] of dependencyEntries(manifest, field, owner)) {
       const ref = resolveBunDependency(
+        bunPackageIndex,
         owner,
         name,
         range,
