@@ -50,7 +50,7 @@ body:
       description: >-
         Release tag or short commit, package filename if packaged, and how you
         launched it (AppImage, deb, dmg, `bun run tauri dev`).
-      placeholder: "v0.2.0-alpha.1 — unfocus_0.2.0-alpha.1_amd64.AppImage"
+      placeholder: "v0.3.1-alpha.1 — unfocus_0.3.1-alpha.1_amd64.AppImage"
     validations:
       required: true
 
@@ -63,7 +63,7 @@ body:
         OS build, architecture, desktop/WM, app version, assistive settings
         (screen reader, reduce motion, contrast, text size).
       placeholder: |
-        commit: abc1234 / tag: v0.2.0-alpha.1
+        commit: abc1234 / tag: v0.3.1-alpha.1
         package: AppImage (packaged)
         OS: Ubuntu 22.04.5 x86_64 — GNOME 42.9 X11
         a11y: reduce-motion off, Orca not used, 100% text scale
