@@ -8,9 +8,10 @@ released versions link to their GitHub release.
 ### Added
 
 - Added a full multi-platform [install guide](docs/install.md): package choice,
-  checksum verification, Linux (deb/rpm/AppImage), macOS (DMG/Homebrew and
-  Gatekeeper), Windows (setup/MSI and SmartScreen), uninstall, and
-  troubleshooting.
+  checksum and provenance verification, Linux (deb/rpm/AppImage, X11 session
+  and tray notes), macOS (DMG/Homebrew and Gatekeeper), Windows (setup/MSI and
+  SmartScreen), first-run defaults, local data paths and clean uninstall,
+  build-from-source pins, and troubleshooting.
 
 ## [0.3.1-alpha.1] - 2026-08-12
 
