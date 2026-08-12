@@ -597,8 +597,8 @@ Declared license: BSD-3-Clause
 Upstream authors: Daniel Reiter Horn <danielrh@dropbox.com>
 License text IDs: c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae
 
-Rust: android_system_properties@0.1.5
-Declared license: MIT/Apache-2.0
+Rust: android_system_properties@0.1.6
+Declared license: MIT OR Apache-2.0
 Upstream authors: Nicolas Silva <nical@fastmail.com>
 License text IDs: 216486f29671a4262efe32af6d84a75bef398127f8c5f369b5c8305983887a06, 80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e
 
@@ -789,9 +789,8 @@ Declared license: Apache-2.0 OR MIT
 Upstream authors: Kornel <kornel@geekhood.net>
 License text IDs: 6742bd3e9c2035522b00ddd9a7c76f09e7ed89491a6750d56db2c062d9251b65
 
-Rust: cc@1.4.0
+Rust: cc@1.4.2
 Declared license: MIT OR Apache-2.0
-Upstream authors: Alex Crichton <alex@alexcrichton.com>
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
 
 Rust: cesu8@1.1.0
@@ -828,7 +827,7 @@ Declared license: Apache-2.0 OR MIT
 Upstream authors: Stjepan Glavina <stjepang@gmail.com>, Taiki Endo <te316e89@gmail.com>, John Nunley <dev@notgull.net>
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
 
-Rust: cookie@0.18.1
+Rust: cookie@0.18.2
 Declared license: MIT OR Apache-2.0
 Upstream authors: Sergio Benitez <sb@sergio.bz>, Alex Crichton <alex@alexcrichton.com>
 License text IDs: 9b1e51075f2956340762ed728426614237690b5b2895cbead9ecd5dc94c4e5af, f28420c1906af38be726cd7842798f0194b27c41d6051c0d1e9ee348b8a4a0ea
@@ -915,6 +914,21 @@ Rust: dbus@0.9.12
 Declared license: Apache-2.0/MIT
 Upstream authors: David Henningsson <diwic@ubuntu.com>
 License text IDs: 3f75361c9252bd71c38fcfb52af3d085add92fb11a4bb92d3237bb87e091e9cc, 444bdf624b51f207d7bd3676b9c875e8f290b5a9c42a13f4cafb4e1db980c984
+
+Rust: defmt-macros@1.1.1
+Declared license: MIT OR Apache-2.0
+Upstream authors: The Knurling-rs developers
+License text IDs: 0d17b75c1867fd568bcbb735f329d0d4253846c4b756a65e4d440c1e4bd59187, af975c9737b3bdcdcf7ec3512b3dc936f91cc58a3c9152a8e4b0803f667df6b9
+
+Rust: defmt-parser@1.0.0
+Declared license: MIT OR Apache-2.0
+Upstream authors: The Knurling-rs developers
+License text IDs: 0d17b75c1867fd568bcbb735f329d0d4253846c4b756a65e4d440c1e4bd59187, af975c9737b3bdcdcf7ec3512b3dc936f91cc58a3c9152a8e4b0803f667df6b9
+
+Rust: defmt@1.1.1
+Declared license: MIT OR Apache-2.0
+Upstream authors: The Knurling-rs developers
+License text IDs: 0d17b75c1867fd568bcbb735f329d0d4253846c4b756a65e4d440c1e4bd59187, af975c9737b3bdcdcf7ec3512b3dc936f91cc58a3c9152a8e4b0803f667df6b9
 
 Rust: deranged@0.5.8
 Declared license: MIT OR Apache-2.0
@@ -1069,7 +1083,7 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: Diggory Blake <diggsey@googlemail.com>
 License text IDs: 9dd44491b4cf95dcfa2963943b3ae91bff9a78d13049a9e0b53e0d0b0a9c8f4e, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
-Rust: find-msvc-tools@0.1.9
+Rust: find-msvc-tools@0.1.10
 Declared license: MIT OR Apache-2.0
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
 
@@ -1108,19 +1122,19 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: The rust-url developers
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 20c7855c364d57ea4c97889a5e8d98470a9952dade37bd9248b9a54431670e5e
 
-Rust: futures-channel@0.3.33
+Rust: futures-channel@0.3.34
 Declared license: MIT OR Apache-2.0
 License text IDs: 6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd, 8337133fbd3cd6b5de6ca9fd048a242a01045f3257add148a03c29f91e51e2b2
 
-Rust: futures-core@0.3.33
+Rust: futures-core@0.3.34
 Declared license: MIT OR Apache-2.0
 License text IDs: 6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd, 8337133fbd3cd6b5de6ca9fd048a242a01045f3257add148a03c29f91e51e2b2
 
-Rust: futures-executor@0.3.33
+Rust: futures-executor@0.3.34
 Declared license: MIT OR Apache-2.0
 License text IDs: 6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd, 8337133fbd3cd6b5de6ca9fd048a242a01045f3257add148a03c29f91e51e2b2
 
-Rust: futures-io@0.3.33
+Rust: futures-io@0.3.34
 Declared license: MIT OR Apache-2.0
 License text IDs: 6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd, 8337133fbd3cd6b5de6ca9fd048a242a01045f3257add148a03c29f91e51e2b2
 
@@ -1129,19 +1143,19 @@ Declared license: Apache-2.0 OR MIT
 Upstream authors: Stjepan Glavina <stjepang@gmail.com>, Contributors to futures-rs
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, 6226d0632e2e1a80c23597e964da9812ae193c535fe058154afb034e94167aa5
 
-Rust: futures-macro@0.3.33
+Rust: futures-macro@0.3.34
 Declared license: MIT OR Apache-2.0
 License text IDs: 6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd, 8337133fbd3cd6b5de6ca9fd048a242a01045f3257add148a03c29f91e51e2b2
 
-Rust: futures-sink@0.3.33
+Rust: futures-sink@0.3.34
 Declared license: MIT OR Apache-2.0
 License text IDs: 6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd, 8337133fbd3cd6b5de6ca9fd048a242a01045f3257add148a03c29f91e51e2b2
 
-Rust: futures-task@0.3.33
+Rust: futures-task@0.3.34
 Declared license: MIT OR Apache-2.0
 License text IDs: 6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd, 8337133fbd3cd6b5de6ca9fd048a242a01045f3257add148a03c29f91e51e2b2
 
-Rust: futures-util@0.3.33
+Rust: futures-util@0.3.34
 Declared license: MIT OR Apache-2.0
 License text IDs: 6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd, 8337133fbd3cd6b5de6ca9fd048a242a01045f3257add148a03c29f91e51e2b2
 
@@ -1420,6 +1434,31 @@ Rust: javascriptcore-rs@1.1.2
 Declared license: MIT
 License text IDs: a0acdc9f96ac4efb6d14a2b1296aaa3e4e69397082e383369fe1bf819f20c709
 
+Rust: jiff-core@0.1.0
+Declared license: Unlicense OR MIT
+Upstream authors: Andrew Gallant <jamslam@gmail.com>
+License text IDs: 01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f, 0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f
+
+Rust: jiff-static@0.2.35
+Declared license: Unlicense OR MIT
+Upstream authors: Andrew Gallant <jamslam@gmail.com>
+License text IDs: 01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f, 0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f
+
+Rust: jiff-tzdb-platform@0.1.3
+Declared license: Unlicense OR MIT
+Upstream authors: Andrew Gallant <jamslam@gmail.com>
+License text IDs: 01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f, 0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f
+
+Rust: jiff-tzdb@0.1.8
+Declared license: Unlicense OR MIT
+Upstream authors: Andrew Gallant <jamslam@gmail.com>
+License text IDs: 01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f, 0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f
+
+Rust: jiff@0.2.35
+Declared license: Unlicense OR MIT
+Upstream authors: Andrew Gallant <jamslam@gmail.com>
+License text IDs: 01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f, 0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f
+
 Rust: jni-sys-macros@0.4.1
 Declared license: MIT OR Apache-2.0
 Upstream authors: Robert Bragg <robert@sixbynine.org>
@@ -1440,7 +1479,7 @@ Declared license: MIT/Apache-2.0
 Upstream authors: Josh Chase <josh@prevoty.com>
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, fea1d5bf3dd71605ce5d7d2ff695c1837e914c77195e523a86b5391716477960
 
-Rust: js-sys@0.3.103
+Rust: js-sys@0.3.104
 Declared license: MIT OR Apache-2.0
 Upstream authors: The wasm-bindgen Developers
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
@@ -1760,6 +1799,14 @@ Declared license: Apache-2.0 OR MIT
 Upstream authors: Stjepan Glavina <stjepang@gmail.com>, John Nunley <dev@notgull.net>
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
 
+Rust: portable-atomic-util@0.2.7
+Declared license: Apache-2.0 OR MIT
+License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
+
+Rust: portable-atomic@1.15.0
+Declared license: Apache-2.0 OR MIT
+License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
+
 Rust: potential_utf@0.1.5
 Declared license: Unicode-3.0
 Upstream authors: The ICU4X Project Developers
@@ -1974,12 +2021,12 @@ Rust: serde_spanned@1.1.1
 Declared license: MIT OR Apache-2.0
 License text IDs: 6efb0476a1cc085077ed49357026d8c173bf33017278ef440f222fb9cbcb66e6, a8ad31b1c3f40dca5a84119351b8fa8ddc868edd77fad8a8ebf6d8f2d16fa4ae
 
-Rust: serde_with@3.21.0
+Rust: serde_with@3.22.0
 Declared license: MIT OR Apache-2.0
 Upstream authors: Jonas Bushart, Marcin Kaźmierczak
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545
 
-Rust: serde_with_macros@3.21.0
+Rust: serde_with_macros@3.22.0
 Declared license: MIT OR Apache-2.0
 Upstream authors: Jonas Bushart
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545
@@ -2182,7 +2229,7 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: David Tolnay <dtolnay@gmail.com>
 License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e
 
-Rust: thiserror-impl@2.0.19
+Rust: thiserror-impl@2.0.20
 Declared license: MIT OR Apache-2.0
 Upstream authors: David Tolnay <dtolnay@gmail.com>
 License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e
@@ -2192,7 +2239,7 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: David Tolnay <dtolnay@gmail.com>
 License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e
 
-Rust: thiserror@2.0.19
+Rust: thiserror@2.0.20
 Declared license: MIT OR Apache-2.0
 Upstream authors: David Tolnay <dtolnay@gmail.com>
 License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e
@@ -2437,27 +2484,27 @@ Rust: wasip2@1.0.4+wasi-0.2.12
 Declared license: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, ae6e99144a735503e5b54b92e09cf8dec2e7f2e25706ec5c98af2f7d2242dc75
 
-Rust: wasm-bindgen-futures@0.4.76
+Rust: wasm-bindgen-futures@0.4.77
 Declared license: MIT OR Apache-2.0
 Upstream authors: The wasm-bindgen Developers
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
 
-Rust: wasm-bindgen-macro-support@0.2.126
+Rust: wasm-bindgen-macro-support@0.2.127
 Declared license: MIT OR Apache-2.0
 Upstream authors: The wasm-bindgen Developers
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
 
-Rust: wasm-bindgen-macro@0.2.126
+Rust: wasm-bindgen-macro@0.2.127
 Declared license: MIT OR Apache-2.0
 Upstream authors: The wasm-bindgen Developers
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
 
-Rust: wasm-bindgen-shared@0.2.126
+Rust: wasm-bindgen-shared@0.2.127
 Declared license: MIT OR Apache-2.0
 Upstream authors: The wasm-bindgen Developers
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
 
-Rust: wasm-bindgen@0.2.126
+Rust: wasm-bindgen@0.2.127
 Declared license: MIT OR Apache-2.0
 Upstream authors: The wasm-bindgen Developers
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
@@ -2467,12 +2514,12 @@ Declared license: MIT OR Apache-2.0
 Upstream authors: Mattias Buelens <mattias@buelens.com>
 License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e
 
-Rust: web-sys@0.3.103
+Rust: web-sys@0.3.104
 Declared license: MIT OR Apache-2.0
 Upstream authors: The wasm-bindgen Developers
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
 
-Rust: web_atoms@0.2.5
+Rust: web_atoms@0.2.6
 Declared license: MIT OR Apache-2.0
 Upstream authors: The html5ever Project Developers
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 86dd7f026f916daf7511e39951ad8ea8cf55a8db67ae64060dacf829761c18f3
@@ -2809,7 +2856,7 @@ Declared license: MIT
 Upstream authors: Zeeshan Ali Khan <zeeshanak@gnome.org>
 License text IDs: 260e4ff3fc493695880c90774283eb1e3d018f898fabe655bbd52dd2cbd2fcad
 
-Rust: zcheapstr@1.0.0
+Rust: zcheapstr@1.1.0
 Declared license: MIT
 Upstream authors: Zeeshan Ali Khan <zeeshanak@gnome.org>
 License text IDs: 59871bb1612f8a0569655c10b995636827eceab42c6578cebdc45ad2922e0142
@@ -2872,6 +2919,11 @@ License text ID: 01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390
 Used by:
   - Rust: aho-corasick@1.1.5
   - Rust: byteorder@1.5.0
+  - Rust: jiff-core@0.1.0
+  - Rust: jiff-static@0.2.35
+  - Rust: jiff-tzdb-platform@0.1.3
+  - Rust: jiff-tzdb@0.1.8
+  - Rust: jiff@0.2.35
   - Rust: memchr@2.8.3
   - Rust: same-file@1.0.6
   - Rust: walkdir@2.5.0
@@ -3615,6 +3667,39 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ===============================================================================
+License text ID: 0d17b75c1867fd568bcbb735f329d0d4253846c4b756a65e4d440c1e4bd59187
+Used by:
+  - Rust: defmt-macros@1.1.1
+  - Rust: defmt-parser@1.0.0
+  - Rust: defmt@1.1.1
+-------------------------------------------------------------------------------
+Copyright (c) Ferrous Systems
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+===============================================================================
 License text ID: 0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73
 Used by:
   - Rust: webview2-com-macros@0.8.1
@@ -3677,6 +3762,11 @@ Used by:
   - Rust: aho-corasick@1.1.5
   - Rust: byteorder-lite@0.1.0
   - Rust: byteorder@1.5.0
+  - Rust: jiff-core@0.1.0
+  - Rust: jiff-static@0.2.35
+  - Rust: jiff-tzdb-platform@0.1.3
+  - Rust: jiff-tzdb@0.1.8
+  - Rust: jiff@0.2.35
   - Rust: memchr@2.8.3
   - Rust: walkdir@2.5.0
 -------------------------------------------------------------------------------
@@ -3779,7 +3869,7 @@ Used by:
   - Rust: bs58@0.5.1
   - Rust: bumpalo@3.20.3
   - Rust: camino@1.2.5
-  - Rust: cc@1.4.0
+  - Rust: cc@1.4.2
   - Rust: cfg-if@1.0.4
   - Rust: concurrent-queue@2.5.0
   - Rust: core-foundation-sys@0.8.7
@@ -3794,7 +3884,7 @@ Used by:
   - Rust: event-listener-strategy@0.5.4
   - Rust: event-listener@5.4.2
   - Rust: fastrand@2.5.0
-  - Rust: find-msvc-tools@0.1.9
+  - Rust: find-msvc-tools@0.1.10
   - Rust: flate2@1.1.9
   - Rust: fnv@1.0.7
   - Rust: form_urlencoded@1.2.2
@@ -3813,7 +3903,7 @@ Used by:
   - Rust: indexmap@1.9.3
   - Rust: indexmap@2.14.0
   - Rust: jni@0.21.1
-  - Rust: js-sys@0.3.103
+  - Rust: js-sys@0.3.104
   - Rust: keyboard-types@0.7.0
   - Rust: libappindicator@0.9.0
   - Rust: linux-raw-sys@0.12.1
@@ -3841,8 +3931,8 @@ Used by:
   - Rust: rustix@1.1.4
   - Rust: scopeguard@1.2.0
   - Rust: selectors@0.36.1
-  - Rust: serde_with@3.21.0
-  - Rust: serde_with_macros@3.21.0
+  - Rust: serde_with@3.22.0
+  - Rust: serde_with_macros@3.22.0
   - Rust: servo_arc@0.4.3
   - Rust: signal-hook-registry@1.4.8
   - Rust: smallvec@1.15.2
@@ -3863,13 +3953,13 @@ Used by:
   - Rust: version_check@0.9.5
   - Rust: wasi@0.11.1+wasi-snapshot-preview1
   - Rust: wasip2@1.0.4+wasi-0.2.12
-  - Rust: wasm-bindgen-futures@0.4.76
-  - Rust: wasm-bindgen-macro-support@0.2.126
-  - Rust: wasm-bindgen-macro@0.2.126
-  - Rust: wasm-bindgen-shared@0.2.126
-  - Rust: wasm-bindgen@0.2.126
-  - Rust: web-sys@0.3.103
-  - Rust: web_atoms@0.2.5
+  - Rust: wasm-bindgen-futures@0.4.77
+  - Rust: wasm-bindgen-macro-support@0.2.127
+  - Rust: wasm-bindgen-macro@0.2.127
+  - Rust: wasm-bindgen-shared@0.2.127
+  - Rust: wasm-bindgen@0.2.127
+  - Rust: web-sys@0.3.104
+  - Rust: web_atoms@0.2.6
   - Rust: window-vibrancy@0.6.0
   - Rust: wit-bindgen@0.57.1
   - Rust: wry@0.55.1
@@ -5385,7 +5475,7 @@ DEALINGS IN THE SOFTWARE.
 ===============================================================================
 License text ID: 216486f29671a4262efe32af6d84a75bef398127f8c5f369b5c8305983887a06
 Used by:
-  - Rust: android_system_properties@0.1.5
+  - Rust: android_system_properties@0.1.6
 -------------------------------------------------------------------------------
 Copyright 2016 Nicolas Silva
 
@@ -6018,6 +6108,8 @@ Used by:
   - Rust: pin-project-lite@0.2.17
   - Rust: piper@0.2.5
   - Rust: polling@3.11.0
+  - Rust: portable-atomic-util@0.2.7
+  - Rust: portable-atomic@1.15.0
   - Rust: proc-macro-crate@1.3.1
   - Rust: proc-macro-crate@2.0.2
   - Rust: proc-macro-crate@3.5.0
@@ -6043,9 +6135,9 @@ Used by:
   - Rust: syn@3.0.3
   - Rust: system-deps@6.2.2
   - Rust: thiserror-impl@1.0.69
-  - Rust: thiserror-impl@2.0.19
+  - Rust: thiserror-impl@2.0.20
   - Rust: thiserror@1.0.69
-  - Rust: thiserror@2.0.19
+  - Rust: thiserror@2.0.20
   - Rust: typeid@1.0.3
   - Rust: unicode-ident@1.0.24
   - Rust: wasi@0.11.1+wasi-snapshot-preview1
@@ -7351,19 +7443,19 @@ at your option.
 ===============================================================================
 License text ID: 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
 Used by:
-  - Rust: cc@1.4.0
+  - Rust: cc@1.4.2
   - Rust: cfg-if@1.0.4
-  - Rust: find-msvc-tools@0.1.9
-  - Rust: js-sys@0.3.103
+  - Rust: find-msvc-tools@0.1.10
+  - Rust: js-sys@0.3.104
   - Rust: pkg-config@0.3.33
   - Rust: socket2@0.6.5
   - Rust: toml_datetime@0.6.3
-  - Rust: wasm-bindgen-futures@0.4.76
-  - Rust: wasm-bindgen-macro-support@0.2.126
-  - Rust: wasm-bindgen-macro@0.2.126
-  - Rust: wasm-bindgen-shared@0.2.126
-  - Rust: wasm-bindgen@0.2.126
-  - Rust: web-sys@0.3.103
+  - Rust: wasm-bindgen-futures@0.4.77
+  - Rust: wasm-bindgen-macro-support@0.2.127
+  - Rust: wasm-bindgen-macro@0.2.127
+  - Rust: wasm-bindgen-shared@0.2.127
+  - Rust: wasm-bindgen@0.2.127
+  - Rust: web-sys@0.3.104
 -------------------------------------------------------------------------------
 Copyright (c) 2014 Alex Crichton
 
@@ -11273,7 +11365,7 @@ DEALINGS IN THE SOFTWARE.
 ===============================================================================
 License text ID: 59871bb1612f8a0569655c10b995636827eceab42c6578cebdc45ad2922e0142
 Used by:
-  - Rust: zcheapstr@1.0.0
+  - Rust: zcheapstr@1.1.0
 -------------------------------------------------------------------------------
 Copyright (c) 2026 Zeeshan Ali Khan & zcheapstr contributors
 
@@ -12387,14 +12479,14 @@ DEALINGS IN THE SOFTWARE.
 ===============================================================================
 License text ID: 6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd
 Used by:
-  - Rust: futures-channel@0.3.33
-  - Rust: futures-core@0.3.33
-  - Rust: futures-executor@0.3.33
-  - Rust: futures-io@0.3.33
-  - Rust: futures-macro@0.3.33
-  - Rust: futures-sink@0.3.33
-  - Rust: futures-task@0.3.33
-  - Rust: futures-util@0.3.33
+  - Rust: futures-channel@0.3.34
+  - Rust: futures-core@0.3.34
+  - Rust: futures-executor@0.3.34
+  - Rust: futures-io@0.3.34
+  - Rust: futures-macro@0.3.34
+  - Rust: futures-sink@0.3.34
+  - Rust: futures-task@0.3.34
+  - Rust: futures-util@0.3.34
 -------------------------------------------------------------------------------
 Copyright (c) 2016 Alex Crichton
 Copyright (c) 2017 The Tokio Authors
@@ -14010,8 +14102,8 @@ SOFTWARE.
 ===============================================================================
 License text ID: 7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545
 Used by:
-  - Rust: serde_with@3.21.0
-  - Rust: serde_with_macros@3.21.0
+  - Rust: serde_with@3.22.0
+  - Rust: serde_with_macros@3.22.0
 -------------------------------------------------------------------------------
 Copyright (c) 2015
 
@@ -14420,7 +14512,7 @@ Creator: Person: Daniel Thompson-Yvetot
 ===============================================================================
 License text ID: 80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e
 Used by:
-  - Rust: android_system_properties@0.1.5
+  - Rust: android_system_properties@0.1.6
 -------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -14474,14 +14566,14 @@ SOFTWARE.
 ===============================================================================
 License text ID: 8337133fbd3cd6b5de6ca9fd048a242a01045f3257add148a03c29f91e51e2b2
 Used by:
-  - Rust: futures-channel@0.3.33
-  - Rust: futures-core@0.3.33
-  - Rust: futures-executor@0.3.33
-  - Rust: futures-io@0.3.33
-  - Rust: futures-macro@0.3.33
-  - Rust: futures-sink@0.3.33
-  - Rust: futures-task@0.3.33
-  - Rust: futures-util@0.3.33
+  - Rust: futures-channel@0.3.34
+  - Rust: futures-core@0.3.34
+  - Rust: futures-executor@0.3.34
+  - Rust: futures-io@0.3.34
+  - Rust: futures-macro@0.3.34
+  - Rust: futures-sink@0.3.34
+  - Rust: futures-task@0.3.34
+  - Rust: futures-util@0.3.34
 -------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -14934,7 +15026,7 @@ License text ID: 86dd7f026f916daf7511e39951ad8ea8cf55a8db67ae64060dacf829761c18f
 Used by:
   - Rust: html5ever@0.38.0
   - Rust: markup5ever@0.38.0
-  - Rust: web_atoms@0.2.5
+  - Rust: web_atoms@0.2.6
 -------------------------------------------------------------------------------
 Copyright (c) 2014 The html5ever Project Developers
 
@@ -15476,7 +15568,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ===============================================================================
 License text ID: 9b1e51075f2956340762ed728426614237690b5b2895cbead9ecd5dc94c4e5af
 Used by:
-  - Rust: cookie@0.18.1
+  - Rust: cookie@0.18.2
 -------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -17151,6 +17243,9 @@ Used by:
   - Rust: bit-set@0.8.0
   - Rust: bit-vec@0.8.0
   - Rust: cfg-expr@0.15.8
+  - Rust: defmt-macros@1.1.1
+  - Rust: defmt-parser@1.0.0
+  - Rust: defmt@1.1.1
 -------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -18000,9 +18095,9 @@ Used by:
   - Rust: syn@2.0.119
   - Rust: syn@3.0.3
   - Rust: thiserror-impl@1.0.69
-  - Rust: thiserror-impl@2.0.19
+  - Rust: thiserror-impl@2.0.20
   - Rust: thiserror@1.0.69
-  - Rust: thiserror@2.0.19
+  - Rust: thiserror@2.0.20
   - Rust: typeid@1.0.3
   - Rust: unicode-ident@1.0.24
   - Rust: wasm-streams@0.5.0
@@ -18352,6 +18447,8 @@ Used by:
   - Rust: miniz_oxide@0.8.9
   - Rust: num-conv@0.2.2
   - Rust: pin-project-lite@0.2.17
+  - Rust: portable-atomic-util@0.2.7
+  - Rust: portable-atomic@1.15.0
   - Rust: raw-window-handle@0.6.2
   - Rust: sync_wrapper@1.0.2
   - Rust: tauri-build@2.6.3
@@ -20676,7 +20773,7 @@ THE SOFTWARE.
 ===============================================================================
 License text ID: f28420c1906af38be726cd7842798f0194b27c41d6051c0d1e9ee348b8a4a0ea
 Used by:
-  - Rust: cookie@0.18.1
+  - Rust: cookie@0.18.2
 -------------------------------------------------------------------------------
 Copyright (c) 2017 Sergio Benitez
 Copyright (c) 2014 Alex Crichton

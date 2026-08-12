@@ -22,6 +22,9 @@ released versions link to their GitHub release.
   without changing the pure timer: after a long active stretch a short micro-idle
   no longer natural-credits; long AFK still prefers quiet natural credit when
   idle; fullscreen is never overridden.
+- Implemented Windows idle (`GetLastInputInfo`) and foreground fullscreen
+  probes (window outer rect vs monitor `rcMonitor`). Windows remains an early
+  build until interactive qualification is recorded.
 
 ## [0.2.0-alpha.1] - 2026-08-11
 

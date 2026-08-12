@@ -46,8 +46,10 @@ orchestration, OS probes, timing, and diagnostics.
   limited to X11: it reads idle from XScreenSaver and fullscreen from EWMH
   `_NET_WM_STATE`; Wayland is unsupported. macOS reads idle from
   `CGEventSourceSecondsSinceLastEventType` and compares the frontmost layer-0
-  window's `kCGWindowBounds` with every active display. Windows has no probes,
-  and unsupported platforms return an error naming themselves.
+  window's `kCGWindowBounds` with every active display. Windows reads idle
+  from `GetLastInputInfo` and compares the foreground window outer rect to the
+  monitor's `rcMonitor` (not the work area). Unsupported platforms return an
+  error naming themselves.
 - Keep platform-independent logic outside the platform arms. The fullscreen
   rectangle comparison is gated with `any(target_os = "macos", test)`. Both
   halves are required: removing the gate trips `dead_code` under Linux clippy;

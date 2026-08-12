@@ -2,6 +2,8 @@
 mod linux;
 #[cfg(any(target_os = "macos", test))]
 mod macos;
+#[cfg(any(target_os = "windows", test))]
+mod windows;
 
 use std::{
     io,
@@ -169,7 +171,12 @@ mod platform_probe {
     pub(super) use super::macos::{active_window_fullscreen, idle_seconds};
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(target_os = "windows")]
+mod platform_probe {
+    pub(super) use super::windows::{active_window_fullscreen, idle_seconds};
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 mod platform_probe {
     pub(super) fn idle_seconds() -> Result<u64, String> {
         Err(format!(
