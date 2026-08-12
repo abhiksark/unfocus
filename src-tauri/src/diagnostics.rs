@@ -49,6 +49,9 @@ fn session_type() -> Option<String> {
     if cfg!(target_os = "macos") {
         return Some("quartz".to_owned());
     }
+    if cfg!(target_os = "windows") {
+        return Some("win32".to_owned());
+    }
 
     environment_value("XDG_SESSION_TYPE")
 }
@@ -57,6 +60,9 @@ fn desktop() -> Option<String> {
     if cfg!(target_os = "macos") {
         return Some("Aqua".to_owned());
     }
+    if cfg!(target_os = "windows") {
+        return Some("Windows".to_owned());
+    }
 
     environment_value("XDG_CURRENT_DESKTOP")
 }
@@ -64,6 +70,9 @@ fn desktop() -> Option<String> {
 fn display() -> Option<String> {
     if cfg!(target_os = "macos") {
         return Some("Quartz Compositor".to_owned());
+    }
+    if cfg!(target_os = "windows") {
+        return Some("Desktop Window Manager".to_owned());
     }
 
     environment_value("DISPLAY")

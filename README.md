@@ -37,7 +37,7 @@ brew install --cask abhiksark/unfocus/unfocus@alpha
 | Platform | Choose | Status and first-run notes |
 | --- | --- | --- |
 | Linux X11 | `.deb` for Debian or Ubuntu, `.rpm` for Fedora or RHEL, or `.AppImage` for a portable build | Qualified; Wayland is unsupported |
-| Windows x64 | Setup `.exe` for a normal install or `.msi` for managed installation | Early build; idle and fullscreen probes are unavailable |
+| Windows x64 | Setup `.exe` for a normal install or `.msi` for managed installation | Early build; idle and fullscreen probes are implemented, interactive qualification pending |
 | macOS Apple silicon | `aarch64.dmg` | Preview; right-click the app and choose **Open** on first launch |
 | macOS Intel | `x64.dmg` | Preview; right-click the app and choose **Open** on first launch |
 
@@ -81,7 +81,7 @@ not just whether a package can be produced.
 | --- | --- | --- |
 | Linux X11 | Qualified | AppIndicator tray where the desktop provides a host, synchronized multi-monitor overlays, XScreenSaver idle detection, and EWMH fullscreen detection |
 | macOS | Preview | Quartz idle and fullscreen probes work interactively; multi-monitor behavior has not completed an acceptance run |
-| Windows | Early build | Packages are produced; idle and fullscreen probes report as unavailable |
+| Windows | Early build | Packages are produced; `GetLastInputInfo` idle and foreground-monitor fullscreen probes are implemented. Interactive multi-monitor qualification is still pending |
 | Linux Wayland | Unsupported | No Wayland probes or acceptance coverage |
 
 On launch, the consumer dashboard leads with the current reminder state, the
