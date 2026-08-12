@@ -1,7 +1,6 @@
 use super::{
     labels::{
-        bounded_overlay_duration, next_overlay_run_id, overlay_deadline_ms, overlay_label,
-        overlay_run_id_from_label, MAX_OVERLAY_MONITORS,
+        next_overlay_run_id, overlay_deadline_ms, overlay_run_id_from_label, plan_overlay_run,
     },
     lifecycle::{OverlayRunLifecycle, OVERLAY_COMPLETION_GRACE},
     OverlayCloseOrigins, OverlayController,
@@ -137,30 +136,19 @@ fn start_overlay(
     // Always perform that operation on the application thread, even when an
     // overlay was requested by a reminder or another background worker.
     let monitors = available_monitors(app)?;
-    if monitors.is_empty() {
-        return Err("Tauri did not report any monitors".into());
-    }
-    if monitors.len() > MAX_OVERLAY_MONITORS {
-        return Err(format!(
-            "Tauri reported {} monitors; overlays support at most {MAX_OVERLAY_MONITORS}",
-            monitors.len()
-        ));
-    }
-
-    let duration_seconds = bounded_overlay_duration(duration_seconds);
     let run_id = next_overlay_run_id();
-    let prefix = format!("overlay-{run_id}-");
-    let total = monitors.len();
-    let starts_at = Instant::now();
     let deadline_ms = overlay_deadline_ms(duration_seconds)?;
-    let completes_at = starts_at + Duration::from_secs(duration_seconds);
+    let plan = plan_overlay_run(run_id, monitors.len(), duration_seconds, deadline_ms)?;
+    let prefix = format!("overlay-{}-", plan.run_id);
+    let total = plan.labels.len();
+    let starts_at = Instant::now();
+    let completes_at = starts_at + Duration::from_secs(plan.duration_seconds);
     let closes_at = completes_at + OVERLAY_COMPLETION_GRACE;
 
-    for (index, monitor) in monitors.iter().enumerate() {
+    for (index, (monitor, label)) in monitors.iter().zip(plan.labels.iter()).enumerate() {
         let scale_factor = monitor.scale_factor();
         let position = monitor.position();
         let size = monitor.size();
-        let label = overlay_label(run_id, index, total, duration_seconds, deadline_ms);
         let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
 
         let build_result =
@@ -187,9 +175,13 @@ fn start_overlay(
                 })
                 .build();
 
+        // Multi-monitor invariant: any single failure rolls back every window
+        // already opened in this run so the desk is never half-covered.
         if let Err(error) = build_result {
             controller.close_windows(app, Some(&prefix), "overlay startup failed");
-            return Err(format!("could not create overlay {index}: {error}"));
+            return Err(format!(
+                "could not create overlay {index} of {total}: {error}"
+            ));
         }
 
         // Native construction can return before the local page has initialized.
@@ -200,21 +192,26 @@ fn start_overlay(
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 controller.close_windows(app, Some(&prefix), "overlay startup failed");
                 return Err(format!(
-                    "overlay {index} did not finish loading within {} seconds",
+                    "overlay {index} of {total} did not finish loading within {} seconds",
                     OVERLAY_WINDOW_READY_TIMEOUT.as_secs()
                 ));
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 controller.close_windows(app, Some(&prefix), "overlay startup failed");
-                return Err(format!("overlay {index} closed before it finished loading"));
+                return Err(format!(
+                    "overlay {index} of {total} closed before it finished loading"
+                ));
             }
         }
     }
 
-    eprintln!("opened overlay run {run_id} on {total} display(s) for {duration_seconds} second(s)");
+    eprintln!(
+        "opened overlay run {} on {total} display(s) for {} second(s)",
+        plan.run_id, plan.duration_seconds
+    );
 
     if let Err(error) = controller.register(OverlayRunLifecycle {
-        run_id,
+        run_id: plan.run_id,
         prefix: prefix.clone(),
         completes_at,
         closes_at,

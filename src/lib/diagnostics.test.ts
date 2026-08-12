@@ -61,10 +61,43 @@ describe("diagnostics presentation", () => {
   });
 
   test("does not guess X11 for unsupported platforms", () => {
-    expect(probeBackend({ ...report, operatingSystem: "windows", sessionType: null })).toBe(
-      "windows (unsupported)"
-    );
-    expect(probeBackend({ ...report, sessionType: "wayland" })).toBe("wayland (unsupported)");
+    expect(
+      probeBackend({
+        ...report,
+        operatingSystem: "windows",
+        sessionType: null,
+        probeBackend: { kind: "unsupported" }
+      })
+    ).toBe("windows (unsupported)");
+    expect(
+      probeBackend({
+        ...report,
+        sessionType: "wayland",
+        probeBackend: { kind: "unsupported" }
+      })
+    ).toBe("wayland (unsupported)");
+  });
+
+  test("labels the Sway candidate from the Rust backend field", () => {
+    expect(
+      probeBackend({
+        ...report,
+        sessionType: "wayland",
+        desktop: "sway",
+        probeBackend: { kind: "sway", version: "1.11", candidate: true }
+      })
+    ).toBe("Sway 1.11 (candidate)");
+  });
+
+  test("labels Win32 when the Rust backend reports it", () => {
+    expect(
+      probeBackend({
+        ...report,
+        operatingSystem: "windows",
+        sessionType: "win32",
+        probeBackend: { kind: "win32" }
+      })
+    ).toBe("Win32");
   });
 
   test("transport failure is unavailable even with a stale report", () => {

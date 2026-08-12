@@ -157,7 +157,64 @@ fn verify_ewmh_support(
 }
 
 #[cfg(target_os = "linux")]
+fn session_type_value() -> Option<String> {
+    std::env::var("XDG_SESSION_TYPE").ok()
+}
+
+/// Dispatch Linux probes by session. X11 remains the only default-qualified path.
+/// Wayland is unsupported unless the opt-in `wayland-sway` candidate is built.
+#[cfg(target_os = "linux")]
 pub(super) fn idle_seconds() -> Result<u64, String> {
+    match session_type_value().as_deref() {
+        Some(session) if session.eq_ignore_ascii_case("x11") => x11_idle_seconds(),
+        Some(session) if session.eq_ignore_ascii_case("wayland") => wayland_idle_seconds(),
+        Some(session) => Err(format!(
+            "Linux {session} sessions are unsupported; probes require a qualified X11 session"
+        )),
+        None => {
+            Err("Linux session type is unavailable; probes require XDG_SESSION_TYPE=x11".into())
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub(super) fn active_window_fullscreen() -> Result<bool, String> {
+    match session_type_value().as_deref() {
+        Some(session) if session.eq_ignore_ascii_case("x11") => x11_active_window_fullscreen(),
+        Some(session) if session.eq_ignore_ascii_case("wayland") => {
+            wayland_active_window_fullscreen()
+        }
+        Some(session) => Err(format!(
+            "Linux {session} sessions are unsupported; probes require a qualified X11 session"
+        )),
+        None => {
+            Err("Linux session type is unavailable; probes require XDG_SESSION_TYPE=x11".into())
+        }
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "wayland-sway"))]
+fn wayland_idle_seconds() -> Result<u64, String> {
+    super::sway::idle_seconds()
+}
+
+#[cfg(all(target_os = "linux", feature = "wayland-sway"))]
+fn wayland_active_window_fullscreen() -> Result<bool, String> {
+    super::sway::active_window_fullscreen()
+}
+
+#[cfg(all(target_os = "linux", not(feature = "wayland-sway")))]
+fn wayland_idle_seconds() -> Result<u64, String> {
+    Err(super::sway::wayland_feature_disabled_error())
+}
+
+#[cfg(all(target_os = "linux", not(feature = "wayland-sway")))]
+fn wayland_active_window_fullscreen() -> Result<bool, String> {
+    Err(super::sway::wayland_feature_disabled_error())
+}
+
+#[cfg(target_os = "linux")]
+fn x11_idle_seconds() -> Result<u64, String> {
     let (connection, screen_number) = connect()?;
     let reply = connection
         .screensaver_query_info(root(&connection, screen_number)?)
@@ -169,7 +226,7 @@ pub(super) fn idle_seconds() -> Result<u64, String> {
 }
 
 #[cfg(target_os = "linux")]
-pub(super) fn active_window_fullscreen() -> Result<bool, String> {
+fn x11_active_window_fullscreen() -> Result<bool, String> {
     let (connection, screen_number) = connect()?;
     let root = root(&connection, screen_number)?;
     let active_window_atom = atom(&connection, b"_NET_ACTIVE_WINDOW")?;

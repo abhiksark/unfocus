@@ -2,6 +2,10 @@
 mod linux;
 #[cfg(any(target_os = "macos", test))]
 mod macos;
+#[cfg(any(target_os = "linux", test))]
+mod sway;
+#[cfg(any(target_os = "windows", test))]
+mod windows;
 
 use std::{
     io,
@@ -16,6 +20,62 @@ const PROBE_STALE_AFTER: Duration = Duration::from_secs(10);
 pub(crate) struct ProbeSnapshot {
     pub(crate) idle_seconds: Result<u64, String>,
     pub(crate) active_window_fullscreen: Result<bool, String>,
+}
+
+/// Discriminated probe backend for diagnostics (never infers support from env alone).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind")]
+#[allow(dead_code)] // variants are selected per target OS
+pub(crate) enum ProbeBackend {
+    #[serde(rename = "x11")]
+    X11,
+    #[serde(rename = "quartz")]
+    Quartz,
+    #[serde(rename = "win32")]
+    Win32,
+    /// Opt-in Sway candidate only (`wayland-sway` feature + runtime gates).
+    #[serde(rename = "sway", rename_all = "camelCase")]
+    Sway { version: String, candidate: bool },
+    #[serde(rename = "unsupported")]
+    Unsupported,
+}
+
+/// Report which probe backend this process is using for the current session.
+pub(crate) fn probe_backend() -> ProbeBackend {
+    #[cfg(target_os = "macos")]
+    {
+        ProbeBackend::Quartz
+    }
+    #[cfg(target_os = "windows")]
+    {
+        ProbeBackend::Win32
+    }
+    #[cfg(target_os = "linux")]
+    {
+        linux_probe_backend()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        ProbeBackend::Unsupported
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_probe_backend() -> ProbeBackend {
+    let session = std::env::var("XDG_SESSION_TYPE").ok();
+    match session.as_deref() {
+        Some(session) if session.eq_ignore_ascii_case("x11") => ProbeBackend::X11,
+        Some(session) if session.eq_ignore_ascii_case("wayland") => {
+            #[cfg(feature = "wayland-sway")]
+            {
+                if let Some((version, candidate)) = sway::backend_label() {
+                    return ProbeBackend::Sway { version, candidate };
+                }
+            }
+            ProbeBackend::Unsupported
+        }
+        _ => ProbeBackend::Unsupported,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -169,7 +229,12 @@ mod platform_probe {
     pub(super) use super::macos::{active_window_fullscreen, idle_seconds};
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(target_os = "windows")]
+mod platform_probe {
+    pub(super) use super::windows::{active_window_fullscreen, idle_seconds};
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 mod platform_probe {
     pub(super) fn idle_seconds() -> Result<u64, String> {
         Err(format!(

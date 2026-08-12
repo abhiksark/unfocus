@@ -37,7 +37,7 @@ brew install --cask abhiksark/unfocus/unfocus@alpha
 | Platform | Choose | Status and first-run notes |
 | --- | --- | --- |
 | Linux X11 | `.deb` for Debian or Ubuntu, `.rpm` for Fedora or RHEL, or `.AppImage` for a portable build | Qualified; Wayland is unsupported |
-| Windows x64 | Setup `.exe` for a normal install or `.msi` for managed installation | Early build; idle and fullscreen probes are unavailable |
+| Windows x64 | Setup `.exe` for a normal install or `.msi` for managed installation | Early build; idle and fullscreen probes are implemented, interactive qualification pending |
 | macOS Apple silicon | `aarch64.dmg` | Preview; right-click the app and choose **Open** on first launch |
 | macOS Intel | `x64.dmg` | Preview; right-click the app and choose **Open** on first launch |
 
@@ -81,11 +81,25 @@ not just whether a package can be produced.
 | --- | --- | --- |
 | Linux X11 | Qualified | AppIndicator tray where the desktop provides a host, synchronized multi-monitor overlays, XScreenSaver idle detection, and EWMH fullscreen detection |
 | macOS | Preview | Quartz idle and fullscreen probes work interactively; multi-monitor behavior has not completed an acceptance run |
-| Windows | Early build | Packages are produced; idle and fullscreen probes report as unavailable |
-| Linux Wayland | Unsupported | No Wayland probes or acceptance coverage |
+| Windows | Early build | Packages are produced; `GetLastInputInfo` idle and foreground-monitor fullscreen probes are implemented. Interactive multi-monitor qualification is still pending |
+| Linux Wayland | Unsupported | Default packages have no Wayland probes. An opt-in `wayland-sway` developer feature scaffolds a Sway 1.11+ candidate only; it is not qualified and must not be described as supported |
 
 On launch, the consumer dashboard leads with the current reminder state, the
-next break, and the saved focus-to-rest rhythm. Timing can be edited inline;
+next break, and the saved focus-to-rest rhythm. Where the idle probe is
+available, a **Your day** card shows a rolling last-24-hour view of continuous
+computer use versus time away from the keyboard (presence only — no keylogging),
+with a half-hour strip and calm empty or probe-unavailable states when samples
+are missing. Gaps under five minutes stay inside continuous work; stretches of
+at least twenty-five minutes of continuous activity are counted as deep blocks.
+Segment history is stored only on this device next to other Unfocus settings,
+pruned to the rolling window, and never uploaded. The same card shows local
+break-outcome counts (shown, natural rest, manual rest, held back for
+fullscreen) for the last day, with a quieter seven-day total. The summary is
+observe-only: it does not pause, skip, or advance the break timer. Scheduled
+break presentation may use that local presence history so a long continuous
+stretch requires a real away period before natural credit, while a long AFK
+still prefers a quiet natural rest when you remain idle; fullscreen still
+suppresses the overlay. Timing can be edited inline;
 expand **Advanced** in that editor and select **Open developer mode** for live
 platform signals, monitor coordinates, raw probe errors, and manual refresh.
 The selected consumer or developer view is remembered on this device.

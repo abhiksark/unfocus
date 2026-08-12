@@ -13,6 +13,28 @@
     type ReminderSettingsValidation
   } from "$lib/reminder-settings";
   import type { ReminderActionCommand, ReminderStatus } from "$lib/reminder-status";
+  import {
+    breakErrorCaption,
+    breakLoadingCaption,
+    breakOutcomeStats,
+    breakSummaryCaption,
+    isBreakDayEmpty,
+    weekBreakCaption,
+    type BreakSummary
+  } from "$lib/break-summary";
+  import {
+    activityFootnote,
+    currentKindLabel,
+    deepBlockCaption,
+    formatActivityDuration,
+    isActivityWindowEmpty,
+    stripActiveHeight,
+    stripAfkHeight,
+    stripAriaLabel,
+    todayErrorCaption,
+    todayLoadingCaption,
+    type TodayActivity
+  } from "$lib/today-activity";
 
   type SettingsResult = "saved" | "reset" | null;
 
@@ -24,6 +46,10 @@
     reminderActionResult: string | null;
     overlayRunning: boolean;
     diagnosticsReady: boolean;
+    todayActivity: TodayActivity | null;
+    todayActivityError: string | null;
+    breakSummary: BreakSummary | null;
+    breakSummaryError: string | null;
     savedSettings: ReminderSettings | null;
     timingEditorExpanded: boolean;
     workMinutesInput: string;
@@ -55,6 +81,10 @@
     reminderActionResult,
     overlayRunning,
     diagnosticsReady,
+    todayActivity,
+    todayActivityError,
+    breakSummary,
+    breakSummaryError,
     savedSettings,
     timingEditorExpanded,
     workMinutesInput,
@@ -106,6 +136,29 @@
       presentation.showResume ||
       reminderActionResult !== null
   );
+  const activityKind = $derived(
+    todayActivity
+      ? currentKindLabel(todayActivity.currentKind, todayActivity.probeAvailable)
+      : todayActivityError
+        ? "Your day unavailable"
+        : "Gathering samples…"
+  );
+  const activityStripLabel = $derived(
+    todayActivity ? stripAriaLabel(todayActivity) : "Activity strip loading"
+  );
+  const activityEmpty = $derived(
+    todayActivity ? isActivityWindowEmpty(todayActivity) : false
+  );
+  const breakStats = $derived(breakSummary ? breakOutcomeStats(breakSummary) : []);
+  const breakDayEmpty = $derived(breakSummary ? isBreakDayEmpty(breakSummary) : false);
+  const breakCaption = $derived(
+    breakSummary
+      ? breakSummaryCaption(breakSummary)
+      : breakSummaryError
+        ? breakErrorCaption(breakSummaryError)
+        : breakLoadingCaption()
+  );
+  const weekCaption = $derived(breakSummary ? weekBreakCaption(breakSummary) : "");
 </script>
 
 <main class="consumer-dashboard">
@@ -161,6 +214,107 @@
         </div>
       </section>
     {/if}
+
+    <section class="today" aria-labelledby="today-title">
+      <div class="today-header">
+        <div>
+          <p class="section-label">Your day</p>
+          <h2 id="today-title">{todayActivity?.windowLabel ?? "Last 24 hours"}</h2>
+          <p class="today-status">{activityKind}</p>
+        </div>
+      </div>
+
+      {#if todayActivity}
+        <div class="today-stats" role="group" aria-label="Activity totals for the rolling window">
+          <div class:is-zero={todayActivity.activeSeconds <= 0}>
+            <span>Active</span>
+            <strong>{formatActivityDuration(todayActivity.activeSeconds)}</strong>
+          </div>
+          <div class:is-zero={todayActivity.afkSeconds <= 0}>
+            <span>Away</span>
+            <strong>{formatActivityDuration(todayActivity.afkSeconds)}</strong>
+          </div>
+          <div class:is-zero={todayActivity.longestActiveSeconds <= 0}>
+            <span>Longest stretch</span>
+            <strong>{formatActivityDuration(todayActivity.longestActiveSeconds)}</strong>
+          </div>
+          <div class:is-zero={todayActivity.deepBlockCount <= 0}>
+            <span>Deep work</span>
+            <strong>{todayActivity.deepBlockCount}</strong>
+            <small
+              >{deepBlockCaption(
+                todayActivity.deepBlockCount,
+                todayActivity.deepBlockMinSeconds
+              )}</small
+            >
+          </div>
+        </div>
+
+        <div class="today-strip-block">
+          <div class="today-strip" role="img" aria-label={activityStripLabel}>
+            {#each todayActivity.strip as bucket, index (index)}
+              <div class="strip-bucket" aria-hidden="true">
+                <span
+                  class="strip-afk"
+                  style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
+                ></span>
+                <span
+                  class="strip-active"
+                  style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
+                ></span>
+              </div>
+            {/each}
+          </div>
+          <ul class="strip-legend" aria-hidden="true">
+            <li><span class="legend-swatch legend-active"></span> Active</li>
+            <li><span class="legend-swatch legend-afk"></span> Away</li>
+          </ul>
+        </div>
+
+        {#if activityEmpty}
+          <p class="today-footnote" role="status">
+            No active or away time classified in this window yet.
+          </p>
+        {/if}
+        <p class="today-footnote">{activityFootnote(todayActivity.afkThresholdSeconds)}</p>
+      {:else if todayActivityError}
+        <p class="today-error" role="status">{todayErrorCaption(todayActivityError)}</p>
+      {:else}
+        <p class="today-footnote" role="status">{todayLoadingCaption()}</p>
+      {/if}
+
+      <div class="break-history" aria-labelledby="break-history-title">
+        <div class="break-history-header">
+          <p class="section-label" id="break-history-title">Break outcomes</p>
+          {#if breakSummary}
+            <p class="break-window">{breakSummary.windowLabel}</p>
+          {/if}
+        </div>
+        {#if breakSummary}
+          <div
+            class="break-counts"
+            class:is-empty={breakDayEmpty}
+            role="group"
+            aria-label="Break outcome counts for the last day"
+          >
+            {#each breakStats as stat (stat.kind)}
+              <div class:is-zero={stat.count <= 0} title={stat.hint}>
+                <span>{stat.label}</span>
+                <strong aria-label={`${stat.count} ${stat.label.toLowerCase()}. ${stat.hint}`}
+                  >{stat.count}</strong
+                >
+              </div>
+            {/each}
+          </div>
+          <p class="today-footnote">{breakCaption}</p>
+          <p class="today-footnote today-footnote-secondary">{weekCaption}</p>
+        {:else if breakSummaryError}
+          <p class="today-error" role="status">{breakErrorCaption(breakSummaryError)}</p>
+        {:else}
+          <p class="today-footnote" role="status">{breakLoadingCaption()}</p>
+        {/if}
+      </div>
+    </section>
 
     <section class="rhythm" aria-labelledby="rhythm-title">
       <div>
@@ -400,12 +554,238 @@
   }
 
   .actions,
+  .today,
   .rhythm,
   .preview,
   .warning {
     border: 1px solid #27332b;
     border-radius: 15px;
     background: rgba(18, 25, 20, 0.92);
+  }
+
+  .today {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    gap: 14px;
+    padding: 15px 17px 16px;
+  }
+
+  .today-header h2 {
+    margin-bottom: 4px;
+    font-size: 1.02rem;
+    font-weight: 620;
+    letter-spacing: -0.015em;
+  }
+
+  .today-status {
+    margin: 0;
+    color: #a8b7ac;
+    font-size: 0.78rem;
+  }
+
+  .today-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .today-stats div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 11px;
+    border: 1px solid #2b372e;
+    border-radius: 11px;
+    background: #0f1612;
+  }
+
+  .today-stats span {
+    color: #8f9d94;
+    font-size: 0.68rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .today-stats strong {
+    color: #e7f0e9;
+    font-size: 1.05rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+  }
+
+  .today-stats small {
+    color: #8f9d94;
+    font-size: 0.66rem;
+    line-height: 1.35;
+  }
+
+  .today-stats .is-zero strong,
+  .break-counts .is-zero strong {
+    color: #6f7c73;
+    font-weight: 550;
+  }
+
+  .today-stats .is-zero,
+  .break-counts .is-zero {
+    border-color: #243029;
+    background: rgba(12, 18, 14, 0.72);
+  }
+
+  .today-strip-block {
+    display: grid;
+    gap: 6px;
+  }
+
+  .today-strip {
+    display: grid;
+    grid-template-columns: repeat(48, minmax(0, 1fr));
+    align-items: end;
+    gap: 2px;
+    height: 52px;
+    padding: 8px 6px 4px;
+    border: 1px solid #2b372e;
+    border-radius: 11px;
+    background:
+      linear-gradient(180deg, rgba(17, 28, 22, 0.2), rgba(8, 12, 10, 0.55)),
+      #0c130f;
+  }
+
+  .strip-bucket {
+    position: relative;
+    display: flex;
+    height: 100%;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .strip-active,
+  .strip-afk {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    min-height: 0;
+    border-radius: 2px 2px 0 0;
+  }
+
+  .strip-afk {
+    background: rgba(120, 99, 58, 0.55);
+  }
+
+  .strip-active {
+    background: #6fbf86;
+  }
+
+  .strip-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: #8f9d94;
+    font-size: 0.66rem;
+  }
+
+  .strip-legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-swatch {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+  }
+
+  .legend-active {
+    background: #6fbf86;
+  }
+
+  .legend-afk {
+    background: rgba(120, 99, 58, 0.75);
+  }
+
+  .today-footnote,
+  .today-error {
+    margin: 0;
+    color: #8f9d94;
+    font-size: 0.7rem;
+    line-height: 1.45;
+  }
+
+  .today-footnote-secondary {
+    color: #7a8880;
+    font-size: 0.66rem;
+  }
+
+  .today-error {
+    color: #ffc4c4;
+  }
+
+  .break-history {
+    display: grid;
+    gap: 10px;
+    border-top: 1px solid #2b372e;
+    padding-top: 14px;
+  }
+
+  .break-history-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px 12px;
+  }
+
+  .break-history .section-label {
+    margin-bottom: 0;
+  }
+
+  .break-window {
+    margin: 0;
+    color: #8f9d94;
+    font-size: 0.68rem;
+  }
+
+  .break-counts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .break-counts.is-empty {
+    opacity: 0.72;
+  }
+
+  .break-counts div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    border: 1px solid #2b372e;
+    border-radius: 10px;
+    background: #0f1612;
+  }
+
+  .break-counts span {
+    color: #8f9d94;
+    font-size: 0.66rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .break-counts strong {
+    color: #e7f0e9;
+    font-size: 1rem;
+    font-weight: 650;
   }
 
   .actions {
@@ -440,7 +820,7 @@
 
   .rhythm {
     grid-column: 1 / -1;
-    grid-row: 2;
+    grid-row: 3;
   }
 
   .preview {
@@ -673,11 +1053,17 @@
       grid-row: 1;
     }
 
+    .today,
     .rhythm,
     .preview,
     .warning {
       grid-column: 1;
       grid-row: auto;
+    }
+
+    .today-stats,
+    .break-counts {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .duration-fields {
@@ -689,6 +1075,11 @@
     .rhythm,
     .preview,
     .warning {
+      grid-template-columns: 1fr;
+    }
+
+    .today-stats,
+    .break-counts {
       grid-template-columns: 1fr;
     }
 

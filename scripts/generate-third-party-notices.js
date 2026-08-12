@@ -36,7 +36,16 @@ function licenseFiles(directory, declaredFile) {
 }
 
 const cargo = Bun.spawnSync(
-  ["cargo", "metadata", "--manifest-path", "src-tauri/Cargo.toml", "--locked", "--format-version", "1"],
+  [
+    "cargo",
+    "metadata",
+    "--manifest-path",
+    "src-tauri/Cargo.toml",
+    "--locked",
+    "--all-features",
+    "--format-version",
+    "1"
+  ],
   { cwd: root, stdout: "pipe", stderr: "pipe" }
 );
 if (cargo.exitCode !== 0) {

@@ -22,6 +22,8 @@
     type ReminderActionCommand,
     type ReminderStatus
   } from "$lib/reminder-status";
+  import type { BreakSummary } from "$lib/break-summary";
+  import type { TodayActivity } from "$lib/today-activity";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
@@ -53,6 +55,10 @@
   let reminderActionPending = $state<ReminderActionCommand | null>(null);
   let reminderActionResult = $state<string | null>(null);
   let reminderRefreshGeneration = 0;
+  let todayActivity = $state<TodayActivity | null>(null);
+  let todayActivityError = $state<string | null>(null);
+  let breakSummary = $state<BreakSummary | null>(null);
+  let breakSummaryError = $state<string | null>(null);
 
   function errorMessage(value: unknown): string {
     return value instanceof Error ? value.message : String(value);
@@ -100,9 +106,11 @@
     if (refreshing) return;
     refreshing = true;
     const reminderGeneration = reminderRefreshGeneration;
-    const [diagnostics, reminder] = await Promise.allSettled([
+    const [diagnostics, reminder, activity, breaks] = await Promise.allSettled([
       invoke<DiagnosticsReport>("get_diagnostics"),
-      invoke<ReminderStatus>("get_reminder_status")
+      invoke<ReminderStatus>("get_reminder_status"),
+      invoke<TodayActivity>("get_today_activity"),
+      invoke<BreakSummary>("get_break_summary")
     ]);
 
     if (diagnostics.status === "fulfilled") {
@@ -126,6 +134,18 @@
       reminderGeneration === reminderRefreshGeneration
     ) {
       reminderStatusError = errorMessage(reminder.reason);
+    }
+    if (activity.status === "fulfilled") {
+      todayActivity = activity.value;
+      todayActivityError = null;
+    } else {
+      todayActivityError = errorMessage(activity.reason);
+    }
+    if (breaks.status === "fulfilled") {
+      breakSummary = breaks.value;
+      breakSummaryError = null;
+    } else {
+      breakSummaryError = errorMessage(breaks.reason);
     }
     refreshing = false;
   }
@@ -370,6 +390,10 @@
     {reminderActionResult}
     {overlayRunning}
     diagnosticsReady={report !== null}
+    {todayActivity}
+    {todayActivityError}
+    {breakSummary}
+    {breakSummaryError}
     {savedSettings}
     {timingEditorExpanded}
     {workMinutesInput}

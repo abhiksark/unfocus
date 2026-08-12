@@ -1,11 +1,18 @@
+mod activity;
+mod break_ledger;
 mod diagnostics;
 #[cfg(desktop)]
 mod instance;
+/// Pure lifecycle/a11y product contract for issue #30 (compiled with unit tests).
+#[cfg(test)]
+mod lifecycle_contract;
 mod overlay;
 mod probes;
 mod reminder;
 mod tray;
 
+use activity::{get_today_activity, ActivityTrackerHandle};
+use break_ledger::{get_break_summary, BreakLedgerHandle};
 use diagnostics::get_diagnostics;
 #[cfg(desktop)]
 use instance::handle_secondary_launch;
@@ -44,8 +51,18 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            let settings_manager = ReminderSettingsManager::load(&app.path().app_config_dir()?)?;
+            let config_dir = app.path().app_config_dir()?;
+            let settings_manager = ReminderSettingsManager::load(&config_dir)?;
             let probe_cache = ProbeCache::start()?;
+            let activity_tracker =
+                ActivityTrackerHandle::load(&config_dir).unwrap_or_else(|error| {
+                    eprintln!("could not load activity history: {error}; starting empty");
+                    ActivityTrackerHandle::default()
+                });
+            let break_ledger = BreakLedgerHandle::load(&config_dir).unwrap_or_else(|error| {
+                eprintln!("could not load break event ledger: {error}; starting empty");
+                BreakLedgerHandle::default()
+            });
             let overlay_controller = OverlayController::start(app.handle().clone())?;
             let tray_status = TrayStatus::default();
             if !app.manage(settings_manager.clone()) {
@@ -53,6 +70,12 @@ pub fn run() {
             }
             if !app.manage(probe_cache.clone()) {
                 return Err(io::Error::other("probe cache was already managed").into());
+            }
+            if !app.manage(activity_tracker.clone()) {
+                return Err(io::Error::other("activity tracker was already managed").into());
+            }
+            if !app.manage(break_ledger.clone()) {
+                return Err(io::Error::other("break event ledger was already managed").into());
             }
             if !app.manage(overlay_controller.clone()) {
                 return Err(io::Error::other("overlay controller was already managed").into());
@@ -63,6 +86,8 @@ pub fn run() {
             let reminder_control = start_reminder_scheduler(
                 app.handle().clone(),
                 probe_cache,
+                activity_tracker,
+                break_ledger,
                 overlay_controller.clone(),
                 settings_manager,
                 tray_status.clone(),
@@ -109,6 +134,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_diagnostics,
+            get_today_activity,
+            get_break_summary,
             get_reminder_settings,
             get_reminder_status,
             save_reminder_settings,

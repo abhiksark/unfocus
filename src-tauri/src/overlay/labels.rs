@@ -104,10 +104,58 @@ pub(super) fn authorize_overlay_close_caller(
     }
 }
 
+/// Pure multi-monitor plan for one overlay run (issue #30 topology contract).
+/// Does not talk to the OS; used by tests to pin label uniqueness and shared
+/// run identity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct OverlayRunPlan {
+    pub(super) run_id: u64,
+    pub(super) duration_seconds: u64,
+    pub(super) deadline_ms: u64,
+    pub(super) labels: Vec<String>,
+}
+
+/// Build the full set of window labels for `monitor_count` displays.
+///
+/// Rejects empty topologies and counts above [`MAX_OVERLAY_MONITORS`]. Every
+/// label shares the same run id, duration, and absolute deadline.
+pub(super) fn plan_overlay_run(
+    run_id: u64,
+    monitor_count: usize,
+    duration_seconds: u64,
+    deadline_ms: u64,
+) -> Result<OverlayRunPlan, String> {
+    if monitor_count == 0 {
+        return Err("Tauri did not report any monitors".into());
+    }
+    if monitor_count > MAX_OVERLAY_MONITORS {
+        return Err(format!(
+            "Tauri reported {monitor_count} monitors; overlays support at most {MAX_OVERLAY_MONITORS}"
+        ));
+    }
+    if run_id == 0 || run_id > JAVASCRIPT_MAX_SAFE_INTEGER {
+        return Err("overlay run id is outside the safe integer range".into());
+    }
+    if deadline_ms == 0 || deadline_ms > JAVASCRIPT_MAX_SAFE_INTEGER {
+        return Err("overlay deadline is outside the safe integer range".into());
+    }
+    let duration_seconds = bounded_overlay_duration(duration_seconds);
+    let labels = (0..monitor_count)
+        .map(|index| overlay_label(run_id, index, monitor_count, duration_seconds, deadline_ms))
+        .collect();
+    Ok(OverlayRunPlan {
+        run_id,
+        duration_seconds,
+        deadline_ms,
+        labels,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::authorize_main_caller;
+    use std::collections::HashSet;
 
     #[test]
     fn overlay_run_labels_are_parsed_strictly() {
@@ -163,5 +211,56 @@ mod tests {
             overlay_label(7, 1, 2, 20, 1_800_000_000_000),
             "overlay-7-1-2-20-1800000000000"
         );
+    }
+
+    #[test]
+    fn multi_monitor_plans_share_run_id_and_deadline_without_duplicates() {
+        let plan = plan_overlay_run(9, 3, 20, 1_800_000_000_000).expect("valid topology");
+        assert_eq!(plan.labels.len(), 3);
+        assert_eq!(
+            plan.labels,
+            vec![
+                "overlay-9-0-3-20-1800000000000".to_owned(),
+                "overlay-9-1-3-20-1800000000000".to_owned(),
+                "overlay-9-2-3-20-1800000000000".to_owned(),
+            ]
+        );
+        let unique: HashSet<_> = plan.labels.iter().collect();
+        assert_eq!(unique.len(), 3);
+        for label in &plan.labels {
+            assert_eq!(overlay_run_id_from_label(label), Some(9));
+        }
+    }
+
+    #[test]
+    fn multi_monitor_plans_reject_empty_and_oversized_topologies() {
+        assert!(plan_overlay_run(1, 0, 20, 1_800_000_000_000).is_err());
+        assert!(plan_overlay_run(1, MAX_OVERLAY_MONITORS + 1, 20, 1_800_000_000_000).is_err());
+        let max = plan_overlay_run(2, MAX_OVERLAY_MONITORS, 8, 1_800_000_000_000).expect("max");
+        assert_eq!(max.labels.len(), MAX_OVERLAY_MONITORS);
+        assert_eq!(max.duration_seconds, 8);
+    }
+
+    #[test]
+    fn multi_monitor_plans_clamp_duration_and_reject_unsafe_ids() {
+        let clamped = plan_overlay_run(3, 1, 300, 1_800_000_000_000).expect("clamped");
+        assert_eq!(clamped.duration_seconds, MAX_OVERLAY_DURATION_SECONDS);
+        assert!(plan_overlay_run(0, 1, 20, 1_800_000_000_000).is_err());
+        assert!(plan_overlay_run(1, 1, 20, 0).is_err());
+        assert!(
+            plan_overlay_run(JAVASCRIPT_MAX_SAFE_INTEGER + 1, 1, 20, 1_800_000_000_000).is_err()
+        );
+    }
+
+    #[test]
+    fn mixed_scale_or_negative_origin_does_not_change_label_identity() {
+        // Geometry is applied at window creation; the pure plan only depends on
+        // count and shared deadline so mixed DPI / negative x,y cannot fork run ids.
+        let left_of_origin = plan_overlay_run(4, 2, 20, 1_700_000_000_000).expect("two");
+        let after_hotplug_add = plan_overlay_run(4, 3, 20, 1_700_000_000_000).expect("three");
+        assert_eq!(left_of_origin.run_id, after_hotplug_add.run_id);
+        assert_eq!(left_of_origin.deadline_ms, after_hotplug_add.deadline_ms);
+        // Mid-run we never apply a new plan; a new plan is only for the next break.
+        assert_ne!(left_of_origin.labels.len(), after_hotplug_add.labels.len());
     }
 }
