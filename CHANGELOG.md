@@ -7,6 +7,11 @@ released versions link to their GitHub release.
 
 ### Added
 
+- Added slow drift and twinkle to the break scene's stars. The sky now holds
+  24 slightly brighter stars, each stepping through its own baked 10-18 second
+  cadence on the scene's existing 2-4 second repaint rhythm, and the starfield
+  fades as the dawn state gathers. Reduced-motion preferences stop the motion
+  entirely, leaving the stars at their resting brightness.
 - Added a full multi-platform [install guide](docs/install.md): package choice,
   checksum and provenance verification, Linux (deb/rpm/AppImage, X11 session
   and tray notes), macOS (DMG/Homebrew and Gatekeeper), Windows (setup/MSI and
