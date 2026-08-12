@@ -428,6 +428,7 @@
     --ink-3: #7f8d85;
     --accent: #7fd79a;
     --accent-ink: #07130b;
+    --accent-hover: #98e5aa;
     --away: #7a93a8;
     --warn: #d9b573;
 
@@ -437,7 +438,6 @@
     --s4: 16px;
     --s5: 24px;
     --s6: 32px;
-    --s7: 48px;
 
     --r-control: 8px;
     --r-button: 999px;

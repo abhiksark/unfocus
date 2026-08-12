@@ -4,6 +4,7 @@
     type ConsumerReminderPresentation,
     type ConsumerWarning
   } from "$lib/consumer-dashboard";
+  import { DASHBOARD_REMINDER_ACTIONS_LABEL } from "$lib/dashboard-a11y";
   import {
     MAX_BREAK_SECONDS,
     MAX_WORK_MINUTES,
@@ -188,7 +189,7 @@
     </div>
 
     {#if hasReminderActions}
-      <div class="cta">
+      <section class="cta" aria-label={DASHBOARD_REMINDER_ACTIONS_LABEL}>
         {#if presentation.showTakeBreak}
           <button
             class="btn-primary"
@@ -212,7 +213,7 @@
         <div class="action-feedback t-micro" aria-live="polite">
           {reminderActionResult ?? ""}
         </div>
-      </div>
+      </section>
     {/if}
   </section>
 
@@ -471,8 +472,6 @@
   .top {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--s4);
   }
 
   .mark {
@@ -599,6 +598,10 @@
     font-weight: 600;
   }
 
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+
   .btn-ghost {
     border: 1px solid var(--line-2);
     padding: 11px 18px;
@@ -609,7 +612,7 @@
   }
 
   .btn-ghost:hover:not(:disabled) {
-    border-color: #3b4b42;
+    border-color: var(--ink-3);
     color: var(--ink);
   }
 
