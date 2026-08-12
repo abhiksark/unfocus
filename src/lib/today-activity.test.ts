@@ -8,6 +8,7 @@ import {
   stripActiveHeight,
   stripAfkHeight,
   stripAriaLabel,
+  stripAxisTicks,
   todayErrorCaption,
   todayLoadingCaption,
   type TodayActivity
@@ -95,5 +96,78 @@ describe("today activity presentation", () => {
     expect(stripActiveHeight({ activeRatio: 1.4, afkRatio: 0 })).toBe(1);
     expect(stripAfkHeight({ activeRatio: 0, afkRatio: -0.2 })).toBe(0);
     expect(stripActiveHeight({ activeRatio: 0.5, afkRatio: 0.5 })).toBe(0.5);
+  });
+});
+
+describe("stripAxisTicks", () => {
+  const DAY_SECONDS = 86_400;
+  // Mid-January carries no daylight-saving transition in common zones, so the
+  // tick count is the same in CI (UTC) and on a developer machine.
+  const JANUARY_NOON_MS = Date.parse("2026-01-15T12:00:00Z");
+
+  test("marks six four-hour ticks across a day window", () => {
+    expect(stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS)).toHaveLength(6);
+  });
+
+  test("lands every tick on a four-hour local boundary", () => {
+    for (const tick of stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS)) {
+      const at = new Date(tick.timestampMs);
+      expect(at.getHours() % 4).toBe(0);
+      expect(at.getMinutes()).toBe(0);
+      expect(at.getSeconds()).toBe(0);
+    }
+  });
+
+  test("orders ticks left to right inside the window", () => {
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS);
+    const startMs = JANUARY_NOON_MS - DAY_SECONDS * 1_000;
+    let previous = -1;
+    for (const tick of ticks) {
+      expect(tick.positionPercent).toBeGreaterThan(previous);
+      previous = tick.positionPercent;
+      expect(tick.positionPercent).toBeGreaterThanOrEqual(0);
+      expect(tick.positionPercent).toBeLessThanOrEqual(100);
+      expect(tick.timestampMs).toBeGreaterThanOrEqual(startMs);
+      expect(tick.timestampMs).toBeLessThan(JANUARY_NOON_MS);
+    }
+  });
+
+  test("suppresses a label that would collide with the now anchor", () => {
+    const base = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS);
+    const lastBoundaryMs = base[base.length - 1].timestampMs;
+    // Ending the window 30 minutes past a boundary puts that tick at ~97.9%.
+    const ticks = stripAxisTicks(DAY_SECONDS, lastBoundaryMs + 30 * 60 * 1_000);
+    const final = ticks[ticks.length - 1];
+
+    expect(final.timestampMs).toBe(lastBoundaryMs);
+    expect(final.positionPercent).toBeGreaterThan(94);
+    expect(final.showLabel).toBe(false);
+    expect(ticks.filter((tick) => tick.showLabel)).toHaveLength(ticks.length - 1);
+  });
+
+  test("keeps a daylight-saving length window in range", () => {
+    const ticks = stripAxisTicks(25 * 60 * 60, JANUARY_NOON_MS);
+
+    expect(ticks.length).toBeGreaterThanOrEqual(6);
+    expect(ticks.length).toBeLessThanOrEqual(7);
+    expect(new Set(ticks.map((tick) => tick.timestampMs)).size).toBe(ticks.length);
+    for (const tick of ticks) {
+      expect(tick.positionPercent).toBeGreaterThanOrEqual(0);
+      expect(tick.positionPercent).toBeLessThanOrEqual(100);
+    }
+  });
+
+  test("returns nothing for an unusable window or clock", () => {
+    expect(stripAxisTicks(0, JANUARY_NOON_MS)).toEqual([]);
+    expect(stripAxisTicks(-1, JANUARY_NOON_MS)).toEqual([]);
+    expect(stripAxisTicks(Number.NaN, JANUARY_NOON_MS)).toEqual([]);
+    expect(stripAxisTicks(DAY_SECONDS, Number.NaN)).toEqual([]);
+    expect(stripAxisTicks(DAY_SECONDS, Number.POSITIVE_INFINITY)).toEqual([]);
+  });
+
+  test("labels every tick with localized text", () => {
+    for (const tick of stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS)) {
+      expect(tick.label.length).toBeGreaterThan(0);
+    }
   });
 });
