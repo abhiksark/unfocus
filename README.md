@@ -82,7 +82,7 @@ not just whether a package can be produced.
 | Linux X11 | Qualified | AppIndicator tray where the desktop provides a host, synchronized multi-monitor overlays, XScreenSaver idle detection, and EWMH fullscreen detection |
 | macOS | Preview | Quartz idle and fullscreen probes work interactively; multi-monitor behavior has not completed an acceptance run |
 | Windows | Early build | Packages are produced; `GetLastInputInfo` idle and foreground-monitor fullscreen probes are implemented. Interactive multi-monitor qualification is still pending |
-| Linux Wayland | Unsupported | No Wayland probes or acceptance coverage |
+| Linux Wayland | Unsupported | Default packages have no Wayland probes. An opt-in `wayland-sway` developer feature scaffolds a Sway 1.11+ candidate only; it is not qualified and must not be described as supported |
 
 On launch, the consumer dashboard leads with the current reminder state, the
 next break, and the saved focus-to-rest rhythm. Where the idle probe is

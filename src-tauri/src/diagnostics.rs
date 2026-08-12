@@ -1,6 +1,6 @@
 use crate::{
     authorize_main_caller,
-    probes::ProbeCache,
+    probes::{probe_backend, ProbeBackend, ProbeCache},
     tray::{TrayDiagnostics, TrayRuntime},
 };
 use serde::Serialize;
@@ -33,6 +33,7 @@ pub(crate) struct DiagnosticsReport {
     idle_error: Option<String>,
     active_window_fullscreen: Option<bool>,
     fullscreen_error: Option<String>,
+    probe_backend: ProbeBackend,
     tray: TrayDiagnostics,
 }
 
@@ -150,6 +151,7 @@ pub(crate) fn get_diagnostics(
         idle_error,
         active_window_fullscreen,
         fullscreen_error,
+        probe_backend: probe_backend(),
         tray: tray_runtime.diagnostics(),
     })
 }

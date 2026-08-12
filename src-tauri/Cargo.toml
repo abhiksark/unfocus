@@ -16,6 +16,12 @@ publish = false
 name = "unfocus_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = []
+# Opt-in Sway 1.11+ Wayland candidate (issue #25). Off in packaged builds.
+# Does not claim multi-monitor or release qualification.
+wayland-sway = ["dep:wayland-client", "dep:wayland-protocols", "dep:rustix"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -29,6 +35,13 @@ tauri-plugin-single-instance = "2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = { version = "0.14", features = ["screensaver"] }
+# Optional: enabled only by the wayland-sway feature on Linux targets.
+rustix = { version = "1", default-features = false, features = ["process", "std"], optional = true }
+wayland-client = { version = "0.31", optional = true }
+wayland-protocols = { version = "0.32", default-features = false, features = [
+  "client",
+  "staging",
+], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-graphics = "0.3"

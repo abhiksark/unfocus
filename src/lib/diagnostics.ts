@@ -7,6 +7,14 @@ export type MonitorReport = {
   scaleFactor: number;
 };
 
+/** Discriminated backend from Rust; never invent support from environment alone. */
+export type ProbeBackend =
+  | { kind: "x11" }
+  | { kind: "quartz" }
+  | { kind: "win32" }
+  | { kind: "sway"; version: string; candidate: boolean }
+  | { kind: "unsupported" };
+
 export type DiagnosticsReport = {
   operatingSystem: string;
   sessionType: string | null;
@@ -18,6 +26,8 @@ export type DiagnosticsReport = {
   idleError: string | null;
   activeWindowFullscreen: boolean | null;
   fullscreenError: string | null;
+  /** Present on current builds; older reports may omit it. */
+  probeBackend?: ProbeBackend | null;
   tray: {
     available: boolean;
     error: string | null;
@@ -59,7 +69,30 @@ export function diagnosticsHealthLabel(health: DiagnosticsHealth): string {
 
 export function probeBackend(report: DiagnosticsReport | null): string {
   if (!report) return "native probes";
+
+  const backend = report.probeBackend;
+  if (backend) {
+    switch (backend.kind) {
+      case "x11":
+        return "X11";
+      case "quartz":
+        return "Quartz";
+      case "win32":
+        return "Win32";
+      case "sway":
+        return backend.candidate
+          ? `Sway ${backend.version} (candidate)`
+          : `Sway ${backend.version}`;
+      case "unsupported": {
+        const platform = report.sessionType?.trim() || report.operatingSystem;
+        return `${platform} (unsupported)`;
+      }
+    }
+  }
+
+  // Fallback for older reports without probeBackend.
   if (report.operatingSystem === "macos") return "Quartz";
+  if (report.operatingSystem === "windows") return "Win32";
   if (
     report.operatingSystem === "linux" &&
     report.sessionType?.trim().toLowerCase() === "x11"

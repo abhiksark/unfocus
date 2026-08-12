@@ -74,7 +74,10 @@ plans/            Local working notes only (gitignored; not tracked docs)
 
 - Linux X11 is the only qualified backend. macOS idle and fullscreen probes
   have been verified interactively but have not passed a multi-monitor
-  acceptance run. Wayland is unsupported, and Windows has no probes. Never
+  acceptance run. Wayland remains unsupported in default packages; an opt-in
+  `wayland-sway` Cargo feature scaffolds a Sway 1.11+ candidate only and must
+  not be described as qualified. Windows has idle and fullscreen probes in
+  code, with interactive multi-monitor qualification still pending. Never
   describe a platform more strongly than that evidence permits.
 - IMPORTANT: an unavailable or failing OS probe returns an error for that
   poll, appears in diagnostics, and leaves the break timer running. It must
