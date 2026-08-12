@@ -40,19 +40,63 @@ export function formatActivityDuration(totalSeconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
+/**
+ * Live status under the Your day title.
+ * Distinct for probe-down vs unknown classification vs active/away.
+ */
 export function currentKindLabel(kind: ActivityKind | null, probeAvailable: boolean): string {
-  if (!probeAvailable || kind === null || kind === "unknown") {
-    return "Idle probe unavailable";
-  }
+  if (!probeAvailable) return "Presence probe unavailable";
+  if (kind === null || kind === "unknown") return "Waiting for presence samples";
   if (kind === "active") return "At the keyboard";
-  return "Away";
+  return "Away from the keyboard";
 }
 
+/**
+ * Secondary line under the deep-work count.
+ * Does not repeat the count already shown as the primary figure.
+ */
 export function deepBlockCaption(count: number, minSeconds: number): string {
   const threshold = formatActivityDuration(minSeconds);
-  if (count === 0) return `No deep blocks yet (≥${threshold})`;
-  if (count === 1) return `1 deep block (≥${threshold})`;
-  return `${count} deep blocks (≥${threshold})`;
+  if (count === 0) return `None yet · ≥${threshold} continuous`;
+  return `≥${threshold} continuous`;
+}
+
+/** Privacy and threshold footnote under the strip. */
+export function activityFootnote(afkThresholdSeconds: number): string {
+  return `Keyboard and mouse presence only · gaps under ${formatActivityDuration(
+    afkThresholdSeconds
+  )} stay in continuous work · nothing is keylogged`;
+}
+
+/** Loading copy before the first native summary arrives. */
+export function todayLoadingCaption(): string {
+  return "Collecting presence samples from this session…";
+}
+
+/**
+ * Calm error copy. Prefer a short status; keep a technical detail only when it
+ * adds something the user can act on (not a raw dump of every internal path).
+ */
+export function todayErrorCaption(error: string | null): string {
+  if (!error || !error.trim()) {
+    return "Your day is unavailable right now. The break timer is unaffected.";
+  }
+  const trimmed = error.trim();
+  // Surface short native messages; clamp long stack-like strings.
+  if (trimmed.length <= 160) {
+    return `${trimmed} The break timer is unaffected.`;
+  }
+  return "Your day is unavailable right now. The break timer is unaffected.";
+}
+
+/**
+ * True when the window has no classified active or away time yet.
+ * Unknown-only windows still show the card structure with empty-feeling totals.
+ */
+export function isActivityWindowEmpty(
+  activity: Pick<TodayActivity, "activeSeconds" | "afkSeconds">
+): boolean {
+  return activity.activeSeconds <= 0 && activity.afkSeconds <= 0;
 }
 
 /**

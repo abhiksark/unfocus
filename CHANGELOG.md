@@ -30,6 +30,12 @@ released versions link to their GitHub release.
   positive runtime gates). Default packages still treat Wayland as unsupported;
   no multi-monitor or release qualification is claimed.
 
+### Changed
+
+- Polished the consumer **Your day** and **Break outcomes** card: clearer
+  loading, empty, and error copy; muted zero counts; strip legend; less
+  redundant captions. Still observe-only with no timer control.
+
 ## [0.2.0-alpha.1] - 2026-08-11
 
 ### Added
