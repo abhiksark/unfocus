@@ -39,6 +39,10 @@ as `export let` or `$:` reactive statements.
   `get_today_activity`. Keep copy observational (active / away / deep blocks);
   no streaks, badges, or gamification. Empty, loading, probe-unavailable, and
   error captions stay distinct and note that the timer is unaffected.
+- The strip's time axis derives client-side: `stripAxisTicks` converts the
+  payload's `windowSeconds` and the render-time clock into round-hour ticks, so
+  no timestamp crosses the Rust boundary. Labels use `Intl.DateTimeFormat` with
+  the system locale; never hardcode a 12- or 24-hour format.
 - The strip is presence-only (OS idle). Never request or display keylogging.
 - `break-summary.ts` formats calm counts from `get_break_summary`. Day captions
   must not re-list the grid counts; mute zeros in the UI rather than inventing

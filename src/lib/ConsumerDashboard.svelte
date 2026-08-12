@@ -32,6 +32,7 @@
     stripActiveHeight,
     stripAfkHeight,
     stripAriaLabel,
+    stripAxisTicks,
     todayErrorCaption,
     todayLoadingCaption,
     type TodayActivity
@@ -155,6 +156,9 @@
   const activityStripLabel = $derived(
     todayActivity ? stripAriaLabel(todayActivity) : "Activity strip loading"
   );
+  const axisTicks = $derived(
+    todayActivity ? stripAxisTicks(todayActivity.windowSeconds, Date.now()) : []
+  );
   const activityEmpty = $derived(
     todayActivity ? isActivityWindowEmpty(todayActivity) : false
   );
@@ -251,19 +255,37 @@
         </div>
       </div>
 
-      <div class="strip" role="img" aria-label={activityStripLabel}>
-        {#each todayActivity.strip as bucket, index (index)}
-          <div class="strip-bucket" aria-hidden="true">
-            <span
-              class="strip-afk"
-              style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
-            ></span>
-            <span
-              class="strip-active"
-              style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
-            ></span>
-          </div>
+      <div class="strip-frame">
+        <div class="strip-lines" aria-hidden="true">
+          {#each axisTicks as tick (tick.timestampMs)}
+            <span class="strip-line" style={`left: ${tick.positionPercent}%`}></span>
+          {/each}
+        </div>
+        <div class="strip" role="img" aria-label={activityStripLabel}>
+          {#each todayActivity.strip as bucket, index (index)}
+            <div class="strip-bucket" aria-hidden="true">
+              <span
+                class="strip-afk"
+                style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
+              ></span>
+              <span
+                class="strip-active"
+                style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
+              ></span>
+            </div>
+          {/each}
+        </div>
+      </div>
+
+      <div class="strip-axis" aria-hidden="true">
+        {#each axisTicks as tick (tick.timestampMs)}
+          {#if tick.showLabel}
+            <span class="strip-axis-hour" style={`left: ${tick.positionPercent}%`}
+              >{tick.label}</span
+            >
+          {/if}
         {/each}
+        <span class="strip-axis-now">now</span>
       </div>
       <ul class="legend" aria-hidden="true">
         <li><span class="legend-swatch legend-active"></span> Active</li>
@@ -688,7 +710,27 @@
     font-weight: 400;
   }
 
+  .strip-frame {
+    position: relative;
+  }
+
+  .strip-lines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .strip-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--line);
+  }
+
   .strip {
+    position: relative;
+    z-index: 1;
     display: grid;
     height: 64px;
     align-items: end;
@@ -719,6 +761,29 @@
   .strip-afk {
     background: var(--away);
     opacity: 0.7;
+  }
+
+  .strip-axis {
+    position: relative;
+    height: 14px;
+    margin-top: var(--s1);
+  }
+
+  .strip-axis-hour,
+  .strip-axis-now {
+    position: absolute;
+    color: var(--ink-3);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .strip-axis-hour {
+    transform: translateX(-50%);
+  }
+
+  .strip-axis-now {
+    right: 0;
   }
 
   .legend {

@@ -7,6 +7,10 @@ released versions link to their GitHub release.
 
 ### Added
 
+- Added a time axis to the **Your day** activity strip. Faint gridlines mark
+  every fourth hour behind the bars, with the hour labeled beneath in the
+  system clock format and the right edge marked `now`, so a bar can be traced
+  to the time of day it covers.
 - Added slow drift and twinkle to the break scene's stars. The sky now holds
   24 slightly brighter stars, each stepping through its own baked 10-18 second
   cadence within the scene's stepped repaint rhythm, and the starfield
