@@ -143,7 +143,7 @@ missing, keep the dashboard open, enable or restart the desktop's indicator
 host, and restart Unfocus. A known setup error appears in the dashboard, and
 closing that dashboard exits instead of hiding an unreachable process.
 
-![The consumer dashboard showing focus time, reminder actions, and the saved rhythm](.github/media/dashboard.png)
+![The consumer dashboard with focus countdown, Your day activity strip, break outcomes, and saved rhythm](.github/media/dashboard.png)
 
 ## Build from source
 

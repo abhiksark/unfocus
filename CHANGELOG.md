@@ -13,6 +13,12 @@ released versions link to their GitHub release.
   fades as the dawn state gathers. Reduced-motion preferences stop the motion
   entirely, leaving the stars at their resting brightness.
 
+### Changed
+
+- Updated the README consumer dashboard screenshot to the single-column layout
+  with **Your day** activity strip and break outcome counts. Break-screen media
+  is unchanged.
+
 ## [0.3.1-alpha.1] - 2026-08-12
 
 ### Added
