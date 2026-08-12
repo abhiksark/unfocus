@@ -14,6 +14,7 @@ vite.config.ts.timestamp-*
 *.md
 !README.md
 !/CHANGELOG.md
+!/docs/install.md
 !.github/SECURITY.md
 !CLAUDE.md
 !AGENTS.md
