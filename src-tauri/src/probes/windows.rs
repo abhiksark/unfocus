@@ -9,11 +9,11 @@
 use windows_sys::Win32::{
     Foundation::{FALSE, HWND, RECT},
     Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST},
+    System::SystemInformation::GetTickCount,
     UI::{
         Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO},
         WindowsAndMessaging::{
-            GetForegroundWindow, GetTickCount, GetWindowRect, GetWindowTextW, IsIconic,
-            IsWindowVisible,
+            GetForegroundWindow, GetWindowRect, GetWindowTextW, IsIconic, IsWindowVisible,
         },
     },
 };
