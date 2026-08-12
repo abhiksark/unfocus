@@ -447,6 +447,15 @@
     --serif: "Fraunces", Georgia, serif;
   }
 
+  @media (prefers-contrast: more) {
+    :global(:root) {
+      --ink-2: #d3ded6;
+      --ink-3: #bccbc2;
+      --line: #58665e;
+      --line-2: #7d8d84;
+    }
+  }
+
   :global(*) {
     box-sizing: border-box;
   }

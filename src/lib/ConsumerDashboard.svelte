@@ -888,8 +888,39 @@
   }
 
   @media (max-width: 760px) {
+    .wrap {
+      padding: var(--s4) var(--s4) var(--s6);
+    }
+
+    .stats {
+      gap: var(--s4) var(--s5);
+    }
+
     .duration-fields {
       grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .foot {
+      grid-template-columns: 1fr;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (prefers-contrast: more) {
+    .rule {
+      height: 2px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .progress i {
+      transition: none;
     }
   }
 </style>
