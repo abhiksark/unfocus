@@ -9,7 +9,7 @@ released versions link to their GitHub release.
 
 - Added slow drift and twinkle to the break scene's stars. The sky now holds
   24 slightly brighter stars, each stepping through its own baked 10-18 second
-  cadence on the scene's existing 2-4 second repaint rhythm, and the starfield
+  cadence within the scene's stepped repaint rhythm, and the starfield
   fades as the dawn state gathers. Reduced-motion preferences stop the motion
   entirely, leaving the stars at their resting brightness.
 - Added a full multi-platform [install guide](docs/install.md): package choice,
@@ -17,6 +17,12 @@ released versions link to their GitHub release.
   and tray notes), macOS (DMG/Homebrew and Gatekeeper), Windows (setup/MSI and
   SmartScreen), first-run defaults, local data paths and clean uninstall,
   build-from-source pins, and troubleshooting.
+
+### Changed
+
+- Updated the README consumer dashboard screenshot to the single-column layout
+  with **Your day** activity strip and break outcome counts. Break-screen media
+  is unchanged.
 
 ## [0.3.1-alpha.1] - 2026-08-12
 

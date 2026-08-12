@@ -280,7 +280,7 @@
   /* The scene is one baked SVG (scripts/gen-scene.js). Full-viewport gradients
      stay static; continuous motion is stepped ridge drift, mist breathing, and
      star drift/twinkle — transform/opacity on small elements, each repainting
-     every 2-4 s. */
+     every 2-5 s. */
 
   .atmosphere :global(.scene) {
     position: absolute;
