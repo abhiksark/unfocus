@@ -18,8 +18,8 @@ released versions link to their GitHub release.
 
 - Rebuilt the consumer dashboard as a single quiet column. The scene-led hero is
   gone, bordered sections became plain text separated by hairline rules, and
-  uppercase letterspaced labels became sentence case. The break screen is
-  unchanged.
+  uppercase letterspaced labels became sentence case. The break screen keeps its
+  layout and behavior and now draws its display type from the shared font token.
 - Moved the dashboard onto a shared token layer for color, spacing, radius, and
   type, and pinned body text to the system font stack. The previous stylesheet
   asked for Inter, which was never vendored and could not be fetched, so body
