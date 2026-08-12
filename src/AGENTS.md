@@ -12,9 +12,11 @@ as `export let` or `$:` reactive statements.
 
 - `today-activity.ts` formats the rolling-window summary from
   `get_today_activity`. Keep copy observational (active / away / deep blocks);
-  no streaks, badges, or gamification.
+  no streaks, badges, or gamification. Empty, loading, probe-unavailable, and
+  error captions stay distinct and note that the timer is unaffected.
 - The strip is presence-only (OS idle). Never request or display keylogging.
-- `break-summary.ts` formats calm counts from `get_break_summary`. Do not add
+- `break-summary.ts` formats calm counts from `get_break_summary`. Day captions
+  must not re-list the grid counts; mute zeros in the UI rather than inventing
   scores, streaks, or competitive framing.
 
 ## Window routing and native events

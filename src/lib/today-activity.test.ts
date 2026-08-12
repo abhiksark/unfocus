@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
+  activityFootnote,
   currentKindLabel,
   deepBlockCaption,
   formatActivityDuration,
+  isActivityWindowEmpty,
   stripActiveHeight,
   stripAfkHeight,
   stripAriaLabel,
+  todayErrorCaption,
+  todayLoadingCaption,
   type TodayActivity
 } from "./today-activity";
 
@@ -41,18 +45,41 @@ describe("today activity presentation", () => {
     expect(formatActivityDuration(-1)).toBe("—");
   });
 
-  test("labels current kind without inventing probe health", () => {
+  test("labels current kind with distinct probe and waiting states", () => {
     expect(currentKindLabel("active", true)).toBe("At the keyboard");
-    expect(currentKindLabel("afk", true)).toBe("Away");
-    expect(currentKindLabel("unknown", true)).toBe("Idle probe unavailable");
-    expect(currentKindLabel("active", false)).toBe("Idle probe unavailable");
-    expect(currentKindLabel(null, true)).toBe("Idle probe unavailable");
+    expect(currentKindLabel("afk", true)).toBe("Away from the keyboard");
+    expect(currentKindLabel("unknown", true)).toBe("Waiting for presence samples");
+    expect(currentKindLabel("active", false)).toBe("Presence probe unavailable");
+    expect(currentKindLabel(null, true)).toBe("Waiting for presence samples");
+    expect(currentKindLabel(null, false)).toBe("Presence probe unavailable");
   });
 
-  test("describes deep blocks without gamified streaks", () => {
-    expect(deepBlockCaption(0, 25 * 60)).toBe("No deep blocks yet (≥25m)");
-    expect(deepBlockCaption(1, 25 * 60)).toBe("1 deep block (≥25m)");
-    expect(deepBlockCaption(3, 25 * 60)).toBe("3 deep blocks (≥25m)");
+  test("describes deep blocks without repeating the count", () => {
+    expect(deepBlockCaption(0, 25 * 60)).toBe("None yet · ≥25m continuous");
+    expect(deepBlockCaption(1, 25 * 60)).toBe("≥25m continuous");
+    expect(deepBlockCaption(3, 25 * 60)).toBe("≥25m continuous");
+  });
+
+  test("keeps the privacy footnote observational", () => {
+    expect(activityFootnote(5 * 60)).toContain("nothing is keylogged");
+    expect(activityFootnote(5 * 60)).toContain("5m");
+    expect(activityFootnote(5 * 60)).not.toMatch(/streak|score|badge/i);
+  });
+
+  test("uses calm loading and error captions", () => {
+    expect(todayLoadingCaption()).toContain("Collecting");
+    expect(todayErrorCaption(null)).toContain("unaffected");
+    expect(todayErrorCaption("probe cache lock is poisoned")).toContain(
+      "probe cache lock is poisoned"
+    );
+    const longError = todayErrorCaption("x".repeat(200));
+    expect(longError.length).toBeLessThan(120);
+    expect(longError).toContain("unaffected");
+  });
+
+  test("detects an empty classified window", () => {
+    expect(isActivityWindowEmpty(sample({ activeSeconds: 0, afkSeconds: 0 }))).toBe(true);
+    expect(isActivityWindowEmpty(sample({ activeSeconds: 1, afkSeconds: 0 }))).toBe(false);
   });
 
   test("builds a calm strip aria label", () => {

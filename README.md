@@ -87,18 +87,19 @@ not just whether a package can be produced.
 On launch, the consumer dashboard leads with the current reminder state, the
 next break, and the saved focus-to-rest rhythm. Where the idle probe is
 available, a **Your day** card shows a rolling last-24-hour view of continuous
-computer use versus time away from the keyboard (presence only — no keylogging).
-Gaps under five minutes stay inside continuous work; stretches of at least
-twenty-five minutes of continuous activity are counted as deep blocks. Segment
-history is stored only on this device next to other Unfocus settings, pruned to
-the rolling window, and never uploaded. The same card shows calm counts of
-local break outcomes (shown, natural rest, manual rest, held for fullscreen)
-for the last day and week. The summary is observe-only: it does not pause,
-skip, or advance the break timer. Scheduled break presentation may use that
-local presence history so a long continuous stretch requires a real away
-period before natural credit, while a long AFK still prefers a quiet natural
-rest when you remain idle; fullscreen still suppresses the overlay. Timing can
-be edited inline;
+computer use versus time away from the keyboard (presence only — no keylogging),
+with a half-hour strip and calm empty or probe-unavailable states when samples
+are missing. Gaps under five minutes stay inside continuous work; stretches of
+at least twenty-five minutes of continuous activity are counted as deep blocks.
+Segment history is stored only on this device next to other Unfocus settings,
+pruned to the rolling window, and never uploaded. The same card shows local
+break-outcome counts (shown, natural rest, manual rest, held back for
+fullscreen) for the last day, with a quieter seven-day total. The summary is
+observe-only: it does not pause, skip, or advance the break timer. Scheduled
+break presentation may use that local presence history so a long continuous
+stretch requires a real away period before natural credit, while a long AFK
+still prefers a quiet natural rest when you remain idle; fullscreen still
+suppresses the overlay. Timing can be edited inline;
 expand **Advanced** in that editor and select **Open developer mode** for live
 platform signals, monitor coordinates, raw probe errors, and manual refresh.
 The selected consumer or developer view is remembered on this device.
