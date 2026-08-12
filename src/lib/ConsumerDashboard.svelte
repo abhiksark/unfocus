@@ -319,21 +319,26 @@
 
   <hr class="rule" />
 
-  <section class="rhythm" aria-labelledby="rhythm-title">
+  <section class="foot" aria-labelledby="rhythm-title">
     <div>
-      <p class="section-label">Your rhythm</p>
-      <h2 id="rhythm-title">{rhythm}</h2>
+      <h2 id="rhythm-title" class="t-label">Your rhythm</h2>
+      <p class="t-micro">{rhythm}</p>
     </div>
-    <button
-      class="text-button"
-      type="button"
-      aria-expanded={timingEditorExpanded}
-      aria-controls="timing-editor"
-      onclick={onToggleTimingEditor}
-      disabled={settingsLoading}
-    >
-      {timingEditorExpanded ? "Close" : "Edit"}
-    </button>
+    <div class="foot-actions">
+      <button
+        class="btn-text"
+        type="button"
+        aria-expanded={timingEditorExpanded}
+        aria-controls="timing-editor"
+        onclick={onToggleTimingEditor}
+        disabled={settingsLoading}
+      >
+        {timingEditorExpanded ? "Close" : "Edit timing"}
+      </button>
+      <button class="btn-text" type="button" onclick={onPreview} disabled={previewDisabled}>
+        {previewLabel}
+      </button>
+    </div>
 
     {#if timingEditorExpanded}
       <div id="timing-editor" class="timing-editor">
@@ -400,14 +405,14 @@
 
           <div class="settings-actions">
             <button
-              class="primary"
+              class="btn-primary"
               type="submit"
               disabled={settingsLoading || settingsSaving || !settingsValidation.settings}
             >
               {settingsSaving ? "Saving…" : "Save timing"}
             </button>
             <button
-              class="secondary"
+              class="btn-ghost"
               type="button"
               onclick={onResetSettings}
               disabled={settingsLoading || settingsSaving}
@@ -430,35 +435,22 @@
         <details class="advanced">
           <summary>Advanced</summary>
           <p>Open technical health details and native probe controls.</p>
-          <button class="secondary" type="button" onclick={onOpenDeveloperMode}>
+          <button class="btn-ghost" type="button" onclick={onOpenDeveloperMode}>
             Open developer mode
           </button>
         </details>
       </div>
     {/if}
-    <div class="settings-confirmation" aria-live="polite">
+    <div class="settings-confirmation t-micro" aria-live="polite">
       {settingsConfirmation ?? ""}
     </div>
   </section>
 
-  <section class="preview" aria-labelledby="preview-title">
-    <div>
-      <p class="section-label">Break screen</p>
-      <h2 id="preview-title">Eight-second preview</h2>
-    </div>
-    <button class="secondary" type="button" onclick={onPreview} disabled={previewDisabled}>
-      {previewLabel}
-    </button>
-  </section>
-
   {#if warning}
-    <section class="warning" role="status" aria-labelledby="warning-title">
-      <div>
-        <p class="section-label">Needs attention</p>
-        <h2 id="warning-title">{warning.heading}</h2>
-        <p>{warning.message}</p>
-      </div>
-      <button class="text-button" type="button" onclick={onOpenDeveloperMode}>
+    <section class="warn" role="status" aria-labelledby="warning-title">
+      <h2 id="warning-title" class="t-label">{warning.heading}</h2>
+      <p class="t-micro">{warning.message}</p>
+      <button class="btn-text" type="button" onclick={onOpenDeveloperMode}>
         View details
       </button>
     </section>
@@ -574,6 +566,13 @@
     line-height: 1.45;
   }
 
+  .t-label {
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
   button {
     border: 0;
     border-radius: var(--r-button);
@@ -614,27 +613,24 @@
     color: var(--ink);
   }
 
-  .section-label {
-    margin: 0 0 9px;
-    color: #85d79b;
-    font-size: 0.7rem;
-    font-weight: 750;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
+  .btn-text {
+    padding: 6px 2px;
+    color: var(--ink-2);
+    background: transparent;
+    font-size: 0.85rem;
+    text-decoration: underline;
+    text-decoration-color: var(--line-2);
+    text-underline-offset: 4px;
+  }
+
+  .btn-text:hover:not(:disabled) {
+    color: var(--ink);
   }
 
   h1,
   h2,
   p {
     margin-top: 0;
-  }
-
-  .rhythm,
-  .preview,
-  .warning {
-    border: 1px solid #27332b;
-    border-radius: 15px;
-    background: rgba(18, 25, 20, 0.92);
   }
 
   .t-title {
@@ -758,46 +754,36 @@
     color: #ffc4c4;
   }
 
-  .rhythm,
-  .preview,
-  .warning {
+  .foot {
     display: grid;
+    align-items: baseline;
+    gap: var(--s3) var(--s4);
     grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 18px;
-    padding: 15px 17px;
   }
 
-  .rhythm {
-    grid-column: 1 / -1;
-    grid-row: 3;
+  .foot-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s4);
   }
 
-  .preview {
-    grid-column: 2;
-    grid-row: 1;
-    grid-template-columns: 1fr;
-    align-content: center;
-    gap: 10px;
+  .warn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s1);
+    border-left: 2px solid var(--warn);
+    padding-left: var(--s3);
   }
 
-  .preview button {
-    width: 100%;
-  }
-
-  .rhythm h2,
-  .preview h2,
-  .warning h2 {
-    margin-bottom: 0;
-    font-size: 1.02rem;
-    font-weight: 620;
-    letter-spacing: -0.015em;
+  .warn .t-label {
+    color: var(--warn);
   }
 
   .timing-editor {
     grid-column: 1 / -1;
-    border-top: 1px solid #2b372e;
-    padding-top: 17px;
+    border-top: 1px solid var(--line);
+    padding-top: var(--s4);
   }
 
   .duration-fields {
@@ -809,7 +795,7 @@
   .duration-field label {
     display: block;
     margin-bottom: 7px;
-    color: #e0eae2;
+    color: var(--ink);
     font-size: 0.78rem;
     font-weight: 620;
   }
@@ -817,14 +803,14 @@
   .duration-input {
     display: flex;
     align-items: center;
-    border: 1px solid #405044;
-    border-radius: 9px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-control);
     background: #0c130f;
   }
 
   .duration-input:focus-within {
-    border-color: #8be0a2;
-    box-shadow: 0 0 0 3px rgba(117, 211, 142, 0.18);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(127, 215, 154, 0.18);
   }
 
   .duration-input.invalid {
@@ -837,21 +823,21 @@
     border: 0;
     outline: 0;
     padding: 10px 5px 10px 12px;
-    color: #edf5ef;
+    color: var(--ink);
     background: transparent;
     font: inherit;
   }
 
   .duration-input span {
     padding-right: 11px;
-    color: #9da8a0;
+    color: var(--ink-2);
     font-size: 0.7rem;
   }
 
   .duration-field small {
     display: block;
     margin-top: 6px;
-    color: #9da8a0;
+    color: var(--ink-2);
     font-size: 0.68rem;
   }
 
@@ -874,15 +860,15 @@
 
   .advanced {
     margin-top: 17px;
-    border-top: 1px solid #2b372e;
+    border-top: 1px solid var(--line);
     padding-top: 14px;
-    color: #b2beb5;
+    color: var(--ink-2);
   }
 
   .advanced summary {
     width: fit-content;
     cursor: pointer;
-    color: #dfe9e1;
+    color: var(--ink);
     font-size: 0.78rem;
     font-weight: 650;
   }
@@ -894,95 +880,16 @@
 
   .settings-confirmation {
     grid-column: 1 / -1;
-    min-height: 0;
-    color: #b9ddc2;
-    font-size: 0.72rem;
+    color: var(--ink-2);
   }
 
   .settings-confirmation:empty {
     display: none;
   }
 
-  .warning {
-    grid-column: 1 / -1;
-    border-color: #78633a;
-    background: #251f14;
-  }
-
-  .warning .section-label {
-    color: #e2c487;
-  }
-
-  .warning p:not(.section-label) {
-    max-width: 660px;
-    margin: 8px 0 0;
-    color: #d5c7a9;
-    font-size: 0.8rem;
-    line-height: 1.45;
-  }
-
-  .primary {
-    color: #07120a;
-    background: #80d997;
-  }
-
-  .primary:hover:not(:disabled) {
-    background: #98e5aa;
-  }
-
-  .secondary {
-    border: 1px solid #46564a;
-    color: #e1eae3;
-    background: #18211b;
-  }
-
-  .secondary:hover:not(:disabled) {
-    border-color: #6c8171;
-    background: #202c24;
-  }
-
-  .text-button {
-    padding: 8px 4px;
-    color: #a8dcb5;
-    background: transparent;
-    font-size: 0.78rem;
-  }
-
-  .text-button:hover:not(:disabled) {
-    color: #d4efdb;
-  }
-
   @media (max-width: 760px) {
-    .rhythm,
-    .preview,
-    .warning {
-      grid-column: 1;
-      grid-row: auto;
-    }
-
     .duration-fields {
       grid-template-columns: 1fr;
-    }
-  }
-
-  @media (max-width: 520px) {
-    .rhythm,
-    .preview,
-    .warning {
-      grid-template-columns: 1fr;
-    }
-
-    .rhythm > .text-button,
-    .warning > .text-button {
-      width: fit-content;
-    }
-  }
-
-  @media (prefers-contrast: more) {
-    .rhythm,
-    .preview,
-    .warning {
-      border-color: #829187;
     }
   }
 </style>
