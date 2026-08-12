@@ -5,6 +5,8 @@ released versions link to their GitHub release.
 
 ## [Unreleased]
 
+## [0.3.0-alpha.1] - 2026-08-12
+
 ### Added
 
 - Added an observe-only **Your day** summary on the consumer dashboard: rolling
@@ -22,6 +24,11 @@ released versions link to their GitHub release.
   without changing the pure timer: after a long active stretch a short micro-idle
   no longer natural-credits; long AFK still prefers quiet natural credit when
   idle; fullscreen is never overridden.
+- Credited a due break as a natural rest when the user has already been idle for
+  the break duration, instead of running a silent break phase.
+- Added pure lifecycle and accessibility contract tests that pin release-tier
+  evidence rules (timer stalls, multi-monitor topology policy, and a11y
+  presentation) without inventing platform qualification.
 - Implemented Windows idle (`GetLastInputInfo`) and foreground fullscreen
   probes (window outer rect vs monitor `rcMonitor`). Windows remains an early
   build until interactive qualification is recorded.
@@ -35,6 +42,11 @@ released versions link to their GitHub release.
 - Polished the consumer **Your day** and **Break outcomes** card: clearer
   loading, empty, and error copy; muted zero counts; strip legend; less
   redundant captions. Still observe-only with no timer control.
+- Documented platform status honestly for this alpha: Linux X11 remains the
+  only qualified backend; macOS is preview without multi-monitor acceptance;
+  Windows packages include probes but interactive multi-monitor qualification
+  is pending; Wayland is unsupported in default packages; packages are not
+  code-signed or notarized.
 
 ## [0.2.0-alpha.1] - 2026-08-11
 
@@ -100,6 +112,7 @@ released versions link to their GitHub release.
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
-[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.2.0-alpha.1...dev
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...dev
+[0.3.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.2.0-alpha.1...v0.3.0-alpha.1
 [0.2.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.1.0-alpha.1...v0.2.0-alpha.1
 [0.1.0-alpha.1]: https://github.com/abhiksark/unfocus/releases/tag/v0.1.0-alpha.1

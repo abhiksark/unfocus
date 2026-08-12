@@ -1,6 +1,6 @@
 [package]
 name = "unfocus"
-version = "0.2.0-alpha.1"
+version = "0.3.0-alpha.1"
 description = "Local-first eye-break reminder"
 authors = ["Unfocus contributors <14940119+abhiksark@users.noreply.github.com>"]
 edition = "2021"
