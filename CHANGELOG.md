@@ -25,6 +25,10 @@ released versions link to their GitHub release.
 - Implemented Windows idle (`GetLastInputInfo`) and foreground fullscreen
   probes (window outer rect vs monitor `rcMonitor`). Windows remains an early
   build until interactive qualification is recorded.
+- Scaffolded an opt-in `wayland-sway` Cargo feature for a Sway 1.11+ Wayland
+  probe candidate (Sway IPC fullscreen, `ext_idle_notifier_v1` input-idle,
+  positive runtime gates). Default packages still treat Wayland as unsupported;
+  no multi-monitor or release qualification is claimed.
 
 ## [0.2.0-alpha.1] - 2026-08-11
 

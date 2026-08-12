@@ -28,8 +28,9 @@ orchestration, OS probes, timing, and diagnostics.
   tests.
 - `src/probes/mod.rs` owns probe caches, workers, snapshots, panic containment,
   stale-result handling, and platform dispatch. `src/probes/linux.rs` owns X11
-  probes and validation; `src/probes/macos.rs` owns Quartz probes and fullscreen
-  geometry.
+  probes, Linux session routing, and validation; `src/probes/sway.rs` owns the
+  opt-in Sway Wayland candidate; `src/probes/macos.rs` owns Quartz probes and
+  fullscreen geometry; `src/probes/windows.rs` owns Win32 idle and fullscreen.
 - `src/overlay/mod.rs` owns the overlay controller, command channel, worker,
   close-origin tracking, and commands. `src/overlay/lifecycle.rs` owns the pure
   lifecycle state machine and timeout calculation; `src/overlay/labels.rs`
@@ -42,14 +43,19 @@ orchestration, OS probes, timing, and diagnostics.
 - IMPORTANT: probes return a `Result` per poll. On failure, surface the error
   in diagnostics and keep the timer running. A probe must never panic, guess,
   or change timer behavior.
-- `platform_probe` has one `cfg`-selected arm per platform. Linux support is
-  limited to X11: it reads idle from XScreenSaver and fullscreen from EWMH
-  `_NET_WM_STATE`; Wayland is unsupported. macOS reads idle from
-  `CGEventSourceSecondsSinceLastEventType` and compares the frontmost layer-0
-  window's `kCGWindowBounds` with every active display. Windows reads idle
-  from `GetLastInputInfo` and compares the foreground window outer rect to the
-  monitor's `rcMonitor` (not the work area). Unsupported platforms return an
-  error naming themselves.
+- `platform_probe` has one `cfg`-selected arm per platform. Linux defaults to
+  X11 only: idle from XScreenSaver and fullscreen from EWMH `_NET_WM_STATE`.
+  Wayland sessions error unless the non-default `wayland-sway` feature is
+  built; that candidate positively identifies Sway 1.11+, `seat0`, and
+  `ext_idle_notifier_v1` v2+ and never falls back to X11/XWayland properties.
+  macOS reads idle from `CGEventSourceSecondsSinceLastEventType` and compares
+  the frontmost layer-0 window's `kCGWindowBounds` with every active display.
+  Windows reads idle from `GetLastInputInfo` and compares the foreground
+  window outer rect to the monitor's `rcMonitor` (not the work area).
+  Unsupported platforms return an error naming themselves.
+- `src/probes/sway.rs` owns pure Sway qualification, IPC framing/tree parsing,
+  input-idle baseline state, and (behind `wayland-sway`) the Linux runtime.
+  Physical multi-monitor Sway acceptance is required before any support claim.
 - Keep platform-independent logic outside the platform arms. The fullscreen
   rectangle comparison is gated with `any(target_os = "macos", test)`. Both
   halves are required: removing the gate trips `dead_code` under Linux clippy;

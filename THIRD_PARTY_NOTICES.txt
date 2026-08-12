@@ -985,6 +985,11 @@ Declared license: MIT
 Upstream authors: niklak <morgenpurple@gmail.com>, importcjj <importcjj@gmail.com>
 License text IDs: 9766e5d58cae9d457057c7cdb2cde8bf357624329c1e5cc50ca9210149b77aed
 
+Rust: downcast-rs@1.2.1
+Declared license: MIT/Apache-2.0
+Upstream authors: Ashish Myles <marcianx@gmail.com>, Runji Wang <wangrunji0408@163.com>
+License text IDs: af975c9737b3bdcdcf7ec3512b3dc936f91cc58a3c9152a8e4b0803f667df6b9, fb252fecf98d9af8f1d9201c5860319a514f5a8a24700dc84fc6ea287a7a4958
+
 Rust: dpi@0.1.2
 Declared license: Apache-2.0 AND MIT
 License text IDs: 9eff396a99bafd208e7126602420d6864f6066c08b84485a5b032320a9c01997, a8ad31b1c3f40dca5a84119351b8fa8ddc868edd77fad8a8ebf6d8f2d16fa4ae
@@ -2513,6 +2518,31 @@ Rust: wasm-streams@0.5.0
 Declared license: MIT OR Apache-2.0
 Upstream authors: Mattias Buelens <mattias@buelens.com>
 License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e
+
+Rust: wayland-backend@0.3.16
+Declared license: MIT
+Upstream authors: Elinor Berger <elinor@safaradeg.net>
+License text IDs: 1cb6f4dee8c649f175736380495f0af0c753c87f22d50931692968bb24bf2161
+
+Rust: wayland-client@0.31.15
+Declared license: MIT
+Upstream authors: Elinor Berger <elinor@safaradeg.net>
+License text IDs: 1cb6f4dee8c649f175736380495f0af0c753c87f22d50931692968bb24bf2161
+
+Rust: wayland-protocols@0.32.13
+Declared license: MIT
+Upstream authors: Elinor Berger <elinor@safaradeg.net>
+License text IDs: 1cb6f4dee8c649f175736380495f0af0c753c87f22d50931692968bb24bf2161
+
+Rust: wayland-scanner@0.31.11
+Declared license: MIT
+Upstream authors: Elinor Berger <elinor@safaradeg.net>
+License text IDs: 1cb6f4dee8c649f175736380495f0af0c753c87f22d50931692968bb24bf2161
+
+Rust: wayland-sys@0.31.11
+Declared license: MIT
+Upstream authors: Elinor Berger <elinor@safaradeg.net>
+License text IDs: 1cb6f4dee8c649f175736380495f0af0c753c87f22d50931692968bb24bf2161
 
 Rust: web-sys@0.3.104
 Declared license: MIT OR Apache-2.0
@@ -4940,6 +4970,35 @@ SOFTWARE.
 
 
 ---------------------------------------------------------
+
+===============================================================================
+License text ID: 1cb6f4dee8c649f175736380495f0af0c753c87f22d50931692968bb24bf2161
+Used by:
+  - Rust: wayland-backend@0.3.16
+  - Rust: wayland-client@0.31.15
+  - Rust: wayland-protocols@0.32.13
+  - Rust: wayland-scanner@0.31.11
+  - Rust: wayland-sys@0.31.11
+-------------------------------------------------------------------------------
+Copyright (c) 2015 Elinor Berger
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 
 ===============================================================================
 License text ID: 1cbe51b907662f6cb1492b16c359384a595180bf0e4d101603ed525e75c4e484
@@ -17246,6 +17305,7 @@ Used by:
   - Rust: defmt-macros@1.1.1
   - Rust: defmt-parser@1.0.0
   - Rust: defmt@1.1.1
+  - Rust: downcast-rs@1.2.1
 -------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -21479,6 +21539,37 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 
   This Source Code Form is "Incompatible With Secondary Licenses", as
   defined by the Mozilla Public License, v. 2.0.
+
+===============================================================================
+License text ID: fb252fecf98d9af8f1d9201c5860319a514f5a8a24700dc84fc6ea287a7a4958
+Used by:
+  - Rust: downcast-rs@1.2.1
+-------------------------------------------------------------------------------
+Copyright (c) 2020 Ashish Myles and contributors
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
 ===============================================================================
 License text ID: fb77f0a9c53e473abe5103c8632ef9f0f2874d4fb3f17cb2d8c661aab9cee9d7
