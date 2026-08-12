@@ -463,9 +463,9 @@
     width: min(100%, 780px);
     min-height: 100vh;
     flex-direction: column;
-    gap: var(--s5);
+    gap: var(--s4);
     margin: 0 auto;
-    padding: var(--s5) var(--s6) var(--s7);
+    padding: var(--s5) var(--s6) var(--s6);
   }
 
   .top {
