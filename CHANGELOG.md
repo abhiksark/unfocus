@@ -5,6 +5,11 @@ released versions link to their GitHub release.
 
 ## [Unreleased]
 
+### Changed
+
+- Described Unfocus as both a break app and a local reflection surface in the
+  README and package metadata (Your day and break outcomes remain observe-only).
+
 ## [0.3.0-alpha.1] - 2026-08-12
 
 ### Added

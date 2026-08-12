@@ -6,7 +6,8 @@
 [![Qualified platform: Linux X11](https://img.shields.io/badge/qualified-Linux%20X11-4f8a66.svg)](#platform-status)
 [![Built with Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24c8db.svg)](https://v2.tauri.app)
 
-A break reminder that asks one thing of you: look at something far away.
+A local-first **break** and **reflection** app: it asks you to look far away when
+it is time to rest, and it shows a calm picture of how your day went.
 
 [Releases](https://github.com/abhiksark/unfocus/releases) ·
 [Changelog](CHANGELOG.md) ·
@@ -16,12 +17,21 @@ A break reminder that asks one thing of you: look at something far away.
 
 ![The Unfocus break screen, a generated night landscape with a countdown](.github/media/break-resting.png)
 
-By default, every twenty minutes Unfocus covers every monitor with a quiet
-night scene and counts down twenty seconds while your eyes rest on the farthest
-point you can find. You can change both durations from the dashboard. When the
-scene warms to amber, dawn is rising behind the ridge and the break is almost
-over. No streaks, no badges, no mascot asking to be watched. The whole point is
-that you stop looking at the screen.
+**Break.** By default, every twenty minutes Unfocus covers every monitor with a
+quiet night scene and counts down twenty seconds while your eyes rest on the
+farthest point you can find. You can change both durations from the dashboard.
+When the scene warms to amber, dawn is rising behind the ridge and the break is
+almost over.
+
+**Reflection.** The same dashboard keeps a local **Your day** view: continuous
+presence at the keyboard versus time away, deep stretches, and calm counts of
+how breaks were taken or held. It is presence only (no keylogging), observe
+only (it never skips or advances the timer for you), and stored only on this
+device.
+
+No streaks, no badges, no mascot asking to be watched. The whole point of a
+break is that you stop looking at the screen. The whole point of the day view
+is that you can see the rhythm without turning it into a score.
 
 ## Download the alpha
 
@@ -48,6 +58,8 @@ Unfocus does not update itself yet, so check the releases page for new builds.
 
 ## How it works
 
+### Breaks
+
 - Covers every monitor with a synchronized full-screen break, rendered as a
   generated landscape that moves too slowly to be worth watching
 - Signals state through light: cool green while you rest, amber dawn when it
@@ -60,10 +72,10 @@ Unfocus does not update itself yet, so check the releases page for new builds.
   tray; a pause keeps only its bounded local expiry across restarts
 - Uses idle and fullscreen signals, where supported, to avoid interrupting
   you when you are already away from the desk or presenting
+- May credit a due break as a natural rest when you have already been idle long
+  enough, or hold the overlay for fullscreen, without rewriting the pure clock
 - Keeps the reminder timer running when a platform probe fails instead of
   crashing, guessing, or silently disabling future breaks
-- Runs local-first: no account, telemetry, cloud dependency, or packaged-app
-  network calls
 
 Timing defaults to a twenty-minute work interval and twenty-second break.
 Saving a change during work starts a new work countdown immediately; a break
@@ -71,6 +83,37 @@ already on screen keeps its original duration and the saved timing applies to
 the next work phase.
 
 ![The same scene near the end of a break, with amber dawn light rising behind the summit](.github/media/break-returning.png)
+
+### Reflection (Your day)
+
+Where the idle probe is available, a **Your day** card on the consumer
+dashboard shows a rolling last-24-hour view of continuous computer use versus
+time away from the keyboard:
+
+- Presence only: keyboard and mouse idle signals, never keylogging
+- Gaps under five minutes stay inside continuous work; stretches of at least
+  twenty-five minutes of continuous activity are counted as deep blocks
+- A half-hour strip sketches the day at a glance, with calm empty or
+  probe-unavailable states when samples are missing
+- Local break-outcome counts (shown, natural rest, manual rest, held for
+  fullscreen) for the last day, with a quieter seven-day total
+- Segment history and the ledger live next to other Unfocus settings on this
+  device, pruned to the rolling window, and are never uploaded
+- Observe-only: the card does not pause, skip, or advance the break timer
+
+Scheduled break presentation may use that same local presence history so a long
+continuous stretch requires a real away period before natural credit, while a
+long AFK still prefers a quiet natural rest when you remain idle. Fullscreen
+still suppresses the overlay.
+
+### Local and private
+
+- Runs local-first: no account, telemetry, cloud dependency, or packaged-app
+  network calls
+- Timing, day history, and break outcomes stay on this device
+- Expand **Advanced** in the timing editor and select **Open developer mode**
+  for live platform signals, monitor coordinates, raw probe errors, and manual
+  refresh; the selected consumer or developer view is remembered locally
 
 ## Platform status
 
@@ -83,26 +126,6 @@ not just whether a package can be produced.
 | macOS | Preview | Quartz idle and fullscreen probes work interactively; multi-monitor behavior has not completed an acceptance run |
 | Windows | Early build | Packages are produced; `GetLastInputInfo` idle and foreground-monitor fullscreen probes are implemented. Interactive multi-monitor qualification is still pending |
 | Linux Wayland | Unsupported | Default packages have no Wayland probes. An opt-in `wayland-sway` developer feature scaffolds a Sway 1.11+ candidate only; it is not qualified and must not be described as supported |
-
-On launch, the consumer dashboard leads with the current reminder state, the
-next break, and the saved focus-to-rest rhythm. Where the idle probe is
-available, a **Your day** card shows a rolling last-24-hour view of continuous
-computer use versus time away from the keyboard (presence only — no keylogging),
-with a half-hour strip and calm empty or probe-unavailable states when samples
-are missing. Gaps under five minutes stay inside continuous work; stretches of
-at least twenty-five minutes of continuous activity are counted as deep blocks.
-Segment history is stored only on this device next to other Unfocus settings,
-pruned to the rolling window, and never uploaded. The same card shows local
-break-outcome counts (shown, natural rest, manual rest, held back for
-fullscreen) for the last day, with a quieter seven-day total. The summary is
-observe-only: it does not pause, skip, or advance the break timer. Scheduled
-break presentation may use that local presence history so a long continuous
-stretch requires a real away period before natural credit, while a long AFK
-still prefers a quiet natural rest when you remain idle; fullscreen still
-suppresses the overlay. Timing can be edited inline;
-expand **Advanced** in that editor and select **Open developer mode** for live
-platform signals, monitor coordinates, raw probe errors, and manual refresh.
-The selected consumer or developer view is remembered on this device.
 
 Closing the dashboard leaves the reminder running in the system tray. Where a
 tray is available, its menu shows the current work countdown or break phase and
@@ -125,8 +148,8 @@ closing that dashboard exits instead of hiding an unreachable process.
 ## Build from source
 
 Install the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
-for your platform—the listed system libraries on Linux or the Xcode command
-line tools on macOS—plus the Bun and Rust versions declared in `.bun-version`
+for your platform (the listed system libraries on Linux or the Xcode command
+line tools on macOS) plus the Bun and Rust versions declared in `.bun-version`
 and `rust-toolchain.toml`, then:
 
 ```sh
@@ -181,25 +204,26 @@ compilation. The `Required CI` check fails unless every required job passes.
 
 Releases are cut by tagging a commit already contained in `main`. The tag must
 be `v` followed by the complete declared version, such as
-`v0.1.0-alpha.1`. The workflow reruns the quality gate before packaging,
+`v0.3.0-alpha.1`. The workflow reruns the quality gate before packaging,
 isolates release credentials from build jobs, and prepares a draft prerelease
 with checksums, build-provenance attestations, a CycloneDX SBOM, and third-party
 notices. Published releases are never overwritten.
 
 Prerelease labels remain in artifact filenames so candidate and final builds
 cannot collide. The Windows MSI's internal ProductVersion is the one exception:
-Windows requires a numeric-only value, so `0.1.0-alpha.1` is represented there
-as `0.1.0`.
+Windows requires a numeric-only value, so `0.3.0-alpha.1` is represented there
+as `0.3.0`.
 
 Debian packages also retain the canonical SemVer in their filename. Their
-embedded `Version` uses Debian ordering, so `0.2.0-alpha.1` becomes
-`0.2.0~alpha.1-1` and upgrades normally through later candidates to the stable
+embedded `Version` uses Debian ordering, so `0.3.0-alpha.1` becomes
+`0.3.0~alpha.1-1` and upgrades normally through later candidates to the stable
 package.
 
 ## Privacy and security
 
 Unfocus has no accounts, telemetry, cloud dependency, or packaged-app runtime
-network calls. Report a suspected vulnerability privately through the
+network calls. Day history and break outcomes stay on the device next to other
+local settings. Report a suspected vulnerability privately through the
 [security policy](.github/SECURITY.md), not in a public issue.
 
 ## Design
