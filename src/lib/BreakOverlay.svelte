@@ -355,7 +355,7 @@
   .wordmark {
     display: flex;
     align-items: center;
-    gap: var(--s2);
+    gap: 10px;
     color: rgba(235, 246, 239, 0.78);
     font-size: 0.72rem;
     font-weight: 650;
@@ -397,7 +397,7 @@
   }
 
   .eyebrow {
-    margin: 0 0 var(--s5);
+    margin: 0 0 26px;
     color: rgba(190, 232, 205, 0.82);
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 0.7rem;
@@ -424,7 +424,7 @@
 
   .guidance {
     max-width: 520px;
-    margin: var(--s5) 0 0;
+    margin: 20px 0 0;
     color: rgba(226, 239, 230, 0.76);
     font-size: clamp(0.82rem, 1.05vw, 1rem);
     line-height: 1.55;
@@ -434,7 +434,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--s2);
+    gap: 10px;
     margin-top: clamp(26px, 4.5vh, 46px);
   }
 
