@@ -145,6 +145,8 @@ export type StripAxisTick = {
   label: string;
   /** False when the label is suppressed so it cannot collide with "now". */
   showLabel: boolean;
+  /** True on the single tick marking where the reader's day begins. */
+  isDayStart: boolean;
 };
 
 /**
@@ -154,9 +156,21 @@ export type StripAxisTick = {
  * labels stay on the hour across daylight-saving transitions, when the window
  * holds 23 or 25 hours.
  */
-export function stripAxisTicks(windowSeconds: number, nowMs: number): StripAxisTick[] {
+export function stripAxisTicks(
+  windowSeconds: number,
+  nowMs: number,
+  dayStartHour: number | null = null
+): StripAxisTick[] {
   if (!Number.isFinite(windowSeconds) || windowSeconds <= 0) return [];
   if (!Number.isFinite(nowMs)) return [];
+
+  const dayStart =
+    typeof dayStartHour === "number" &&
+    Number.isInteger(dayStartHour) &&
+    dayStartHour >= 0 &&
+    dayStartHour < 24
+      ? dayStartHour
+      : null;
 
   const windowMs = windowSeconds * 1_000;
   const startMs = nowMs - windowMs;
@@ -168,18 +182,31 @@ export function stripAxisTicks(windowSeconds: number, nowMs: number): StripAxisT
   if (cursor.getTime() < startMs) cursor.setHours(cursor.getHours() + 1);
 
   for (let step = 0; step < AXIS_MAX_STEPS && cursor.getTime() < nowMs; step += 1) {
-    if (cursor.getHours() % AXIS_HOUR_STEP === 0) {
+    const hour = cursor.getHours();
+    const isDayStart = dayStart !== null && hour === dayStart;
+    if (hour % AXIS_HOUR_STEP === 0 || isDayStart) {
       const timestampMs = cursor.getTime();
       const positionPercent = ((timestampMs - startMs) / windowMs) * 100;
       ticks.push({
         timestampMs,
         positionPercent,
         label: hourLabel.format(cursor),
-        showLabel: positionPercent >= AXIS_LABEL_FLOOR && positionPercent <= AXIS_LABEL_LIMIT
+        showLabel: positionPercent >= AXIS_LABEL_FLOOR && positionPercent <= AXIS_LABEL_LIMIT,
+        isDayStart
       });
     }
     cursor.setHours(cursor.getHours() + 1);
   }
 
-  return ticks;
+  // A fall-back daylight-saving day repeats an hour, so the chosen hour can
+  // appear twice. Only the most recent occurrence is the day start; a stale
+  // duplicate that earned its place only by matching is dropped.
+  const latest = ticks.reduce((found, tick, index) => (tick.isDayStart ? index : found), -1);
+  return ticks
+    .map((tick, index) =>
+      tick.isDayStart && index !== latest ? { ...tick, isDayStart: false } : tick
+    )
+    .filter(
+      (tick) => new Date(tick.timestampMs).getHours() % AXIS_HOUR_STEP === 0 || tick.isDayStart
+    );
 }

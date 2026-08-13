@@ -202,4 +202,58 @@ describe("stripAxisTicks", () => {
       expect(tick.label.length).toBeGreaterThan(0);
     }
   });
+
+  test("marks no tick as the day start by default", () => {
+    for (const tick of stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS)) {
+      expect(tick.isDayStart).toBe(false);
+    }
+  });
+
+  test("marks exactly one tick for the chosen day start", () => {
+    // 6 is not divisible by 4, so this adds a tick rather than flagging one.
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 6);
+    const marked = ticks.filter((tick) => tick.isDayStart);
+
+    expect(marked).toHaveLength(1);
+    expect(new Date(marked[0].timestampMs).getHours()).toBe(6);
+    expect(ticks).toHaveLength(7);
+  });
+
+  test("flags the existing tick when the day start is already on the grid", () => {
+    // 8 is divisible by 4, so the hour must be flagged, never duplicated.
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 8);
+    const atEight = ticks.filter((tick) => new Date(tick.timestampMs).getHours() === 8);
+
+    expect(atEight).toHaveLength(1);
+    expect(atEight[0].isDayStart).toBe(true);
+    expect(ticks).toHaveLength(6);
+  });
+
+  test("keeps ticks ordered when the day start is added", () => {
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 6);
+    let previous = -1;
+    for (const tick of ticks) {
+      expect(tick.positionPercent).toBeGreaterThan(previous);
+      previous = tick.positionPercent;
+    }
+  });
+
+  test("suppresses the day-start label at an edge but keeps the tick", () => {
+    const base = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 6);
+    const dayStartMs = base.find((tick) => tick.isDayStart)!.timestampMs;
+    // A window starting exactly on the day start puts it at 0%.
+    const ticks = stripAxisTicks(DAY_SECONDS, dayStartMs + DAY_SECONDS * 1_000, 6);
+    const marked = ticks.find((tick) => tick.isDayStart)!;
+
+    expect(marked.positionPercent).toBeLessThan(2);
+    expect(marked.showLabel).toBe(false);
+  });
+
+  test("ignores a day start that is not a whole hour of the day", () => {
+    for (const hour of [-1, 24, 6.5, Number.NaN]) {
+      const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, hour);
+      expect(ticks.filter((tick) => tick.isDayStart)).toHaveLength(0);
+      expect(ticks).toHaveLength(6);
+    }
+  });
 });
