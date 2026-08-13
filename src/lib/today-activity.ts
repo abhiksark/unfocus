@@ -183,6 +183,9 @@ export function stripAxisTicks(
 
   for (let step = 0; step < AXIS_MAX_STEPS && cursor.getTime() < nowMs; step += 1) {
     const hour = cursor.getHours();
+    // Each local hour appears at most once per 24 hours, so a day window flags
+    // exactly one tick. A longer window legitimately spans several days and
+    // flags one per day; that is not a duplicate to be resolved.
     const isDayStart = dayStart !== null && hour === dayStart;
     if (hour % AXIS_HOUR_STEP === 0 || isDayStart) {
       const timestampMs = cursor.getTime();
@@ -198,15 +201,5 @@ export function stripAxisTicks(
     cursor.setHours(cursor.getHours() + 1);
   }
 
-  // A fall-back daylight-saving day repeats an hour, so the chosen hour can
-  // appear twice. Only the most recent occurrence is the day start; a stale
-  // duplicate that earned its place only by matching is dropped.
-  const latest = ticks.reduce((found, tick, index) => (tick.isDayStart ? index : found), -1);
-  return ticks
-    .map((tick, index) =>
-      tick.isDayStart && index !== latest ? { ...tick, isDayStart: false } : tick
-    )
-    .filter(
-      (tick) => new Date(tick.timestampMs).getHours() % AXIS_HOUR_STEP === 0 || tick.isDayStart
-    );
+  return ticks;
 }

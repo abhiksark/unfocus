@@ -256,4 +256,15 @@ describe("stripAxisTicks", () => {
       expect(ticks).toHaveLength(6);
     }
   });
+
+  test("flags one day start per day in a longer window", () => {
+    const ticks = stripAxisTicks(48 * 60 * 60, JANUARY_NOON_MS, 6);
+    const marked = ticks.filter((tick) => tick.isDayStart);
+
+    expect(marked).toHaveLength(2);
+    for (const tick of marked) {
+      expect(new Date(tick.timestampMs).getHours()).toBe(6);
+    }
+    expect(marked[0].positionPercent).toBeLessThan(marked[1].positionPercent);
+  });
 });
