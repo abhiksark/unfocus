@@ -8,6 +8,7 @@ import {
   stripActiveHeight,
   stripAfkHeight,
   stripAriaLabel,
+  stripAxisTicks,
   todayErrorCaption,
   todayLoadingCaption,
   type TodayActivity
@@ -95,5 +96,203 @@ describe("today activity presentation", () => {
     expect(stripActiveHeight({ activeRatio: 1.4, afkRatio: 0 })).toBe(1);
     expect(stripAfkHeight({ activeRatio: 0, afkRatio: -0.2 })).toBe(0);
     expect(stripActiveHeight({ activeRatio: 0.5, afkRatio: 0.5 })).toBe(0.5);
+  });
+});
+
+describe("stripAxisTicks", () => {
+  const DAY_SECONDS = 86_400;
+  // Mid-January carries no daylight-saving transition in common zones, so the
+  // tick count is the same in CI (UTC) and on a developer machine.
+  const JANUARY_NOON_MS = Date.parse("2026-01-15T12:00:00Z");
+
+  test("marks six four-hour ticks across a day window", () => {
+    expect(stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS)).toHaveLength(6);
+  });
+
+  test("lands every tick on a four-hour local boundary", () => {
+    for (const tick of stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS)) {
+      const at = new Date(tick.timestampMs);
+      expect(at.getHours() % 4).toBe(0);
+      expect(at.getMinutes()).toBe(0);
+      expect(at.getSeconds()).toBe(0);
+    }
+  });
+
+  test("orders ticks left to right inside the window", () => {
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS);
+    const startMs = JANUARY_NOON_MS - DAY_SECONDS * 1_000;
+    let previous = -1;
+    for (const tick of ticks) {
+      expect(tick.positionPercent).toBeGreaterThan(previous);
+      previous = tick.positionPercent;
+      expect(tick.positionPercent).toBeGreaterThanOrEqual(0);
+      expect(tick.positionPercent).toBeLessThanOrEqual(100);
+      expect(tick.timestampMs).toBeGreaterThanOrEqual(startMs);
+      expect(tick.timestampMs).toBeLessThan(JANUARY_NOON_MS);
+    }
+  });
+
+  test("suppresses a label that would collide with the now anchor", () => {
+    const base = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS);
+    const lastBoundaryMs = base[base.length - 1].timestampMs;
+    // Ending the window 30 minutes past a boundary puts that tick at ~97.9%.
+    const ticks = stripAxisTicks(DAY_SECONDS, lastBoundaryMs + 30 * 60 * 1_000);
+    const final = ticks[ticks.length - 1];
+
+    expect(final.timestampMs).toBe(lastBoundaryMs);
+    expect(final.positionPercent).toBeGreaterThan(94);
+    expect(final.showLabel).toBe(false);
+    expect(ticks.filter((tick) => tick.showLabel)).toHaveLength(ticks.length - 1);
+  });
+
+  test("suppresses a label that would overflow the strip's left edge", () => {
+    const base = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS);
+    const firstBoundaryMs = base[0].timestampMs;
+    // Starting the window exactly on an hour boundary puts that tick at ~0%.
+    const ticks = stripAxisTicks(DAY_SECONDS, firstBoundaryMs + DAY_SECONDS * 1_000);
+    const first = ticks[0];
+
+    expect(first.timestampMs).toBe(firstBoundaryMs);
+    expect(first.positionPercent).toBeLessThan(2);
+    expect(first.showLabel).toBe(false);
+    expect(ticks).toContain(first);
+  });
+
+  test("walks local wall-clock hours across daylight-saving transitions", () => {
+    const previousTz = process.env.TZ;
+    process.env.TZ = "America/New_York";
+    try {
+      const assertHourWalk = (ticks: ReturnType<typeof stripAxisTicks>) => {
+        expect(ticks.length).toBeGreaterThan(0);
+        const seen = new Set<number>();
+        for (const tick of ticks) {
+          expect(tick.positionPercent).toBeGreaterThanOrEqual(0);
+          expect(tick.positionPercent).toBeLessThanOrEqual(100);
+          const at = new Date(tick.timestampMs);
+          expect(at.getHours() % 4).toBe(0);
+          expect(at.getMinutes()).toBe(0);
+          seen.add(tick.timestampMs);
+        }
+        expect(seen.size).toBe(ticks.length);
+      };
+
+      // Spring forward: 2026-03-08 02:00 EST jumps to 03:00 EDT (a 23-hour day).
+      const springForwardNowMs = new Date(2026, 2, 9, 12, 0, 0).getTime();
+      assertHourWalk(stripAxisTicks(48 * 60 * 60, springForwardNowMs));
+
+      // Fall back: 2026-11-01 02:00 EDT repeats as 02:00 EST (a 25-hour day).
+      const fallBackNowMs = new Date(2026, 10, 2, 12, 0, 0).getTime();
+      assertHourWalk(stripAxisTicks(48 * 60 * 60, fallBackNowMs));
+    } finally {
+      if (previousTz === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTz;
+    }
+  });
+
+  test("returns nothing for an unusable window or clock", () => {
+    expect(stripAxisTicks(0, JANUARY_NOON_MS)).toEqual([]);
+    expect(stripAxisTicks(-1, JANUARY_NOON_MS)).toEqual([]);
+    expect(stripAxisTicks(Number.NaN, JANUARY_NOON_MS)).toEqual([]);
+    expect(stripAxisTicks(DAY_SECONDS, Number.NaN)).toEqual([]);
+    expect(stripAxisTicks(DAY_SECONDS, Number.POSITIVE_INFINITY)).toEqual([]);
+  });
+
+  test("labels every tick with localized text", () => {
+    for (const tick of stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS)) {
+      expect(tick.label.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("marks no tick as the day start by default", () => {
+    for (const tick of stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS)) {
+      expect(tick.isDayStart).toBe(false);
+    }
+  });
+
+  test("marks exactly one tick for the chosen day start", () => {
+    // 6 is not divisible by 4, so this adds a tick rather than flagging one.
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 6);
+    const marked = ticks.filter((tick) => tick.isDayStart);
+
+    expect(marked).toHaveLength(1);
+    expect(new Date(marked[0].timestampMs).getHours()).toBe(6);
+    expect(ticks).toHaveLength(7);
+  });
+
+  test("flags the existing tick when the day start is already on the grid", () => {
+    // 8 is divisible by 4, so the hour must be flagged, never duplicated.
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 8);
+    const atEight = ticks.filter((tick) => new Date(tick.timestampMs).getHours() === 8);
+
+    expect(atEight).toHaveLength(1);
+    expect(atEight[0].isDayStart).toBe(true);
+    expect(ticks).toHaveLength(6);
+  });
+
+  test("keeps ticks ordered when the day start is added", () => {
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 6);
+    let previous = -1;
+    for (const tick of ticks) {
+      expect(tick.positionPercent).toBeGreaterThan(previous);
+      previous = tick.positionPercent;
+    }
+  });
+
+  test("suppresses the day-start label at an edge but keeps the tick", () => {
+    const base = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 6);
+    const dayStartMs = base.find((tick) => tick.isDayStart)!.timestampMs;
+    // A window starting exactly on the day start puts it at 0%.
+    const ticks = stripAxisTicks(DAY_SECONDS, dayStartMs + DAY_SECONDS * 1_000, 6);
+    const marked = ticks.find((tick) => tick.isDayStart)!;
+
+    expect(marked.positionPercent).toBeLessThan(2);
+    expect(marked.showLabel).toBe(false);
+  });
+
+  test("ignores a day start that is not a whole hour of the day", () => {
+    for (const hour of [-1, 24, 6.5, Number.NaN]) {
+      const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, hour);
+      expect(ticks.filter((tick) => tick.isDayStart)).toHaveLength(0);
+      expect(ticks).toHaveLength(6);
+    }
+  });
+
+  test("flags one day start per day in a longer window", () => {
+    const ticks = stripAxisTicks(48 * 60 * 60, JANUARY_NOON_MS, 6);
+    const marked = ticks.filter((tick) => tick.isDayStart);
+
+    expect(marked).toHaveLength(2);
+    for (const tick of marked) {
+      expect(new Date(tick.timestampMs).getHours()).toBe(6);
+    }
+    expect(marked[0].positionPercent).toBeLessThan(marked[1].positionPercent);
+  });
+
+  test("suppresses the grid tick label next to an off-grid day start one hour away", () => {
+    // 9 is one hour off the four-hour grid tick at 8, so the two labels would
+    // otherwise collide. The day-start label at 9 wins; the grid tick at 8
+    // keeps its rule but loses its label.
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 9);
+    const adjacentPair = ticks.filter((tick) => {
+      const hour = new Date(tick.timestampMs).getHours();
+      return hour === 8 || hour === 9;
+    });
+
+    expect(adjacentPair).toHaveLength(2);
+    const labeled = adjacentPair.filter((tick) => tick.showLabel);
+    expect(labeled).toHaveLength(1);
+    expect(labeled[0].isDayStart).toBe(true);
+  });
+
+  test("does not suppress labels for crowding when the day start is two hours from the grid", () => {
+    // 6 sits two hours from the nearest grid ticks (4 and 8), clear of the
+    // one-hour collision distance, so nothing should be suppressed on that basis.
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 6);
+    for (const tick of ticks) {
+      const insideEdgeGuards = tick.positionPercent >= 2 && tick.positionPercent <= 94;
+      if (insideEdgeGuards) {
+        expect(tick.showLabel).toBe(true);
+      }
+    }
   });
 });

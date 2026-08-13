@@ -14,6 +14,7 @@
     type ReminderSettingsValidation
   } from "$lib/reminder-settings";
   import type { ReminderActionCommand, ReminderStatus } from "$lib/reminder-status";
+  import { dayStartOptions } from "$lib/day-start";
   import {
     breakErrorCaption,
     breakLoadingCaption,
@@ -32,6 +33,7 @@
     stripActiveHeight,
     stripAfkHeight,
     stripAriaLabel,
+    stripAxisTicks,
     todayErrorCaption,
     todayLoadingCaption,
     type TodayActivity
@@ -51,6 +53,7 @@
     todayActivityError: string | null;
     breakSummary: BreakSummary | null;
     breakSummaryError: string | null;
+    dayStartHour: number;
     savedSettings: ReminderSettings | null;
     timingEditorExpanded: boolean;
     workMinutesInput: string;
@@ -72,6 +75,7 @@
     onSaveSettings: () => void;
     onResetSettings: () => void;
     onOpenDeveloperMode: () => void;
+    onDayStartChange: (hour: number) => void;
   };
 
   let {
@@ -86,6 +90,7 @@
     todayActivityError,
     breakSummary,
     breakSummaryError,
+    dayStartHour,
     savedSettings,
     timingEditorExpanded,
     workMinutesInput,
@@ -106,7 +111,8 @@
     onBreakSecondsInput,
     onSaveSettings,
     onResetSettings,
-    onOpenDeveloperMode
+    onOpenDeveloperMode,
+    onDayStartChange
   }: Props = $props();
 
   const progress = $derived(focusProgress(reminderStatus, savedSettings));
@@ -154,6 +160,11 @@
   );
   const activityStripLabel = $derived(
     todayActivity ? stripAriaLabel(todayActivity) : "Activity strip loading"
+  );
+  const axisTicks = $derived(
+    todayActivity
+      ? stripAxisTicks(todayActivity.windowSeconds, Date.now(), dayStartHour)
+      : []
   );
   const activityEmpty = $derived(
     todayActivity ? isActivityWindowEmpty(todayActivity) : false
@@ -222,7 +233,22 @@
   <section class="section" aria-labelledby="today-title">
     <div class="section-head">
       <h2 id="today-title" class="t-title">Your day</h2>
-      <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
+      <div class="head-aside">
+        <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
+        <label class="day-start t-micro">
+          Day starts
+          <select
+            class="day-start-select"
+            value={dayStartHour}
+            onchange={(event) =>
+              onDayStartChange(Number((event.currentTarget as HTMLSelectElement).value))}
+          >
+            {#each dayStartOptions() as option (option.hour)}
+              <option value={option.hour}>{option.label}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
     </div>
 
     {#if todayActivity}
@@ -251,19 +277,43 @@
         </div>
       </div>
 
-      <div class="strip" role="img" aria-label={activityStripLabel}>
-        {#each todayActivity.strip as bucket, index (index)}
-          <div class="strip-bucket" aria-hidden="true">
+      <div class="strip-frame">
+        <div class="strip-lines" aria-hidden="true">
+          {#each axisTicks as tick (tick.timestampMs)}
             <span
-              class="strip-afk"
-              style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
+              class="strip-line"
+              class:is-day-start={tick.isDayStart}
+              style={`left: ${tick.positionPercent}%`}
             ></span>
+          {/each}
+        </div>
+        <div class="strip" role="img" aria-label={activityStripLabel}>
+          {#each todayActivity.strip as bucket, index (index)}
+            <div class="strip-bucket" aria-hidden="true">
+              <span
+                class="strip-afk"
+                style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
+              ></span>
+              <span
+                class="strip-active"
+                style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
+              ></span>
+            </div>
+          {/each}
+        </div>
+      </div>
+
+      <div class="strip-axis" aria-hidden="true">
+        {#each axisTicks as tick (tick.timestampMs)}
+          {#if tick.showLabel}
             <span
-              class="strip-active"
-              style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
-            ></span>
-          </div>
+              class="strip-axis-hour"
+              class:is-day-start={tick.isDayStart}
+              style={`left: ${tick.positionPercent}%`}>{tick.label}</span
+            >
+          {/if}
         {/each}
+        <span class="strip-axis-now">now</span>
       </div>
       <ul class="legend" aria-hidden="true">
         <li><span class="legend-swatch legend-active"></span> Active</li>
@@ -688,7 +738,27 @@
     font-weight: 400;
   }
 
+  .strip-frame {
+    position: relative;
+  }
+
+  .strip-lines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .strip-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--line);
+  }
+
   .strip {
+    position: relative;
+    z-index: 1;
     display: grid;
     height: 64px;
     align-items: end;
@@ -719,6 +789,71 @@
   .strip-afk {
     background: var(--away);
     opacity: 0.7;
+  }
+
+  .strip-axis {
+    position: relative;
+    height: 14px;
+    margin-top: var(--s1);
+  }
+
+  .strip-axis-hour,
+  .strip-axis-now {
+    position: absolute;
+    color: var(--ink-3);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .strip-axis-hour {
+    transform: translateX(-50%);
+  }
+
+  .strip-axis-now {
+    right: 0;
+  }
+
+  .strip-line.is-day-start {
+    background: var(--line-2);
+  }
+
+  .strip-axis-hour.is-day-start {
+    color: var(--ink-2);
+  }
+
+  .head-aside {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--s1) var(--s3);
+  }
+
+  .day-start {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--s1);
+    color: var(--ink-3);
+  }
+
+  .day-start-select {
+    appearance: none;
+    border: 1px solid var(--line);
+    border-radius: var(--r-control);
+    background: transparent;
+    color: var(--ink-2);
+    font: inherit;
+    padding: 2px 22px 2px 8px;
+    background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+      linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+    background-position: right 10px center, right 6px center;
+    background-size: 4px 4px, 4px 4px;
+    background-repeat: no-repeat;
+  }
+
+  .day-start-select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
   .legend {
