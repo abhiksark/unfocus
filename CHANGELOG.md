@@ -25,12 +25,27 @@ released versions link to their GitHub release.
   and tray notes), macOS (DMG/Homebrew and Gatekeeper), Windows (setup/MSI and
   SmartScreen), first-run defaults, local data paths and clean uninstall,
   build-from-source pins, and troubleshooting.
+- Kept raw **Your day** presence history on this device for at least 90 days,
+  beyond the 24-hour live window the strip already shows. Segments that age
+  out of the live file are archived to local files in the same config
+  directory rather than deleted; this stays local-only like everything else
+  in Unfocus, with no account and no network call. History fills forward
+  only: existing installs start with none of this longer history, and nothing
+  from before this change can be backfilled. A new query command reads the
+  longer history back, but nothing in the UI uses it yet — a week and month
+  view is separate future work.
 
 ### Changed
 
 - Updated the README consumer dashboard screenshot to the single-column layout
   with **Your day** activity strip and break outcome counts. Break-screen media
   is unchanged.
+- Raised the break-outcome ledger's retention from 7 to at least 90 days and
+  its event cap from 512 to 16,384, matching the activity history above. The
+  old cap was a live defect: a 20-minute work interval can produce up to 72
+  scheduled breaks a day, and with natural-idle and fullscreen-suppress
+  outcomes added in, the cap could already be reached inside the old 7-day
+  window, silently undercounting the dashboard's week totals.
 
 ## [0.3.1-alpha.1] - 2026-08-12
 

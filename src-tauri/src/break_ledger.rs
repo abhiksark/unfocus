@@ -17,9 +17,20 @@ use std::{
 
 const LEDGER_FILE_NAME: &str = "break-events.json";
 const LEDGER_SCHEMA_VERSION: u32 = 1;
-/// Keep roughly a week of outcomes for calm daily/weekly counts.
-const RETENTION_SECONDS: u64 = 7 * 24 * 60 * 60;
-const MAX_EVENTS: usize = 512;
+/// Keep at least ninety days of outcomes, matching the activity history
+/// retention (`activity.rs`'s `HISTORY_RETENTION_SECONDS`) so week/day counts
+/// stay backed by data for as long as the day-by-hour history the frontend
+/// will eventually read alongside them.
+const RETENTION_SECONDS: u64 = 90 * 24 * 60 * 60;
+/// Bounds a pathological event rate; retention above is what normally bounds
+/// the file. `512` was a live defect: a 20-minute work interval yields up to
+/// 72 scheduled breaks a day, so with natural-idle and fullscreen-suppress
+/// events the old cap could bite inside even the prior 7-day window, silently
+/// undercounting the dashboard's week totals. At the densest plausible rate
+/// (a 1-minute work interval, 1,440 scheduled breaks a day) retention still
+/// bounds the file for the first several days before this cap would; a
+/// genuinely pathological rate is still stopped.
+const MAX_EVENTS: usize = 16_384;
 const MILLIS_PER_SECOND: u64 = 1_000;
 
 static LEDGER_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
@@ -478,6 +489,43 @@ mod tests {
             .iter()
             .all(|event| event.kind != BreakEventKind::NaturalIdle
                 || event.at_ms >= (t0 + MAX_EVENTS as u64 + 40).saturating_sub(retention_ms())));
+    }
+
+    #[test]
+    fn retention_keeps_ninety_days_at_a_realistic_rate() {
+        // ~80 events a day (scheduled breaks plus natural-idle and
+        // fullscreen-suppress outcomes) is a realistic heavy-use rate, well
+        // above a 20-minute interval's ~72 scheduled breaks alone. Ninety
+        // days at that rate is 7,200 events, far under MAX_EVENTS, so
+        // retention alone must decide what stays; nothing inside the window
+        // may be dropped by the cap.
+        const EVENTS_PER_DAY: u64 = 80;
+        const DAYS: u64 = 90;
+        let spacing_ms = day_ms() / EVENTS_PER_DAY;
+        let t0 = 1_700_000_000_000_u64;
+        let total = EVENTS_PER_DAY * DAYS;
+        let mut events = Vec::with_capacity(total as usize);
+        for index in 0..total {
+            events.push(BreakEvent {
+                at_ms: t0 + index * spacing_ms,
+                kind: BreakEventKind::ScheduledShown,
+                work_minutes: 20,
+                break_seconds: 20,
+            });
+        }
+        let now_ms = t0 + (total - 1) * spacing_ms;
+
+        prune_events(&mut events, now_ms);
+
+        assert!(
+            (total as usize) < MAX_EVENTS,
+            "test rate must stay realistic, not already exceed the cap"
+        );
+        assert_eq!(
+            events.len(),
+            total as usize,
+            "no event inside the ninety-day window should be dropped"
+        );
     }
 
     #[test]
