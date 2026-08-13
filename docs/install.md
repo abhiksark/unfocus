@@ -177,10 +177,10 @@ The archive key signs **repository metadata** only; alpha packages are still
 not application code-signed (same honesty as release `.deb` downloads).
 
 ```sh
-curl -fsSL https://abhiksark.github.io/unfocus-apt/public-key.asc \
+curl -fsSL https://apt.abhik.ai/public-key.asc \
   | sudo gpg --dearmor -o /usr/share/keyrings/unfocus-archive-keyring.gpg
 
-echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://abhiksark.github.io/unfocus-apt alpha main' \
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://apt.abhik.ai alpha main' \
   | sudo tee /etc/apt/sources.list.d/unfocus-alpha.list
 
 sudo apt update

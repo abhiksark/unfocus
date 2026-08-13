@@ -45,9 +45,9 @@ and choose the package for your system, or use a package manager:
 On Debian or Ubuntu (X11), install the alpha from the public APT repository:
 
 ```sh
-curl -fsSL https://abhiksark.github.io/unfocus-apt/public-key.asc \
+curl -fsSL https://apt.abhik.ai/public-key.asc \
   | sudo gpg --dearmor -o /usr/share/keyrings/unfocus-archive-keyring.gpg
-echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://abhiksark.github.io/unfocus-apt alpha main' \
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://apt.abhik.ai alpha main' \
   | sudo tee /etc/apt/sources.list.d/unfocus-alpha.list
 sudo apt update
 sudo apt install unfocus

@@ -106,7 +106,7 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
 ## APT repository automation boundary
 
 - The APT archive for alpha packages lives in `abhiksark/unfocus-apt` and is
-  served from GitHub Pages (`https://abhiksark.github.io/unfocus-apt/`). Suite
+  served from GitHub Pages (`https://apt.abhik.ai/`). Suite
   name is `alpha`; package name is `unfocus`; architecture is `amd64` only.
 - The APT GitHub App is installed only on `abhiksark/unfocus-apt`. Its
   credentials live in the default-branch-restricted `apt-repo-automation`
