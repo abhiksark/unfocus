@@ -151,10 +151,15 @@ impl ActivityTracker {
         }
     }
 
-    /// Replace live segments with a pruned history snapshot.
+    /// Replace live segments with a loaded history snapshot.
     ///
-    /// Future wall-clock ends (clock skew) clear history rather than inventing
-    /// multi-day spans. Restored state is not treated as a live probe success.
+    /// The caller (the loader in `load_or_repair_history`) has already
+    /// archived-before-dropping anything aged out of the window; this must
+    /// not re-drop anything itself, or a segment kept hot for a later
+    /// archive retry (because the write failed at load time) would be
+    /// silently destroyed here instead. Future wall-clock ends (clock skew)
+    /// still clear history rather than inventing multi-day spans. Restored
+    /// state is not treated as a live probe success.
     fn restore_segments(&mut self, segments: Vec<Segment>, now_ms: u64) {
         self.segments = segments;
         if self
@@ -168,7 +173,6 @@ impl ActivityTracker {
             self.last_probe_ok = false;
             return;
         }
-        self.drop_archived(now_ms);
         self.last_sample_ms = self.segments.last().map(|segment| segment.end_ms);
         self.last_kind = self.segments.last().map(|segment| segment.kind);
         self.last_probe_ok = false;
@@ -593,13 +597,10 @@ pub(crate) fn epoch_ms(now: SystemTime) -> u64 {
 fn segments_from_persisted(
     history: PersistedActivityHistory,
     now_ms: u64,
-    window_seconds: u64,
 ) -> Result<Vec<Segment>, ()> {
     if history.version != HISTORY_SCHEMA_VERSION {
         return Err(());
     }
-    let window_ms = window_seconds.saturating_mul(MILLIS_PER_SECOND);
-    let cutoff = now_ms.saturating_sub(window_ms);
     let mut segments = Vec::with_capacity(history.segments.len());
     for item in history.segments {
         if item.end_ms < item.start_ms {
@@ -609,17 +610,54 @@ fn segments_from_persisted(
             // Future timestamps: treat as clock skew, drop whole history.
             return Err(());
         }
-        if item.end_ms <= cutoff {
-            continue;
-        }
-        let start_ms = item.start_ms.max(cutoff);
         segments.push(Segment {
             kind: item.kind.into_activity(),
-            start_ms,
+            start_ms: item.start_ms,
             end_ms: item.end_ms,
         });
     }
     Ok(segments)
+}
+
+/// Archive-before-drop for segments loaded from the hot file, mirroring the
+/// live prune contract in `ActivityTrackerHandle::observe` exactly: a
+/// segment fully aged out of the window (`end_ms <= cutoff`) is archived
+/// before it leaves the returned set. If the archive write fails, it stays
+/// in the returned set instead of being discarded — a later live prune will
+/// retry it, so a failed write here never destroys data. A segment
+/// straddling the cutoff is always returned whole, never truncated.
+///
+/// This closes the one path the live prune can never cover: the app closed
+/// for longer than the window and reopened, so the aged-out segments never
+/// reach memory for a live prune to archive at all.
+fn archive_before_drop(
+    path: &Path,
+    segments: Vec<Segment>,
+    now_ms: u64,
+    window_seconds: u64,
+) -> Vec<Segment> {
+    let window_ms = window_seconds.saturating_mul(MILLIS_PER_SECOND);
+    let cutoff = now_ms.saturating_sub(window_ms);
+    let (archivable, mut retained): (Vec<Segment>, Vec<Segment>) = segments
+        .into_iter()
+        .partition(|segment| segment.end_ms <= cutoff);
+
+    if archivable.is_empty() {
+        return retained;
+    }
+
+    let config_dir = path.parent().unwrap_or_else(|| Path::new(""));
+    match archive_segments(config_dir, &archivable) {
+        Ok(()) => retained,
+        Err(error) => {
+            eprintln!(
+                "could not archive aged-out activity history on load: {error}; keeping it hot for a later retry"
+            );
+            retained.extend(archivable);
+            retained.sort_by_key(|segment| segment.start_ms);
+            retained
+        }
+    }
 }
 
 fn load_or_repair_history(
@@ -631,9 +669,9 @@ fn load_or_repair_history(
         Ok(contents) => {
             let parsed = serde_json::from_slice::<PersistedActivityHistory>(&contents)
                 .ok()
-                .and_then(|history| segments_from_persisted(history, now_ms, window_seconds).ok());
+                .and_then(|history| segments_from_persisted(history, now_ms).ok());
             if let Some(segments) = parsed {
-                return Ok(segments);
+                return Ok(archive_before_drop(path, segments, now_ms, window_seconds));
             }
 
             // Invalid or untrusted content: write a complete empty history so
@@ -989,6 +1027,84 @@ mod tests {
             serde_json::from_slice(&fs::read(&path).expect("read")).expect("valid json");
         assert_eq!(repaired.version, HISTORY_SCHEMA_VERSION);
         assert!(repaired.segments.is_empty());
+    }
+
+    #[test]
+    fn load_archives_segments_aged_out_while_closed() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let t0 = 1_700_000_000_000_u64;
+        let old_segment = PersistedSegment {
+            kind: PersistedKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 60_000,
+        };
+        persist_history(
+            &path,
+            &PersistedActivityHistory {
+                version: HISTORY_SCHEMA_VERSION,
+                segments: vec![old_segment],
+            },
+        )
+        .expect("seed hot file with an aged segment");
+
+        // Reopen several days later, as if the app had been closed the whole
+        // time: the live prune never ran, so this segment never reached
+        // memory until now.
+        let reopened_at = t0 + 60_000 + 5 * 24 * 60 * 60 * 1_000;
+        let loaded = load_or_repair_history(&path, reopened_at, ACTIVITY_WINDOW_SECONDS)
+            .expect("load on reopen");
+
+        assert!(
+            loaded.is_empty(),
+            "the aged-out segment must leave the live set on load"
+        );
+
+        let archived = activity_archive::read_range(&dir.path, t0, t0 + 60_000 + 1);
+        assert_eq!(
+            archived,
+            vec![Segment {
+                kind: ActivityKind::Active,
+                start_ms: t0,
+                end_ms: t0 + 60_000,
+            }],
+            "the aged-out segment must be archived on load instead of discarded"
+        );
+    }
+
+    #[test]
+    fn load_retains_straddling_segment_whole() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let t0 = 1_700_000_000_000_u64;
+        let straddler = PersistedSegment {
+            kind: PersistedKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 250_000,
+        };
+        persist_history(
+            &path,
+            &PersistedActivityHistory {
+                version: HISTORY_SCHEMA_VERSION,
+                segments: vec![straddler],
+            },
+        )
+        .expect("seed hot file with a straddling segment");
+
+        // window is 300_000 ms, so cutoff = now - 300_000 = t0 + 100_000,
+        // which falls inside the segment's span.
+        let now = t0 + 400_000;
+        let loaded = load_or_repair_history(&path, now, 300).expect("load");
+
+        assert_eq!(
+            loaded,
+            vec![Segment {
+                kind: ActivityKind::Active,
+                start_ms: t0,
+                end_ms: t0 + 250_000,
+            }],
+            "a straddling segment must load with its original start_ms, not truncated"
+        );
     }
 
     #[test]
