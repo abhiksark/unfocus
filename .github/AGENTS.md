@@ -106,25 +106,20 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
 ## APT repository automation boundary
 
 - The APT archive for alpha packages lives in `abhiksark/unfocus-apt` and is
-  served from GitHub Pages (`https://apt.abhik.ai/`). Suite
-  name is `alpha`; package name is `unfocus`; architecture is `amd64` only.
-- The APT GitHub App is installed only on `abhiksark/unfocus-apt`. Its
-  credentials live in the default-branch-restricted `apt-repo-automation`
-  environment on both repositories. Secret names: `APT_APP_ID`,
-  `APT_APP_PRIVATE_KEY` (source dispatch and apt-repo update). Signing secrets
-  live only on `unfocus-apt`: `APT_SIGNING_KEY` (armored private key) and
-  optional `APT_SIGNING_KEY_PASSPHRASE`.
-- The source repository may use the App only to send the
-  `unfocus-alpha-published` repository dispatch to `unfocus-apt`. It must never
-  push apt tree files, hold the archive private key, or sign indexes.
-- The apt repository may use the App only to push an automation branch and open
-  a reviewable pull request that updates `pool/`, `dists/`, and `public-key.asc`.
-  Workflows must never alter Unfocus releases, merge their own pull request, or
-  grant a ruleset bypass.
+  served from GitHub Pages at `https://apt.abhik.ai/`. Suite name is `alpha`;
+  package name is `unfocus`; architecture is `amd64` only.
+- Credentials live in the `apt-repo-automation` environment on both
+  repositories. Source repo secret: `APT_DISPATCH_TOKEN` (may only create
+  `repository_dispatch` events on `unfocus-apt`). Apt-repo secrets:
+  `APT_SIGNING_KEY` (armored archive private key) and optional
+  `APT_SIGNING_KEY_PASSPHRASE`.
+- The source repository must never push apt tree files, hold the archive
+  private key, or sign indexes. It only dispatches `unfocus-alpha-published`.
+- The apt repository rebuilds `pool/`, `dists/`, and `public-key.asc` and
+  pushes to `main` with `GITHUB_TOKEN`. It must never alter Unfocus releases.
 - Archive GPG signing authenticates **repository metadata** only. Alpha `.deb`
   packages remain application-unsigned; docs must keep that distinction.
-- Operator setup steps for the key, App, Pages, and first publish live in
-  `abhiksark/unfocus-apt` (`OPERATOR.md`).
+- Operator setup is documented in `abhiksark/unfocus-apt` (`OPERATOR.md`).
 
 ## Repository settings
 

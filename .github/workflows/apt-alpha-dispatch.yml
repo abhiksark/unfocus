@@ -70,23 +70,17 @@ jobs:
             echo "tag_name=$TAG"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Mint an apt-repo-only GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.APT_APP_ID }}
-          private-key: ${{ secrets.APT_APP_PRIVATE_KEY }}
-          owner: abhiksark
-          permission-contents: write
-          repositories: unfocus-apt
-
       - name: Dispatch the apt repository update
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.APT_DISPATCH_TOKEN }}
           RELEASE_ID: ${{ steps.release.outputs.release_id }}
           TAG_NAME: ${{ steps.release.outputs.tag_name }}
         run: |
           set -euo pipefail
+          [ -n "${GH_TOKEN:-}" ] || {
+            echo "APT_DISPATCH_TOKEN is required in the apt-repo-automation environment." >&2
+            exit 1
+          }
           jq -n \
             --arg source_repository "$GITHUB_REPOSITORY" \
             --argjson release_id "$RELEASE_ID" \

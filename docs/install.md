@@ -218,9 +218,9 @@ Package removal does not always delete local settings. See
 [Local data and clean uninstall](#local-data-and-clean-uninstall).
 
 Repository automation and operator notes live in
-[abhiksark/unfocus-apt](https://github.com/abhiksark/unfocus-apt). The source
-must be available on GitHub Pages before the commands above succeed; until the
-first alpha package PR is merged there, use the manual `.deb` path below.
+[abhiksark/unfocus-apt](https://github.com/abhiksark/unfocus-apt). Use the
+manual `.deb` path below for offline install or when verifying a specific
+release asset yourself.
 
 ### Debian / Ubuntu (manual `.deb`)
 
