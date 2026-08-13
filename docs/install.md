@@ -173,8 +173,13 @@ desktop.
 ### Debian / Ubuntu (APT, preferred)
 
 Install the alpha from the public APT repository. The suite name is **`alpha`**.
-The archive key signs **repository metadata** only; alpha packages are still
-not application code-signed (same honesty as release `.deb` downloads).
+
+On Ubuntu and Debian, “signed packages” means the **APT archive** is signed
+with the Unfocus archive OpenPGP key (`public-key.asc`), not Apple/Microsoft
+application code signing. `apt update` checks that signature before it trusts
+package lists. Each pool `.deb` also has a matching detached signature
+(`.deb.asc`) for optional offline checks. That is the normal Linux trust model
+for third-party repositories.
 
 ```sh
 curl -fsSL https://apt.abhik.ai/public-key.asc \
@@ -185,6 +190,15 @@ echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg]
 
 sudo apt update
 sudo apt install unfocus
+```
+
+**Optional offline check** of a downloaded package (after importing the archive
+key once):
+
+```sh
+curl -fsSL -O https://apt.abhik.ai/pool/main/u/unfocus/unfocus_0.3.0~alpha.1-1_amd64.deb
+curl -fsSL -O https://apt.abhik.ai/pool/main/u/unfocus/unfocus_0.3.0~alpha.1-1_amd64.deb.asc
+gpg --verify unfocus_0.3.0~alpha.1-1_amd64.deb.asc unfocus_0.3.0~alpha.1-1_amd64.deb
 ```
 
 Launch from the application menu as **Unfocus**, or:

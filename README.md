@@ -53,6 +53,10 @@ sudo apt update
 sudo apt install unfocus
 ```
 
+Linux packages are signed with the Unfocus **APT archive OpenPGP key** (the
+normal third-party repo model). macOS and Windows installers are still not
+application code-signed.
+
 On macOS, install the same prerelease through the public Homebrew tap:
 
 ```sh

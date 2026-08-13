@@ -7,6 +7,8 @@ released versions link to their GitHub release.
 
 ### Added
 
+- Documented Ubuntu/Debian package trust via the APT archive OpenPGP key on
+  [apt.abhik.ai](https://apt.abhik.ai), including optional `.deb.asc` verification.
 - Added a time axis to the **Your day** activity strip. Faint gridlines mark
   every fourth hour behind the bars, with the hour labeled beneath in the
   system clock format and the right edge marked `now`, so a bar can be traced
