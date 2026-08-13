@@ -12,7 +12,7 @@
 //! archive write leaves a segment hot so it is retried on a later prune;
 //! nothing is lost to a failed write or a crash between the two.
 
-use crate::activity_archive::{archive_segments, prune_chunks};
+use crate::activity_archive::{archive_segments, prune_chunks, read_range};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File, OpenOptions},
@@ -48,6 +48,9 @@ const PERSIST_MIN_INTERVAL_MS: u64 = 30_000;
 const HISTORY_FILE_NAME: &str = "activity-history.json";
 pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 1;
 const MILLIS_PER_SECOND: u64 = 1_000;
+/// Upper bound on buckets per query. A 30-day grid at hourly resolution needs
+/// 720 buckets, so 721 boundaries.
+const MAX_RANGE_BUCKETS: usize = 1_024;
 
 static HISTORY_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -461,6 +464,37 @@ pub(crate) struct ActivitySummary {
     pub(crate) strip: Vec<StripBucket>,
 }
 
+/// One bucket of summed occupancy for `get_activity_range`. The frontend
+/// computes bucket boundaries (local days/hours); Rust only sums between
+/// them, see the module-level contract on `get_activity_range`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RangeBucket {
+    pub(crate) active_ms: u64,
+    pub(crate) afk_ms: u64,
+}
+
+/// Sum active/afk overlap between `[start, end)` and `segments`, using the
+/// same clamped-overlap arithmetic as `ActivityTracker::strip_buckets`.
+fn bucket_occupancy(segments: &[Segment], start: u64, end: u64) -> RangeBucket {
+    let mut active_ms = 0_u64;
+    let mut afk_ms = 0_u64;
+    for segment in segments {
+        let overlap_start = segment.start_ms.max(start);
+        let overlap_end = segment.end_ms.min(end);
+        if overlap_end <= overlap_start {
+            continue;
+        }
+        let overlap = overlap_end - overlap_start;
+        match segment.kind {
+            ActivityKind::Active => active_ms = active_ms.saturating_add(overlap),
+            ActivityKind::Afk => afk_ms = afk_ms.saturating_add(overlap),
+            ActivityKind::Unknown => {}
+        }
+    }
+    RangeBucket { active_ms, afk_ms }
+}
+
 #[derive(Debug)]
 struct ActivityTrackerState {
     tracker: ActivityTracker,
@@ -585,6 +619,71 @@ impl ActivityTrackerHandle {
                 continuous_active_seconds: 0,
                 recent_afk_seconds: 0,
             })
+    }
+
+    /// Sum occupancy into `boundaries.len() - 1` buckets, one per adjacent
+    /// pair, from the union of the hot segments and the archive. Fails
+    /// closed (a descriptive error, never a partial or empty success) when
+    /// `boundaries` has fewer than two entries, is not strictly increasing,
+    /// or would produce more than `MAX_RANGE_BUCKETS` buckets.
+    ///
+    /// `boundaries` are caller-computed epoch milliseconds: Rust has no
+    /// calendar and must not gain one, so it never buckets by local day or
+    /// hour itself, only sums between the boundaries it is given.
+    pub(crate) fn range(&self, boundaries: &[u64]) -> Result<Vec<RangeBucket>, String> {
+        if boundaries.len() < 2 {
+            return Err("boundaries must contain at least two values".into());
+        }
+        if boundaries.len() > MAX_RANGE_BUCKETS + 1 {
+            return Err(format!(
+                "boundaries must not exceed {} entries ({MAX_RANGE_BUCKETS} buckets)",
+                MAX_RANGE_BUCKETS + 1
+            ));
+        }
+        if !boundaries.windows(2).all(|pair| pair[1] > pair[0]) {
+            return Err("boundaries must be strictly increasing".into());
+        }
+
+        let span_start = boundaries[0];
+        let span_end = boundaries[boundaries.len() - 1];
+        let segments = self.segments_in_range(span_start, span_end);
+
+        Ok(boundaries
+            .windows(2)
+            .map(|pair| bucket_occupancy(&segments, pair[0], pair[1]))
+            .collect())
+    }
+
+    /// Every segment overlapping `[start_ms, end_ms)`, merged from the hot
+    /// set and the archive.
+    ///
+    /// A segment is archived, then dropped from the hot set, under the same
+    /// lock (see `observe`), so within one `observe` call it is never in
+    /// both places at once. But this method takes its own snapshot of the
+    /// hot set and only afterwards reads the archive from disk; a concurrent
+    /// `observe` can archive-and-drop a segment in between those two steps,
+    /// so the snapshot (taken before the drop) and the archive read (taken
+    /// after the archive write) can both contain it. Such a duplicate is a
+    /// value-identical `Segment`, since a dropped segment can never be
+    /// extended again (a later sample with the same kind opens a new
+    /// segment instead, see `extend_or_open`), so sorting and deduping by
+    /// value is exact, not a heuristic.
+    fn segments_in_range(&self, start_ms: u64, end_ms: u64) -> Vec<Segment> {
+        let (hot, config_dir) = {
+            let Ok(state) = self.inner.lock() else {
+                return Vec::new();
+            };
+            (state.tracker.segments.clone(), state.config_dir.clone())
+        };
+
+        let mut combined: Vec<Segment> = hot
+            .into_iter()
+            .filter(|segment| segment.end_ms > start_ms && segment.start_ms < end_ms)
+            .collect();
+        combined.extend(read_range(&config_dir, start_ms, end_ms));
+        combined.sort_by_key(|segment| segment.start_ms);
+        combined.dedup();
+        combined
     }
 }
 
@@ -773,6 +872,25 @@ pub(crate) fn get_today_activity(
 ) -> Result<ActivitySummary, String> {
     crate::authorize_main_caller(window.label())?;
     Ok(tracker.summary(epoch_ms(SystemTime::now())))
+}
+
+/// Historical occupancy across an arbitrary span, bucketed by the caller.
+///
+/// Rust has no calendar and must not gain one: the eventual grid's rows are
+/// local days and columns are local hours, which do not align to uniform
+/// UTC steps in half-hour-offset zones or on daylight-saving days. The
+/// frontend therefore computes `boundaries` (strictly increasing epoch
+/// milliseconds) and this command only sums between them, over the union of
+/// the hot segments and the archive. See `ActivityTrackerHandle::range` for
+/// the validation contract and the hot/archive merge.
+#[tauri::command]
+pub(crate) fn get_activity_range(
+    window: tauri::WebviewWindow,
+    tracker: tauri::State<'_, ActivityTrackerHandle>,
+    boundaries: Vec<u64>,
+) -> Result<Vec<RangeBucket>, String> {
+    crate::authorize_main_caller(window.label())?;
+    tracker.range(&boundaries)
 }
 
 #[cfg(test)]
@@ -1370,6 +1488,168 @@ mod tests {
             activity_archive::chunk_path(&dir.path, 3).exists(),
             "the freshly archived chunk must survive the same prune pass"
         );
+    }
+
+    #[test]
+    fn range_rejects_fewer_than_two_boundaries() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+
+        assert!(
+            handle.range(&[]).is_err(),
+            "empty boundaries must be rejected"
+        );
+        assert!(
+            handle.range(&[1_700_000_000_000]).is_err(),
+            "a single boundary must be rejected"
+        );
+    }
+
+    #[test]
+    fn range_rejects_non_increasing_boundaries() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+
+        assert!(
+            handle.range(&[t0, t0]).is_err(),
+            "equal adjacent boundaries must be rejected"
+        );
+        assert!(
+            handle.range(&[t0, t0 - 1]).is_err(),
+            "decreasing boundaries must be rejected"
+        );
+        assert!(
+            handle.range(&[t0, t0 + 10_000, t0 + 5_000]).is_err(),
+            "a later non-increasing pair must be rejected too"
+        );
+    }
+
+    #[test]
+    fn range_rejects_more_than_the_bucket_cap() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+
+        let at_cap: Vec<u64> = (0..=MAX_RANGE_BUCKETS as u64).map(|i| t0 + i).collect();
+        assert!(
+            handle.range(&at_cap).is_ok(),
+            "exactly MAX_RANGE_BUCKETS buckets must be accepted"
+        );
+
+        let over_cap: Vec<u64> = (0..=(MAX_RANGE_BUCKETS as u64 + 1))
+            .map(|i| t0 + i)
+            .collect();
+        assert!(
+            handle.range(&over_cap).is_err(),
+            "one more than the cap must be rejected"
+        );
+    }
+
+    #[test]
+    fn range_returns_one_bucket_per_adjacent_pair() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+
+        let boundaries = vec![t0, t0 + 10_000, t0 + 20_000, t0 + 45_000];
+        let buckets = handle.range(&boundaries).expect("range succeeds");
+        assert_eq!(buckets.len(), boundaries.len() - 1);
+    }
+
+    #[test]
+    fn range_reports_zero_for_an_empty_bucket() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+
+        let buckets = handle
+            .range(&[t0, t0 + 60_000])
+            .expect("range succeeds for a window with no data");
+        assert_eq!(buckets.len(), 1);
+        assert_eq!(buckets[0].active_ms, 0);
+        assert_eq!(buckets[0].afk_ms, 0);
+    }
+
+    #[test]
+    fn range_sums_hot_and_archived_segments_once() {
+        let dir = TestDirectory::new();
+        let t0 = 1_700_000_000_000_u64;
+        let segment = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 60_000,
+        };
+
+        // Simulate the archive-before-drop race: `observe` archives a segment
+        // to disk and only then drops it from the hot set, under the same
+        // lock. A reader that snapshots the hot set just before that drop and
+        // reads the archive just after it can observe the identical segment
+        // in both places. `range` must still count its duration once.
+        activity_archive::archive_segments(&dir.path, &[segment]).expect("seed archive");
+        let mut seeded = tracker();
+        seeded.restore_segments(vec![segment], t0 + 60_000);
+        let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
+
+        let buckets = handle.range(&[t0, t0 + 60_000]).expect("range succeeds");
+
+        assert_eq!(buckets.len(), 1);
+        assert_eq!(
+            buckets[0].active_ms, 60_000,
+            "a segment present in both the hot set and the archive must be counted once"
+        );
+        assert_eq!(buckets[0].afk_ms, 0);
+    }
+
+    #[test]
+    fn range_matches_strip_buckets_for_an_equivalent_window() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+
+        // Spread active and afk time across more than one bucket.
+        handle.observe(t0, Some(0));
+        handle.observe(t0 + 30 * 60_000, Some(0));
+        handle.observe(t0 + 30 * 60_000 + 1_000, Some(400));
+        handle.observe(t0 + 90 * 60_000, Some(400));
+        handle.observe(t0 + 90 * 60_000 + 1_000, Some(0));
+
+        let now_ms = t0 + ACTIVITY_WINDOW_SECONDS * MILLIS_PER_SECOND;
+        let summary = handle.summary(now_ms);
+        assert_eq!(summary.strip.len(), STRIP_BUCKET_COUNT);
+
+        let window_ms = ACTIVITY_WINDOW_SECONDS * MILLIS_PER_SECOND;
+        let window_start = now_ms - window_ms;
+        let bucket_ms = window_ms / STRIP_BUCKET_COUNT as u64;
+        let boundaries: Vec<u64> = (0..=STRIP_BUCKET_COUNT as u64)
+            .map(|index| window_start + bucket_ms * index)
+            .collect();
+
+        let range_buckets = handle.range(&boundaries).expect("range succeeds");
+        assert_eq!(range_buckets.len(), STRIP_BUCKET_COUNT);
+
+        for (index, (strip_bucket, range_bucket)) in
+            summary.strip.iter().zip(range_buckets.iter()).enumerate()
+        {
+            let expected_active = (strip_bucket.active_ratio * bucket_ms as f64).round() as u64;
+            let expected_afk = (strip_bucket.afk_ratio * bucket_ms as f64).round() as u64;
+            assert!(
+                range_bucket.active_ms.abs_diff(expected_active) <= 1,
+                "bucket {index}: active_ms mismatch: strip-derived={expected_active} range={}",
+                range_bucket.active_ms
+            );
+            assert!(
+                range_bucket.afk_ms.abs_diff(expected_afk) <= 1,
+                "bucket {index}: afk_ms mismatch: strip-derived={expected_afk} range={}",
+                range_bucket.afk_ms
+            );
+        }
     }
 
     #[test]

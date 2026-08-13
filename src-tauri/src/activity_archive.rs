@@ -13,8 +13,8 @@
 //! months of history.
 //!
 //! `archive_segments` and `prune_chunks` are wired into the hot-file prune in
-//! `activity.rs`. `read_range` is exercised by tests only until the
-//! `get_activity_range` command (later work) reads through it.
+//! `activity.rs`. `read_range` is read through by the `get_activity_range`
+//! command, also in `activity.rs`, which merges it with the hot set.
 
 use crate::activity::{
     persist_history, PersistedActivityHistory, PersistedKind, PersistedSegment, Segment,
@@ -119,9 +119,8 @@ pub(crate) fn archive_segments(config_dir: &Path, segments: &[Segment]) -> io::R
 /// Every archived segment overlapping `[start_ms, end_ms)`, oldest first.
 /// Skips unreadable or corrupt chunks rather than failing the whole read.
 ///
-/// Not yet called from production code: the `get_activity_range` command
-/// that reads through this is later work. Exercised by tests until then.
-#[allow(dead_code)]
+/// Read through by the `get_activity_range` command (`activity.rs`), merged
+/// there with the hot set.
 pub(crate) fn read_range(config_dir: &Path, start_ms: u64, end_ms: u64) -> Vec<Segment> {
     if end_ms <= start_ms {
         return Vec::new();
