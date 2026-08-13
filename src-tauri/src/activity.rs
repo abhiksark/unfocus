@@ -12,7 +12,7 @@
 //! archive write leaves a segment hot so it is retried on a later prune;
 //! nothing is lost to a failed write or a crash between the two.
 
-use crate::activity_archive::{archive_segments, prune_chunks, read_range};
+use crate::activity_archive::{archive_segments, prune_chunks, read_range, ARCHIVE_BLOCK_MS};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File, OpenOptions},
@@ -566,13 +566,24 @@ impl ActivityTrackerHandle {
         state.tracker.observe(now_ms, idle_seconds);
         let kind_changed = state.tracker.last_kind != previous_kind;
 
+        let due = match state.last_persisted_at_ms {
+            None => true,
+            Some(previous) => now_ms.saturating_sub(previous) >= PERSIST_MIN_INTERVAL_MS,
+        };
+
         // Flush before prune: a segment leaves the hot set only once it is
         // safely archived. A write failure leaves it hot for a later retry;
         // nothing is lost, and this never blocks or mutates the timer. Only
-        // write when something is actually archivable, so an idle prune
-        // costs nothing.
+        // attempt the archive when the persist throttle below would already
+        // do work (a kind change or the throttle interval elapsing): under a
+        // persistent archive failure (full disk, blocked chunk path), the
+        // same segments would otherwise be retried, and rewritten in full,
+        // on every observation, which is exactly the unbounded hot-set
+        // growth this design exists to prevent. Segments simply wait for the
+        // next throttled attempt; nothing already archived is re-attempted,
+        // and nothing hot is ever lost.
         let archivable = state.tracker.archivable_segments(now_ms);
-        if !archivable.is_empty() {
+        if !archivable.is_empty() && (kind_changed || due) {
             match archive_segments(&state.config_dir, &archivable) {
                 Ok(()) => {
                     state.tracker.drop_archived(now_ms);
@@ -589,10 +600,6 @@ impl ActivityTrackerHandle {
             }
         }
 
-        let due = match state.last_persisted_at_ms {
-            None => true,
-            Some(previous) => now_ms.saturating_sub(previous) >= PERSIST_MIN_INTERVAL_MS,
-        };
         if !kind_changed && !due {
             return;
         }
@@ -646,6 +653,21 @@ impl ActivityTrackerHandle {
 
         let span_start = boundaries[0];
         let span_end = boundaries[boundaries.len() - 1];
+        // Bound the span itself, not just the bucket count: two boundaries
+        // spanning the full u64 range pass every check above (one bucket,
+        // strictly increasing) yet would ask `read_range` to walk from the
+        // first archive chunk key to the last, roughly seven billion reads.
+        // Retained history can never exceed retention plus one archive block
+        // (a chunk is only deleted once fully expired), so a wider span can
+        // never hold real data and is rejected outright.
+        let max_span_ms = HISTORY_RETENTION_SECONDS
+            .saturating_mul(MILLIS_PER_SECOND)
+            .saturating_add(ARCHIVE_BLOCK_MS);
+        if span_end.saturating_sub(span_start) > max_span_ms {
+            return Err(format!(
+                "boundaries must not span more than {max_span_ms} ms of retained history"
+            ));
+        }
         let segments = self.segments_in_range(span_start, span_end);
 
         Ok(boundaries
@@ -1373,6 +1395,61 @@ mod tests {
     }
 
     #[test]
+    fn archive_attempt_respects_the_persist_throttle() {
+        let dir = TestDirectory::new();
+        let t0 = 1_700_000_000_000_u64;
+
+        // A one-second window so a segment can age into "archivable" within
+        // milliseconds, without waiting anywhere near the 30-second persist
+        // throttle. `closed_segment` never gets extended again (its kind
+        // differs from the segment that follows it), so it stays fixed while
+        // the clock advances around it.
+        let closed_segment = Segment {
+            kind: ActivityKind::Afk,
+            start_ms: t0,
+            end_ms: t0 + 50,
+        };
+        let open_segment = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0 + 50,
+            end_ms: t0 + 50,
+        };
+        let mut seeded = ActivityTracker::new(60, 120, 1, 3);
+        seeded.restore_segments(vec![closed_segment, open_segment], t0 + 50);
+
+        let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
+
+        // First observation: `last_persisted_at_ms` is still `None`, so this
+        // call is due regardless of `kind_changed`. `closed_segment` has not
+        // aged out of the 1-second window yet, so nothing is archivable here
+        // — this call only establishes the persisted-at baseline.
+        let first_at = t0 + 100;
+        handle.observe(first_at, Some(0));
+
+        // Second observation: same kind (idle stays below the 60s AFK
+        // threshold, so both calls classify Active) and well inside the
+        // 30-second persist throttle, so this call is neither due nor a kind
+        // change. But 1.2 seconds have now passed, more than the 1-second
+        // window, so `closed_segment` has aged into archivable territory.
+        let second_at = first_at + 1_200;
+        handle.observe(second_at, Some(0));
+
+        let locked = handle.inner.lock().expect("lock tracker state");
+        assert!(
+            locked.tracker.segments.contains(&closed_segment),
+            "an archivable segment must stay hot when the observation that saw it \
+             was neither due nor a kind change"
+        );
+        drop(locked);
+
+        let archived = activity_archive::read_range(&dir.path, t0, t0 + 50 + 1);
+        assert!(
+            archived.is_empty(),
+            "no archive write must occur on an observation that is neither due nor a kind change"
+        );
+    }
+
+    #[test]
     fn prune_retains_straddling_segment_whole() {
         let mut tracker = ActivityTracker::new(60, 120, 300, 3);
         let t0 = 1_700_000_000_000_u64;
@@ -1546,6 +1623,39 @@ mod tests {
         assert!(
             handle.range(&over_cap).is_err(),
             "one more than the cap must be rejected"
+        );
+    }
+
+    #[test]
+    fn range_rejects_a_span_wider_than_retention() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+
+        // Two boundaries spanning almost the entire u64 range: exactly one
+        // bucket, strictly increasing, so this passes every check except the
+        // span cap. Without that cap, `read_range` would walk from the first
+        // archive chunk key to the last, roughly seven billion reads, inside
+        // a single command call.
+        let result = handle.range(&[0, u64::MAX]);
+        assert!(
+            result.is_err(),
+            "a span wider than retention plus one archive block must be rejected"
+        );
+
+        // A span that exactly matches the maximum allowed width must still
+        // be accepted, confirming the cap targets the span, not the request.
+        let t0 = 1_700_000_000_000_u64;
+        let max_span_ms = HISTORY_RETENTION_SECONDS
+            .saturating_mul(MILLIS_PER_SECOND)
+            .saturating_add(ARCHIVE_BLOCK_MS);
+        assert!(
+            handle.range(&[t0, t0 + max_span_ms]).is_ok(),
+            "a span exactly at the cap must still be accepted"
+        );
+        assert!(
+            handle.range(&[t0, t0 + max_span_ms + 1]).is_err(),
+            "one millisecond past the cap must be rejected"
         );
     }
 

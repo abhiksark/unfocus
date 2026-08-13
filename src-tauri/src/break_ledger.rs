@@ -22,6 +22,10 @@ const LEDGER_SCHEMA_VERSION: u32 = 1;
 /// stay backed by data for as long as the day-by-hour history the frontend
 /// will eventually read alongside them.
 const RETENTION_SECONDS: u64 = 90 * 24 * 60 * 60;
+/// The dashboard's week summary window, deliberately independent of how long
+/// events are retained. Retention is storage; this is what "last seven days"
+/// means on screen.
+const WEEK_SECONDS: u64 = 7 * 24 * 60 * 60;
 /// Bounds a pathological event rate; retention above is what normally bounds
 /// the file. `512` was a live defect: a 20-minute work interval yields up to
 /// 72 scheduled breaks a day, so with natural-idle and fullscreen-suppress
@@ -174,6 +178,10 @@ fn day_ms() -> u64 {
     24 * 60 * 60 * MILLIS_PER_SECOND
 }
 
+fn week_ms() -> u64 {
+    WEEK_SECONDS.saturating_mul(MILLIS_PER_SECOND)
+}
+
 fn prune_events(events: &mut Vec<BreakEvent>, now_ms: u64) {
     let cutoff = now_ms.saturating_sub(retention_ms());
     events.retain(|event| event.at_ms >= cutoff && event.at_ms <= now_ms);
@@ -185,7 +193,7 @@ fn prune_events(events: &mut Vec<BreakEvent>, now_ms: u64) {
 
 fn summarize_events(events: &[BreakEvent], now_ms: u64) -> BreakLedgerSummary {
     let day_cutoff = now_ms.saturating_sub(day_ms());
-    let week_cutoff = now_ms.saturating_sub(retention_ms());
+    let week_cutoff = now_ms.saturating_sub(week_ms());
     let mut day = Counts::default();
     let mut week = Counts::default();
     for event in events {
@@ -440,6 +448,45 @@ mod tests {
         assert_eq!(summary.manual_take_break, 1);
         assert_eq!(summary.week_scheduled_shown, 2);
         assert_eq!(summary.week_natural_idle, 1);
+    }
+
+    #[test]
+    fn week_counts_exclude_events_older_than_seven_days() {
+        // Ten days old: older than the seven-day week window this test
+        // guards, but well inside the ninety-day retention window, so the
+        // event must remain in storage yet be excluded from every `week_*`
+        // count. This is exactly the gap `records_distinguishable_outcomes_and_counts_windows`
+        // could not catch: its two-day-old event passes under both a 7-day
+        // and a 90-day cutoff, which is why the regression (week_cutoff
+        // derived from retention instead of a dedicated week window) shipped
+        // unnoticed. If `week_cutoff` reverts to `now_ms.saturating_sub(retention_ms())`,
+        // this event falls back inside the (90-day) window and every
+        // `week_*` assertion below fails.
+        let now_ms = 1_700_000_000_000_u64;
+        let ten_days_ago = now_ms - (10 * day_ms());
+        let mut events = vec![BreakEvent {
+            at_ms: ten_days_ago,
+            kind: BreakEventKind::ScheduledShown,
+            work_minutes: 20,
+            break_seconds: 20,
+        }];
+
+        // Storage: retention is ninety days, so a ten-day-old event must not
+        // be pruned.
+        prune_events(&mut events, now_ms);
+        assert_eq!(
+            events.len(),
+            1,
+            "an event within the ninety-day retention window must remain in storage"
+        );
+
+        // Presentation: the dashboard's week window is seven days, so the
+        // same event must not be counted there.
+        let summary = summarize_events(&events, now_ms);
+        assert_eq!(summary.week_scheduled_shown, 0);
+        assert_eq!(summary.week_natural_idle, 0);
+        assert_eq!(summary.week_fullscreen_suppress, 0);
+        assert_eq!(summary.week_manual_take_break, 0);
     }
 
     #[test]

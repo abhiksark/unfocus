@@ -67,11 +67,11 @@ plans/            Local working notes only (gitignored; not tracked docs)
 - Dashboard has consumer mode (default) and developer mode (platform signals,
   monitors, raw probe errors). Mode is remembered on device.
 - Tauri commands registered on the main window: `get_diagnostics`,
+  `get_today_activity`, `get_activity_range`, `get_break_summary`,
   `get_reminder_settings`, `get_reminder_status`, `save_reminder_settings`,
   `reset_reminder_settings`, `pause_reminders`, `resume_reminders`,
-  `take_break_now`, `show_overlay_test`, `close_overlay_test`,
-  `get_activity_range`. Overlay windows only get the minimal event/window
-  permissions in `capabilities/overlay.json`.
+  `take_break_now`, `show_overlay_test`, `close_overlay_test`. Overlay windows
+  only get the minimal event/window permissions in `capabilities/overlay.json`.
 
 ## Product invariants
 
