@@ -6,7 +6,13 @@
 //! Segment history is stored locally next to app config as JSON. Writes are
 //! atomic (temp file + replace). Probe or write failures never mutate the
 //! reminder timer.
+//!
+//! Segments that age out of the rolling window are archived to cold storage
+//! (`activity_archive`) before being dropped from the hot set. A failed
+//! archive write leaves a segment hot so it is retried on a later prune;
+//! nothing is lost to a failed write or a crash between the two.
 
+use crate::activity_archive::{archive_segments, prune_chunks};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File, OpenOptions},
@@ -31,6 +37,10 @@ pub(crate) const LONG_AFK_SECONDS: u64 = AFK_THRESHOLD_SECONDS;
 pub(crate) const RECENT_AFK_GRACE_SECONDS: u64 = 2 * 60;
 /// Rolling observation window for the dashboard strip and totals.
 pub(crate) const ACTIVITY_WINDOW_SECONDS: u64 = 24 * 60 * 60;
+/// How long raw history is kept on disk, distinct from the live window.
+/// Whole chunks are deleted only once fully expired, so effective retention
+/// runs between this and this plus one archive block.
+const HISTORY_RETENTION_SECONDS: u64 = 90 * 24 * 60 * 60;
 /// Half-hour buckets across the rolling window (48 × 30 min = 24 h).
 pub(crate) const STRIP_BUCKET_COUNT: usize = 48;
 /// Minimum spacing between background history writes while a segment extends.
@@ -158,7 +168,7 @@ impl ActivityTracker {
             self.last_probe_ok = false;
             return;
         }
-        self.prune(now_ms);
+        self.drop_archived(now_ms);
         self.last_sample_ms = self.segments.last().map(|segment| segment.end_ms);
         self.last_kind = self.segments.last().map(|segment| segment.kind);
         self.last_probe_ok = false;
@@ -168,6 +178,11 @@ impl ActivityTracker {
     ///
     /// `idle_seconds = None` means the probe failed; classification freezes and
     /// does not invent active or AFK time (fail open for the timer elsewhere).
+    ///
+    /// This never drops or archives aged-out segments itself: archiving is
+    /// I/O and must succeed before a segment leaves the hot set, so that
+    /// decision belongs to the caller (see `archivable_segments` /
+    /// `drop_archived`, driven by `ActivityTrackerHandle`).
     pub(crate) fn observe(&mut self, now_ms: u64, idle_seconds: Option<u64>) {
         if let Some(previous) = self.last_sample_ms {
             if now_ms < previous {
@@ -204,8 +219,6 @@ impl ActivityTracker {
                 self.last_kind = Some(kind);
             }
         }
-
-        self.prune(now_ms);
     }
 
     fn extend_or_open(&mut self, kind: ActivityKind, now_ms: u64) {
@@ -228,18 +241,30 @@ impl ActivityTracker {
         });
     }
 
-    fn prune(&mut self, now_ms: u64) {
+    fn window_cutoff(&self, now_ms: u64) -> u64 {
         let window_ms = self.window_seconds.saturating_mul(MILLIS_PER_SECOND);
-        let cutoff = now_ms.saturating_sub(window_ms);
-        self.segments.retain_mut(|segment| {
-            if segment.end_ms <= cutoff {
-                return false;
-            }
-            if segment.start_ms < cutoff {
-                segment.start_ms = cutoff;
-            }
-            true
-        });
+        now_ms.saturating_sub(window_ms)
+    }
+
+    /// Segments that have fully aged out of the rolling window: exactly the
+    /// segments a drop would remove, `end_ms <= cutoff`. Read-only; a
+    /// segment straddling the cutoff is never included and never truncated,
+    /// it stays hot and whole.
+    fn archivable_segments(&self, now_ms: u64) -> Vec<Segment> {
+        let cutoff = self.window_cutoff(now_ms);
+        self.segments
+            .iter()
+            .filter(|segment| segment.end_ms <= cutoff)
+            .copied()
+            .collect()
+    }
+
+    /// Drop segments already confirmed archived. Mirrors
+    /// `archivable_segments`'s predicate exactly, so callers must archive
+    /// first; a segment straddling the cutoff is never truncated.
+    fn drop_archived(&mut self, now_ms: u64) {
+        let cutoff = self.window_cutoff(now_ms);
+        self.segments.retain(|segment| segment.end_ms > cutoff);
     }
 
     fn to_persisted(&self) -> PersistedActivityHistory {
@@ -436,6 +461,9 @@ pub(crate) struct ActivitySummary {
 struct ActivityTrackerState {
     tracker: ActivityTracker,
     path: PathBuf,
+    /// Directory `path` lives in; archives live beside the hot file in the
+    /// same directory.
+    config_dir: PathBuf,
     last_persisted_at_ms: Option<u64>,
 }
 
@@ -451,6 +479,7 @@ impl Default for ActivityTrackerHandle {
             inner: Arc::new(Mutex::new(ActivityTrackerState {
                 tracker: ActivityTracker::default(),
                 path: PathBuf::from(HISTORY_FILE_NAME),
+                config_dir: PathBuf::new(),
                 last_persisted_at_ms: None,
             })),
         }
@@ -472,6 +501,7 @@ impl ActivityTrackerHandle {
             inner: Arc::new(Mutex::new(ActivityTrackerState {
                 tracker,
                 path,
+                config_dir: config_dir.to_path_buf(),
                 last_persisted_at_ms: None,
             })),
         })
@@ -479,10 +509,12 @@ impl ActivityTrackerHandle {
 
     #[cfg(test)]
     fn new_with_path(tracker: ActivityTracker, path: PathBuf) -> Self {
+        let config_dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
         Self {
             inner: Arc::new(Mutex::new(ActivityTrackerState {
                 tracker,
                 path,
+                config_dir,
                 last_persisted_at_ms: None,
             })),
         }
@@ -495,6 +527,30 @@ impl ActivityTrackerHandle {
         let previous_kind = state.tracker.last_kind;
         state.tracker.observe(now_ms, idle_seconds);
         let kind_changed = state.tracker.last_kind != previous_kind;
+
+        // Flush before prune: a segment leaves the hot set only once it is
+        // safely archived. A write failure leaves it hot for a later retry;
+        // nothing is lost, and this never blocks or mutates the timer. Only
+        // write when something is actually archivable, so an idle prune
+        // costs nothing.
+        let archivable = state.tracker.archivable_segments(now_ms);
+        if !archivable.is_empty() {
+            match archive_segments(&state.config_dir, &archivable) {
+                Ok(()) => {
+                    state.tracker.drop_archived(now_ms);
+                    let retention_cutoff = now_ms.saturating_sub(
+                        HISTORY_RETENTION_SECONDS.saturating_mul(MILLIS_PER_SECOND),
+                    );
+                    if let Err(error) = prune_chunks(&state.config_dir, retention_cutoff) {
+                        eprintln!("could not prune expired activity archives: {error}");
+                    }
+                }
+                Err(error) => {
+                    eprintln!("could not archive activity history: {error}; will retry");
+                }
+            }
+        }
+
         let due = match state.last_persisted_at_ms {
             None => true,
             Some(previous) => now_ms.saturating_sub(previous) >= PERSIST_MIN_INTERVAL_MS,
@@ -684,6 +740,7 @@ pub(crate) fn get_today_activity(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::activity_archive;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static TEST_DIRECTORY_ID: AtomicU64 = AtomicU64::new(0);
@@ -942,6 +999,202 @@ mod tests {
         tracker.observe(t0 + 120_000, Some(0));
         tracker.observe(t0, Some(0));
         assert!(tracker.summary(t0).active_seconds < 60);
+    }
+
+    #[test]
+    fn prune_archives_segments_before_dropping_them() {
+        let dir = TestDirectory::new();
+        let t0 = 1_700_000_000_000_u64;
+        let old_segment = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 60_000,
+        };
+        let buffer_segment = Segment {
+            kind: ActivityKind::Afk,
+            start_ms: t0 + 60_000,
+            end_ms: t0 + 61_000,
+        };
+        let mut seeded = tracker();
+        seeded.restore_segments(vec![old_segment, buffer_segment], t0 + 61_000);
+
+        let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
+
+        // Advance far past the 24-hour window so `old_segment` is fully
+        // expired and archivable. The observation itself only ever extends
+        // the buffer segment (still hot); `old_segment` is untouched.
+        let later = t0 + 61_000 + 90_000_000;
+        handle.observe(later, Some(400));
+
+        let archived = activity_archive::read_range(&dir.path, t0, t0 + 60_000 + 1);
+        assert_eq!(
+            archived,
+            vec![old_segment],
+            "the expired segment must be archived"
+        );
+
+        let locked = handle.inner.lock().expect("lock tracker state");
+        assert!(
+            !locked.tracker.segments.contains(&old_segment),
+            "an archived segment must be dropped from the hot set"
+        );
+    }
+
+    #[test]
+    fn prune_keeps_segments_hot_when_archive_write_fails() {
+        let dir = TestDirectory::new();
+        let blocker = dir.path.join("not-a-directory");
+        fs::write(&blocker, b"x").expect("blocker file");
+        let broken_path = blocker.join(HISTORY_FILE_NAME);
+
+        let t0 = 1_700_000_000_000_u64;
+        let old_segment = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 60_000,
+        };
+        let buffer_segment = Segment {
+            kind: ActivityKind::Afk,
+            start_ms: t0 + 60_000,
+            end_ms: t0 + 61_000,
+        };
+        let mut seeded = tracker();
+        seeded.restore_segments(vec![old_segment, buffer_segment], t0 + 61_000);
+
+        // config_dir is derived from `broken_path`'s parent, which is a
+        // file, so both the archive write and the hot persist must fail.
+        let handle = ActivityTrackerHandle::new_with_path(seeded, broken_path);
+        let later = t0 + 61_000 + 90_000_000;
+        handle.observe(later, Some(400));
+
+        let locked = handle.inner.lock().expect("lock tracker state");
+        assert!(
+            locked.tracker.segments.contains(&old_segment),
+            "a failed archive write must keep the segment hot for a later retry"
+        );
+        assert_eq!(
+            locked.tracker.segments.len(),
+            2,
+            "nothing is lost when the archive write fails"
+        );
+    }
+
+    #[test]
+    fn prune_retains_straddling_segment_whole() {
+        let mut tracker = ActivityTracker::new(60, 120, 300, 3);
+        let t0 = 1_700_000_000_000_u64;
+        let straddler = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 250_000,
+        };
+        // window is 300_000 ms, so cutoff = now - 300_000 = t0 + 100_000,
+        // which falls inside the segment's span.
+        let now = t0 + 400_000;
+        tracker.restore_segments(vec![straddler], now);
+
+        assert!(
+            tracker.archivable_segments(now).is_empty(),
+            "a straddling segment must not be treated as archivable"
+        );
+        tracker.drop_archived(now);
+        assert_eq!(
+            tracker.segments,
+            vec![straddler],
+            "a straddling segment must stay hot with its original start_ms, not truncated"
+        );
+    }
+
+    #[test]
+    fn straddling_segment_summary_matches_clamped_value() {
+        let mut tracker = ActivityTracker::new(60, 120, 300, 3);
+        let t0 = 1_700_000_000_000_u64;
+        let straddler = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 250_000,
+        };
+        let now = t0 + 400_000;
+        tracker.restore_segments(vec![straddler], now);
+
+        let summary = tracker.summary(now);
+        // window_start = now - 300_000 = t0 + 100_000; the clamped duration
+        // is (t0 + 250_000) - (t0 + 100_000) = 150_000 ms, identical to what
+        // truncating start_ms to the cutoff used to produce.
+        assert_eq!(summary.active_seconds, 150);
+    }
+
+    #[test]
+    fn prune_writes_nothing_when_no_segment_expired() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+        handle.observe(t0, Some(0));
+        handle.observe(t0 + 90_000, Some(2));
+
+        let archive_files: Vec<_> = fs::read_dir(&dir.path)
+            .expect("read config dir")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("activity-archive-")
+            })
+            .collect();
+        assert!(
+            archive_files.is_empty(),
+            "an idle prune with nothing expired must not write any archive chunk"
+        );
+    }
+
+    #[test]
+    fn prune_deletes_expired_chunks() {
+        let dir = TestDirectory::new();
+
+        // A chunk from long ago, seeded directly so it predates anything the
+        // handle itself will write.
+        let ancient = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 500,
+            end_ms: 900,
+        };
+        activity_archive::archive_segments(&dir.path, &[ancient]).expect("seed old chunk");
+        assert!(activity_archive::chunk_path(&dir.path, 0).exists());
+
+        // A segment that will become archivable once `later` is reached, so
+        // the same observation both archives fresh data and runs the
+        // retention prune alongside it.
+        let recent = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 8_000_000_000,
+            end_ms: 8_000_060_000,
+        };
+        let buffer = Segment {
+            kind: ActivityKind::Afk,
+            start_ms: 8_000_060_000,
+            end_ms: 8_000_061_000,
+        };
+        let mut seeded = tracker();
+        seeded.restore_segments(vec![recent, buffer], 8_000_061_000);
+
+        let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
+
+        // Past the 24h window (so `recent` is archivable) and past the
+        // 90-day retention cutoff for chunk 0's block, but not for the
+        // fresh chunk's block.
+        let later = 12_000_000_000_u64;
+        handle.observe(later, Some(0));
+
+        assert!(
+            !activity_archive::chunk_path(&dir.path, 0).exists(),
+            "chunk 0 is fully older than the retention cutoff and must be deleted"
+        );
+        assert!(
+            activity_archive::chunk_path(&dir.path, 3).exists(),
+            "the freshly archived chunk must survive the same prune pass"
+        );
     }
 
     #[test]

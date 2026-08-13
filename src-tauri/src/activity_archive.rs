@@ -12,11 +12,9 @@
 //! 90 days of archives, dropping everything for one bad timestamp would erase
 //! months of history.
 //!
-//! This task adds the store only; nothing in the running app calls it yet
-//! (the flush-before-prune wiring and the `get_activity_range` command are
-//! later work), so the crate-visible items below are exercised by tests only
-//! for now.
-#![allow(dead_code)]
+//! `archive_segments` and `prune_chunks` are wired into the hot-file prune in
+//! `activity.rs`. `read_range` is exercised by tests only until the
+//! `get_activity_range` command (later work) reads through it.
 
 use crate::activity::{
     persist_history, PersistedActivityHistory, PersistedKind, PersistedSegment, Segment,
@@ -120,6 +118,10 @@ pub(crate) fn archive_segments(config_dir: &Path, segments: &[Segment]) -> io::R
 
 /// Every archived segment overlapping `[start_ms, end_ms)`, oldest first.
 /// Skips unreadable or corrupt chunks rather than failing the whole read.
+///
+/// Not yet called from production code: the `get_activity_range` command
+/// that reads through this is later work. Exercised by tests until then.
+#[allow(dead_code)]
 pub(crate) fn read_range(config_dir: &Path, start_ms: u64, end_ms: u64) -> Vec<Segment> {
     if end_ms <= start_ms {
         return Vec::new();
