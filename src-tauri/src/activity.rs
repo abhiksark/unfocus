@@ -36,7 +36,7 @@ pub(crate) const STRIP_BUCKET_COUNT: usize = 48;
 /// Minimum spacing between background history writes while a segment extends.
 const PERSIST_MIN_INTERVAL_MS: u64 = 30_000;
 const HISTORY_FILE_NAME: &str = "activity-history.json";
-const HISTORY_SCHEMA_VERSION: u32 = 1;
+pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 1;
 const MILLIS_PER_SECOND: u64 = 1_000;
 
 static HISTORY_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
@@ -51,13 +51,13 @@ pub(crate) enum ActivityKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum PersistedKind {
+pub(crate) enum PersistedKind {
     Active,
     Afk,
 }
 
 impl PersistedKind {
-    fn from_activity(kind: ActivityKind) -> Option<Self> {
+    pub(crate) fn from_activity(kind: ActivityKind) -> Option<Self> {
         match kind {
             ActivityKind::Active => Some(Self::Active),
             ActivityKind::Afk => Some(Self::Afk),
@@ -65,7 +65,7 @@ impl PersistedKind {
         }
     }
 
-    fn into_activity(self) -> ActivityKind {
+    pub(crate) fn into_activity(self) -> ActivityKind {
         match self {
             Self::Active => ActivityKind::Active,
             Self::Afk => ActivityKind::Afk,
@@ -74,25 +74,25 @@ impl PersistedKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Segment {
-    kind: ActivityKind,
-    start_ms: u64,
-    end_ms: u64,
+pub(crate) struct Segment {
+    pub(crate) kind: ActivityKind,
+    pub(crate) start_ms: u64,
+    pub(crate) end_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct PersistedSegment {
-    kind: PersistedKind,
-    start_ms: u64,
-    end_ms: u64,
+pub(crate) struct PersistedSegment {
+    pub(crate) kind: PersistedKind,
+    pub(crate) start_ms: u64,
+    pub(crate) end_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct PersistedActivityHistory {
-    version: u32,
-    segments: Vec<PersistedSegment>,
+pub(crate) struct PersistedActivityHistory {
+    pub(crate) version: u32,
+    pub(crate) segments: Vec<PersistedSegment>,
 }
 
 #[derive(Debug, Clone)]
@@ -644,7 +644,7 @@ fn replace_history_file(temp_path: &Path, path: &Path) -> io::Result<()> {
     }
 }
 
-fn persist_history(path: &Path, history: &PersistedActivityHistory) -> io::Result<()> {
+pub(crate) fn persist_history(path: &Path, history: &PersistedActivityHistory) -> io::Result<()> {
     let parent = path.parent().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,

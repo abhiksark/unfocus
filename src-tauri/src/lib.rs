@@ -1,4 +1,5 @@
 mod activity;
+mod activity_archive;
 mod break_ledger;
 mod diagnostics;
 #[cfg(desktop)]
