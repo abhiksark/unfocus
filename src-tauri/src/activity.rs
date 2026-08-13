@@ -1108,6 +1108,65 @@ mod tests {
     }
 
     #[test]
+    fn load_keeps_segments_hot_when_archive_write_fails() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let t0 = 1_700_000_000_000_u64;
+        let old_segment_start_ms = t0;
+        let old_segment = PersistedSegment {
+            kind: PersistedKind::Active,
+            start_ms: old_segment_start_ms,
+            end_ms: t0 + 60_000,
+        };
+        persist_history(
+            &path,
+            &PersistedActivityHistory {
+                version: HISTORY_SCHEMA_VERSION,
+                segments: vec![old_segment],
+            },
+        )
+        .expect("seed hot file with an aged segment");
+
+        // `path` must sit under a real, readable directory for `fs::read` to
+        // succeed at all, so the config-dir-under-a-file trick
+        // `prune_keeps_segments_hot_when_archive_write_fails` uses can't
+        // transfer here directly. The equivalent forced failure for a real
+        // config_dir is blocking the exact chunk file the segment would
+        // archive into with a directory, so `archive_segments`'s rename onto
+        // it fails the same way — same narrative (segment stays hot when the
+        // archive write fails), the closest available mechanism given a
+        // real, readable config_dir is required for the read to succeed.
+        let chunk_key = activity_archive::chunk_key(old_segment_start_ms);
+        fs::create_dir(activity_archive::chunk_path(&dir.path, chunk_key))
+            .expect("blocker directory in place of the chunk file");
+
+        // Go through `ActivityTrackerHandle::load_at`, not just
+        // `load_or_repair_history` directly: this is the path that also
+        // calls `restore_segments`, which is exactly what pins the bug this
+        // test exists for. `load_or_repair_history` alone correctly keeps a
+        // failed-to-archive segment in its returned set; the bug this
+        // guards against is `restore_segments` re-dropping that same
+        // segment a moment later via the `drop_archived` call this task
+        // removed, using the identical `end_ms <= cutoff` predicate at the
+        // identical `now_ms`. A test that stopped at `load_or_repair_history`
+        // would not observe that second drop at all.
+        let reopened_at = t0 + 60_000 + 5 * 24 * 60 * 60 * 1_000;
+        let handle =
+            ActivityTrackerHandle::load_at(&dir.path, reopened_at).expect("load on reopen");
+
+        let locked = handle.inner.lock().expect("lock tracker state");
+        assert!(
+            locked.tracker.segments.contains(&Segment {
+                kind: ActivityKind::Active,
+                start_ms: t0,
+                end_ms: t0 + 60_000,
+            }),
+            "a failed archive write at load time must keep the segment hot for a later retry, \
+             not be silently re-dropped by restore_segments"
+        );
+    }
+
+    #[test]
     fn reverse_wall_clock_drops_live_history() {
         let mut tracker = tracker();
         let t0 = 1_700_000_000_000_u64;
