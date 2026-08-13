@@ -67,23 +67,25 @@ Filenames embed the full version (example: `0.3.1-alpha.1`). Replace
 file from the release page in a browser. The release tag is the same string
 with a `v` prefix (example: `v0.3.1-alpha.1`).
 
-| You have | Download |
+| You have | Download or install path |
 | --- | --- |
-| Debian, Ubuntu, or similar (X11) | `Unfocus_VERSION_amd64.deb` |
+| Debian, Ubuntu, or similar (X11) | **APT source** (preferred) or `Unfocus_VERSION_amd64.deb` |
 | Fedora, RHEL, or similar (X11) | `Unfocus-VERSION-1.x86_64.rpm` |
 | Portable Linux (X11) | `Unfocus_VERSION_amd64.AppImage` |
-| macOS Apple silicon | `Unfocus_VERSION_aarch64.dmg` |
-| macOS Intel | `Unfocus_VERSION_x64.dmg` |
+| macOS Apple silicon | `Unfocus_VERSION_aarch64.dmg` or Homebrew |
+| macOS Intel | `Unfocus_VERSION_x64.dmg` or Homebrew |
 | Windows (normal install) | `Unfocus_VERSION_x64-setup.exe` |
 | Windows (managed / MSI) | `Unfocus_VERSION_x64_en-US.msi` |
 | Checksums for every asset | `SHA256SUMS` |
 | License texts for dependencies | `THIRD_PARTY_NOTICES.txt` |
 | Software bill of materials | `unfocus.cdx.json` |
 
-macOS can also install the alpha through Homebrew (see [macOS](#macos)).
+Debian and Ubuntu can install the alpha from the public APT repository (see
+[Linux (X11)](#linux-x11)). macOS can install the alpha through Homebrew (see
+[macOS](#macos)).
 
-Unfocus does **not** update itself yet. Check the releases page for new builds,
-or use `brew upgrade` if you installed the Homebrew alpha cask.
+Unfocus does **not** update itself in-app. Use `apt upgrade`, `brew upgrade`, or
+a newer package from the releases page.
 
 ---
 
@@ -168,7 +170,62 @@ screen. On Ubuntu GNOME, that is often a gear menu on the password screen with
 a label such as **Ubuntu on Xorg**. Exact labels vary by distribution and
 desktop.
 
-### Debian / Ubuntu (`.deb`)
+### Debian / Ubuntu (APT, preferred)
+
+Install the alpha from the public APT repository. The suite name is **`alpha`**.
+The archive key signs **repository metadata** only; alpha packages are still
+not application code-signed (same honesty as release `.deb` downloads).
+
+```sh
+curl -fsSL https://abhiksark.github.io/unfocus-apt/public-key.asc \
+  | sudo gpg --dearmor -o /usr/share/keyrings/unfocus-archive-keyring.gpg
+
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://abhiksark.github.io/unfocus-apt alpha main' \
+  | sudo tee /etc/apt/sources.list.d/unfocus-alpha.list
+
+sudo apt update
+sudo apt install unfocus
+```
+
+Launch from the application menu as **Unfocus**, or:
+
+```sh
+unfocus
+```
+
+**Upgrade:**
+
+```sh
+sudo apt update
+sudo apt install --only-upgrade unfocus
+```
+
+**Remove the package:**
+
+```sh
+sudo apt remove unfocus
+```
+
+To remove the APT source as well:
+
+```sh
+sudo rm -f /etc/apt/sources.list.d/unfocus-alpha.list
+sudo rm -f /usr/share/keyrings/unfocus-archive-keyring.gpg
+sudo apt update
+```
+
+Package removal does not always delete local settings. See
+[Local data and clean uninstall](#local-data-and-clean-uninstall).
+
+Repository automation and operator notes live in
+[abhiksark/unfocus-apt](https://github.com/abhiksark/unfocus-apt). The source
+must be available on GitHub Pages before the commands above succeed; until the
+first alpha package PR is merged there, use the manual `.deb` path below.
+
+### Debian / Ubuntu (manual `.deb`)
+
+Use this for offline install or when you want to verify a specific release
+asset yourself.
 
 ```sh
 VERSION=0.3.1-alpha.1
@@ -178,12 +235,6 @@ sudo apt install "./Unfocus_${VERSION}_amd64.deb"
 # or:
 # sudo dpkg -i "./Unfocus_${VERSION}_amd64.deb"
 # sudo apt-get install -f   # only if dpkg reports missing dependencies
-```
-
-Launch from the application menu as **Unfocus**, or:
-
-```sh
-unfocus
 ```
 
 **Upgrade:** install a newer `.deb` the same way. Prerelease Debian versions
@@ -198,9 +249,6 @@ upgrades sort correctly.
 sudo apt remove unfocus
 # or: sudo dpkg -r unfocus
 ```
-
-Package removal does not always delete local settings. See
-[Local data and clean uninstall](#local-data-and-clean-uninstall).
 
 ### Fedora / RHEL (`.rpm`)
 

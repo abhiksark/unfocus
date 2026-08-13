@@ -40,7 +40,18 @@ is that you can see the rhythm without turning it into a score.
 (verify downloads, first run, tray notes, uninstall, troubleshooting).
 
 Download the current alpha from [GitHub Releases](https://github.com/abhiksark/unfocus/releases)
-and choose the package for your system:
+and choose the package for your system, or use a package manager:
+
+On Debian or Ubuntu (X11), install the alpha from the public APT repository:
+
+```sh
+curl -fsSL https://abhiksark.github.io/unfocus-apt/public-key.asc \
+  | sudo gpg --dearmor -o /usr/share/keyrings/unfocus-archive-keyring.gpg
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://abhiksark.github.io/unfocus-apt alpha main' \
+  | sudo tee /etc/apt/sources.list.d/unfocus-alpha.list
+sudo apt update
+sudo apt install unfocus
+```
 
 On macOS, install the same prerelease through the public Homebrew tap:
 
@@ -50,10 +61,10 @@ brew install --cask abhiksark/unfocus/unfocus@alpha
 
 | Platform | Choose | Status and first-run notes |
 | --- | --- | --- |
-| Linux X11 | `.deb` for Debian or Ubuntu, `.rpm` for Fedora or RHEL, or `.AppImage` for a portable build | Qualified; Wayland is unsupported |
+| Linux X11 | APT (`apt install unfocus`), `.deb`, `.rpm`, or `.AppImage` | Qualified; Wayland is unsupported |
 | Windows x64 | Setup `.exe` for a normal install or `.msi` for managed installation | Early build; idle and fullscreen probes are implemented, interactive qualification pending |
-| macOS Apple silicon | `aarch64.dmg` | Preview; right-click the app and choose **Open** on first launch |
-| macOS Intel | `x64.dmg` | Preview; right-click the app and choose **Open** on first launch |
+| macOS Apple silicon | `aarch64.dmg` or Homebrew | Preview; right-click the app and choose **Open** on first launch |
+| macOS Intel | `x64.dmg` or Homebrew | Preview; right-click the app and choose **Open** on first launch |
 
 These early builds are not code-signed or notarized. Download only from the
 official releases page, read the release notes, and verify packages with the

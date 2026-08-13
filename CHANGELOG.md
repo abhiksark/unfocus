@@ -25,6 +25,9 @@ released versions link to their GitHub release.
   and tray notes), macOS (DMG/Homebrew and Gatekeeper), Windows (setup/MSI and
   SmartScreen), first-run defaults, local data paths and clean uninstall,
   build-from-source pins, and troubleshooting.
+- Added a public **APT** install path for Debian and Ubuntu alphas via
+  [abhiksark/unfocus-apt](https://github.com/abhiksark/unfocus-apt) (`apt install
+  unfocus`), with release dispatch automation parallel to the Homebrew tap.
 
 ### Changed
 
