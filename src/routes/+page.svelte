@@ -11,6 +11,11 @@
     writeDashboardMode,
     type DashboardMode
   } from "$lib/dashboard-mode";
+  import {
+    DEFAULT_DAY_START_HOUR,
+    readDayStartHour,
+    writeDayStartHour
+  } from "$lib/day-start";
   import type { DiagnosticsReport } from "$lib/diagnostics";
   import { parseWindowLabel } from "$lib/overlay-label";
   import {
@@ -34,6 +39,7 @@
   const overlayParameters = windowRoute.kind === "overlay" ? windowRoute.parameters : null;
 
   let dashboardMode = $state<DashboardMode>("consumer");
+  let dayStartHour = $state(DEFAULT_DAY_START_HOUR);
   let report = $state<DiagnosticsReport | null>(null);
   let diagnosticsError = $state<string | null>(null);
   let overlayError = $state<string | null>(null);
@@ -100,6 +106,11 @@
   function setDashboardMode(mode: DashboardMode) {
     dashboardMode = mode;
     writeDashboardMode(browserStorage(), mode);
+  }
+
+  function setDayStartHour(hour: number): void {
+    dayStartHour = hour;
+    writeDayStartHour(browserStorage(), hour);
   }
 
   async function refresh() {
@@ -298,6 +309,7 @@
     if (windowRoute.kind !== "dashboard") return;
 
     dashboardMode = readDashboardMode(browserStorage());
+    dayStartHour = readDayStartHour(browserStorage());
     let timer: number | undefined;
     const stopPolling = () => {
       if (timer !== undefined) window.clearInterval(timer);
@@ -394,6 +406,8 @@
     {todayActivityError}
     {breakSummary}
     {breakSummaryError}
+    {dayStartHour}
+    onDayStartChange={setDayStartHour}
     {savedSettings}
     {timingEditorExpanded}
     {workMinutesInput}
