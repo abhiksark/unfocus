@@ -76,6 +76,8 @@
     onResetSettings: () => void;
     onOpenDeveloperMode: () => void;
     onDayStartChange: (hour: number) => void;
+    authorWebsiteError: boolean;
+    onOpenAuthorWebsite: () => void;
   };
 
   let {
@@ -112,7 +114,9 @@
     onSaveSettings,
     onResetSettings,
     onOpenDeveloperMode,
-    onDayStartChange
+    onDayStartChange,
+    authorWebsiteError,
+    onOpenAuthorWebsite
   }: Props = $props();
 
   const progress = $derived(focusProgress(reminderStatus, savedSettings));
@@ -506,6 +510,24 @@
       </button>
     </section>
   {/if}
+
+  <hr class="rule" />
+
+  <footer class="credit">
+    <p class="t-micro">
+      Made by <button
+        class="btn-link"
+        type="button"
+        aria-label="Abhik Sarkar, opens abhik.ai in your browser"
+        onclick={onOpenAuthorWebsite}>Abhik Sarkar</button
+      > · © 2026 · All rights reserved
+    </p>
+    {#if authorWebsiteError}
+      <p class="t-micro credit-error" role="alert">
+        We couldn’t open your browser. The address is abhik.ai
+      </p>
+    {/if}
+  </footer>
 </main>
 
 <style>
@@ -677,6 +699,21 @@
   }
 
   .btn-text:hover:not(:disabled) {
+    color: var(--ink);
+  }
+
+  .btn-link {
+    padding: 0;
+    border-radius: 0;
+    color: var(--ink-2);
+    background: transparent;
+    font-size: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--line-2);
+    text-underline-offset: 3px;
+  }
+
+  .btn-link:hover {
     color: var(--ink);
   }
 
@@ -1037,6 +1074,16 @@
     .duration-fields {
       grid-template-columns: 1fr;
     }
+  }
+
+  .credit {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s1);
+  }
+
+  .credit-error {
+    color: #ffc4c4;
   }
 
   @media (max-width: 520px) {

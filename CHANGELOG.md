@@ -7,6 +7,11 @@ released versions link to their GitHub release.
 
 ### Added
 
+- Added an attribution line to the foot of the consumer dashboard, crediting
+  **Abhik Sarkar** and linking the name to `abhik.ai`. The link hands a fixed address to the
+  desktop's default browser rather than navigating the dashboard away, and says
+  so plainly if no browser could be opened. Unfocus itself still makes no
+  network call.
 - Added a time axis to the **Your day** activity strip. Faint gridlines mark
   every fourth hour behind the bars, with the hour labeled beneath in the
   system clock format and the right edge marked `now`, so a bar can be traced

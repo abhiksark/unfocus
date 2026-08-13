@@ -39,6 +39,55 @@ fn authorize_main_caller(label: &str) -> Result<(), String> {
     }
 }
 
+/// The author's site, shown as attribution on the dashboard.
+const AUTHOR_WEBSITE: &str = "https://abhik.ai";
+
+/// Hands the author's site to the desktop's default browser.
+///
+/// The address is a constant rather than a parameter, so the dashboard cannot
+/// ask the host to open anything else. Unfocus itself still makes no network
+/// call; the browser does, and only when the reader asks for it. A failure is
+/// reported to the caller, never panics, and never touches the reminder timer.
+///
+/// The launcher is spawned rather than waited on, so a missing handler is
+/// reported but a handler that starts and then fails is not. Waiting would
+/// block this command for as long as a cold browser start takes.
+#[tauri::command]
+fn open_author_website(window: tauri::WebviewWindow) -> Result<(), String> {
+    authorize_main_caller(window.label())?;
+
+    #[cfg(target_os = "linux")]
+    let mut launcher = {
+        let mut launcher = std::process::Command::new("xdg-open");
+        launcher.arg(AUTHOR_WEBSITE);
+        launcher
+    };
+    #[cfg(target_os = "macos")]
+    let mut launcher = {
+        let mut launcher = std::process::Command::new("open");
+        launcher.arg(AUTHOR_WEBSITE);
+        launcher
+    };
+    // `start` reads its first quoted argument as the window title, so the empty
+    // string is required before the address.
+    #[cfg(target_os = "windows")]
+    let mut launcher = {
+        let mut launcher = std::process::Command::new("cmd");
+        launcher.args(["/C", "start", "", AUTHOR_WEBSITE]);
+        launcher
+    };
+
+    let mut child = launcher
+        .spawn()
+        .map_err(|error| format!("could not open {AUTHOR_WEBSITE}: {error}"))?;
+    // Reap the launcher off this thread so a long-lived tray process does not
+    // accumulate a defunct child for every click.
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -144,7 +193,8 @@ pub fn run() {
             resume_reminders,
             take_break_now,
             show_overlay_test,
-            close_overlay_test
+            close_overlay_test,
+            open_author_website
         ])
         .run(tauri::generate_context!())
         .expect("error while running Unfocus");
