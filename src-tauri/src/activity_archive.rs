@@ -135,14 +135,17 @@ pub(crate) fn read_range(config_dir: &Path, start_ms: u64, end_ms: u64) -> Vec<S
         results.extend(read_chunk_segments(&chunk_path(config_dir, key)));
     }
 
-    // Keep only segments overlapping the requested window, and individually
-    // skip a segment whose `end_ms` runs past the requested range end: for
-    // archives that is a future timestamp relative to `end_ms` (the same
-    // clock-skew signal the hot loader treats as corruption), except here
-    // only that one segment is dropped rather than the whole chunk or range.
-    results.retain(|segment| {
-        segment.end_ms <= end_ms && segment.start_ms < end_ms && segment.end_ms > start_ms
-    });
+    // Keep every segment that overlaps the requested window, straddlers at
+    // both ends included whole. `read_chunk_segments` already dropped the
+    // one malformed shape (`end_ms < start_ms`); there is no further
+    // per-segment skip here. In particular, a segment is never treated as a
+    // "future" clock-skew signal relative to `end_ms`: every historical
+    // query has an `end_ms` in the past, so a real segment routinely ends
+    // after it (that is exactly the end-boundary straddler), and a stray
+    // future timestamp can never overlap a sane range anyway. Clamping to
+    // the window, like `summary`'s `start_ms.max(window_start)`, is the
+    // caller's job, not this function's.
+    results.retain(|segment| segment.end_ms > start_ms && segment.start_ms < end_ms);
     results.sort_by_key(|segment| segment.start_ms);
     results.dedup();
     results
@@ -375,24 +378,17 @@ mod tests {
         };
         let good_start = good.start_ms;
         let good_end = good.end_ms;
-        // end_ms < start_ms: individually invalid.
-        let bad_ordering = PersistedSegment {
+        // end_ms < start_ms: the sole malformed shape, skipped individually.
+        let bad = PersistedSegment {
             kind: PersistedKind::Afk,
             start_ms: block_start + 5_000,
             end_ms: block_start + 1_000,
-        };
-        // Starts inside the query range but ends past it: a future timestamp
-        // relative to the requested range end, skipped individually.
-        let bad_future = PersistedSegment {
-            kind: PersistedKind::Active,
-            start_ms: block_start + 3_000,
-            end_ms: block_start + ARCHIVE_BLOCK_MS + 500,
         };
         persist_history(
             &chunk_path(&dir.path, key),
             &PersistedActivityHistory {
                 version: HISTORY_SCHEMA_VERSION,
-                segments: vec![good, bad_ordering, bad_future],
+                segments: vec![good, bad],
             },
         )
         .expect("seed chunk");
@@ -401,6 +397,24 @@ mod tests {
         assert_eq!(results.len(), 1, "the whole chunk must not be discarded");
         assert_eq!(results[0].start_ms, good_start);
         assert_eq!(results[0].end_ms, good_end);
+    }
+
+    #[test]
+    fn read_range_includes_segment_straddling_the_range_end() {
+        let dir = TestDirectory::new();
+        // Starts inside the query range but ends after it: this is the
+        // week-view case (the last day's final block) that a future-relative-
+        // to-`end_ms` rule would wrongly discard. It must come back whole,
+        // not clamped or dropped.
+        let straddler = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 5_000,
+            end_ms: ARCHIVE_BLOCK_MS + 500,
+        };
+        archive_segments(&dir.path, &[straddler]).expect("archive");
+
+        let results = read_range(&dir.path, 0, ARCHIVE_BLOCK_MS);
+        assert_eq!(results, vec![straddler]);
     }
 
     #[test]
