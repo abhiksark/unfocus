@@ -267,4 +267,32 @@ describe("stripAxisTicks", () => {
     }
     expect(marked[0].positionPercent).toBeLessThan(marked[1].positionPercent);
   });
+
+  test("suppresses the grid tick label next to an off-grid day start one hour away", () => {
+    // 9 is one hour off the four-hour grid tick at 8, so the two labels would
+    // otherwise collide. The day-start label at 9 wins; the grid tick at 8
+    // keeps its rule but loses its label.
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 9);
+    const adjacentPair = ticks.filter((tick) => {
+      const hour = new Date(tick.timestampMs).getHours();
+      return hour === 8 || hour === 9;
+    });
+
+    expect(adjacentPair).toHaveLength(2);
+    const labeled = adjacentPair.filter((tick) => tick.showLabel);
+    expect(labeled).toHaveLength(1);
+    expect(labeled[0].isDayStart).toBe(true);
+  });
+
+  test("does not suppress labels for crowding when the day start is two hours from the grid", () => {
+    // 6 sits two hours from the nearest grid ticks (4 and 8), clear of the
+    // one-hour collision distance, so nothing should be suppressed on that basis.
+    const ticks = stripAxisTicks(DAY_SECONDS, JANUARY_NOON_MS, 6);
+    for (const tick of ticks) {
+      const insideEdgeGuards = tick.positionPercent >= 2 && tick.positionPercent <= 94;
+      if (insideEdgeGuards) {
+        expect(tick.showLabel).toBe(true);
+      }
+    }
+  });
 });

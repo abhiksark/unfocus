@@ -190,11 +190,27 @@ export function stripAxisTicks(
     if (hour % AXIS_HOUR_STEP === 0 || isDayStart) {
       const timestampMs = cursor.getTime();
       const positionPercent = ((timestampMs - startMs) / windowMs) * 100;
+      // The four-hour grid is normally its own collision guard: neighboring
+      // labels are always four hours apart, wider than any label glyph. An
+      // off-grid day start breaks that assumption when it lands one hour from
+      // a grid tick (e.g. day start 9 next to grid tick 8), so the two labels
+      // would overlap. The day-start label is the one the reader deliberately
+      // chose, so its grid-tick neighbor loses its label instead. Adjacency
+      // wraps around midnight (hour 0 is adjacent to a day start of 23).
+      const hourGap = dayStart === null ? -1 : Math.abs(hour - dayStart);
+      const crowdedByDayStart =
+        dayStart !== null &&
+        dayStart % AXIS_HOUR_STEP !== 0 &&
+        !isDayStart &&
+        (hourGap === 1 || hourGap === 23);
       ticks.push({
         timestampMs,
         positionPercent,
         label: hourLabel.format(cursor),
-        showLabel: positionPercent >= AXIS_LABEL_FLOOR && positionPercent <= AXIS_LABEL_LIMIT,
+        showLabel:
+          positionPercent >= AXIS_LABEL_FLOOR &&
+          positionPercent <= AXIS_LABEL_LIMIT &&
+          !crowdedByDayStart,
         isDayStart
       });
     }
