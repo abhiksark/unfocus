@@ -52,6 +52,18 @@ as `export let` or `$:` reactive statements.
 - `break-summary.ts` formats calm counts from `get_break_summary`. Day captions
   must not re-list the grid counts; mute zeros in the UI rather than inventing
   scores, streaks, or competitive framing.
+- `history.ts` owns the main-window history page shape: three 30-day pages,
+  local day-start boundaries, and day and hour buckets built in the frontend.
+  Keep the saved day-start preference as a display preference only. It still
+  must not affect reminder timing or probe behavior.
+- `history-loader.ts` and `HistoryView.svelte` demand-load history only after
+  the user opens the transient consumer History view or changes pages. They
+  read `get_activity_range` for bucketed `activeMs`, `afkMs`, and
+  `longestActiveMs`, plus `get_break_range` for chronological privacy-safe
+  `{atMs, kind}` break outcomes inside the requested page.
+- History stays observational. It may summarize activity and break outcomes,
+  but it must not change reminders, probes, overlays, or developer mode
+  behavior.
 
 ## Window routing and native events
 

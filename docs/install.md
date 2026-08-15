@@ -632,11 +632,19 @@ Files written there include:
 | File | Purpose |
 | --- | --- |
 | `reminder-settings.json` | Work and break timing, pause state |
-| `activity-history.json` | Local presence / AFK segments for **Your day** |
-| `break-events.json` | Local break outcome ledger |
+| `activity-history.json` | Hot local presence / AFK segments for the last 24 hours, feeding **Your day** |
+| `activity-archive-<key>.json` | Older presence / AFK segments in fixed 30-day epoch chunks, kept at least 90 days |
+| `break-events.json` | Local break outcome ledger, kept at least 90 days |
 
-These files stay on this device. Removing the application package, DMG app
-bundle, or AppImage does **not** always delete them.
+`activity-archive-<key>.json` files hold the same presence-only data as
+`activity-history.json` (no keylogging, window titles, or telemetry), just
+older than 24 hours. Each archive file covers one fixed 30-day epoch block, so
+effective retention is at least 90 days rather than an exact cutoff. Retention
+fills forward only. Existing installs cannot backfill presence from before this
+feature became available on that device. There may be more than one archive
+file as history accumulates. These files stay on this device. Removing the
+application package, DMG app bundle, or AppImage does **not** always delete
+them.
 
 ### Optional full wipe after uninstall
 
