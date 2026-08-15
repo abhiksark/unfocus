@@ -103,6 +103,24 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
   branch and pull request. The workflows must never alter releases or release
   assets, merge the App's pull request, or grant the App a ruleset bypass.
 
+## APT repository automation boundary
+
+- The APT archive for alpha packages lives in `abhiksark/unfocus-apt` and is
+  served from GitHub Pages at `https://apt.abhik.ai/`. Suite name is `alpha`;
+  package name is `unfocus`; architecture is `amd64` only.
+- Credentials live in the `apt-repo-automation` environment on both
+  repositories. Source repo secret: `APT_DISPATCH_TOKEN` (may only create
+  `repository_dispatch` events on `unfocus-apt`). Apt-repo secrets:
+  `APT_SIGNING_KEY` (armored archive private key) and optional
+  `APT_SIGNING_KEY_PASSPHRASE`.
+- The source repository must never push apt tree files, hold the archive
+  private key, or sign indexes. It only dispatches `unfocus-alpha-published`.
+- The apt repository rebuilds `pool/`, `dists/`, and `public-key.asc` and
+  pushes to `main` with `GITHUB_TOKEN`. It must never alter Unfocus releases.
+- Archive GPG signing authenticates **repository metadata** only. Alpha `.deb`
+  packages remain application-unsigned; docs must keep that distinction.
+- Operator setup is documented in `abhiksark/unfocus-apt` (`OPERATOR.md`).
+
 ## Repository settings
 
 - Do not infer live branch protection, tag rules, environments, immutable

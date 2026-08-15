@@ -278,8 +278,9 @@
   }
 
   /* The scene is one baked SVG (scripts/gen-scene.js). Full-viewport gradients
-     stay static; the only continuous motion is stepped ridge drift and mist
-     breathing — transform/opacity on a few elements, updated every 2-3 s. */
+     stay static; continuous motion is stepped ridge drift, mist breathing, and
+     star drift/twinkle — transform/opacity on small elements, each repainting
+     every 2-5 s. */
 
   .atmosphere :global(.scene) {
     position: absolute;
@@ -307,6 +308,20 @@
   .atmosphere :global(.mist) {
     animation: mist-breathe 21s steps(10, end) infinite alternate;
     animation-delay: calc(0ms - var(--presentation-offset));
+  }
+
+  /* The sky drifts against the far ridge for depth; each star breathes on its
+     own baked cadence (--tw-dur/--tw-delay from gen-scene.js) around its
+     resting opacity --o. */
+  .atmosphere :global(.stars) {
+    animation: stars-drift 64s steps(16, end) infinite alternate;
+    animation-delay: calc(0ms - var(--presentation-offset));
+    transition: opacity 2.4s ease;
+  }
+
+  .atmosphere :global(.star) {
+    animation: star-twinkle var(--tw-dur) steps(4, end) infinite alternate;
+    animation-delay: calc(var(--tw-delay) - var(--presentation-offset));
   }
 
   /* Dawn rises behind the summit as the break ends: cool haze and mist recede,
@@ -340,6 +355,12 @@
   .complete .atmosphere :global(.mist) {
     animation: none;
     opacity: 0;
+  }
+
+  /* Stars fade into the dawn; group opacity multiplies under the twinkle. */
+  .final-seconds .atmosphere :global(.stars),
+  .complete .atmosphere :global(.stars) {
+    opacity: 0.25;
   }
 
   .overlay-header {
@@ -668,6 +689,21 @@
     }
   }
 
+  @keyframes stars-drift {
+    to {
+      transform: translateX(-9px);
+    }
+  }
+
+  @keyframes star-twinkle {
+    from {
+      opacity: calc(var(--o) * 0.35);
+    }
+    to {
+      opacity: calc(var(--o) * 1.6);
+    }
+  }
+
   @keyframes overlay-dismiss {
     to {
       opacity: 0;
@@ -757,6 +793,8 @@
     .atmosphere :global(.ridge-2),
     .atmosphere :global(.ridge-3),
     .atmosphere :global(.mist),
+    .atmosphere :global(.stars),
+    .atmosphere :global(.star),
     .message,
     .timer-digits {
       animation: none;
@@ -766,7 +804,8 @@
     .atmosphere :global(.dawn),
     .atmosphere :global(.mist-amber),
     .atmosphere :global(.haze),
-    .atmosphere :global(.mist) {
+    .atmosphere :global(.mist),
+    .atmosphere :global(.stars) {
       transition-duration: 120ms;
     }
 

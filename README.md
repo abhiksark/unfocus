@@ -10,6 +10,7 @@ A local-first **break** and **reflection** app: it asks you to look far away whe
 it is time to rest, and it shows a calm picture of how your day went.
 
 [Releases](https://github.com/abhiksark/unfocus/releases) ·
+[Install guide](docs/install.md) ·
 [Changelog](CHANGELOG.md) ·
 [Report a bug](https://github.com/abhiksark/unfocus/issues/new?template=bug_report.yml) ·
 [Request a feature](https://github.com/abhiksark/unfocus/issues/new?template=feature_request.yml) ·
@@ -35,10 +36,38 @@ is that you can see the rhythm without turning it into a score.
 
 ## Download the alpha
 
-Download the current alpha from [GitHub Releases](https://github.com/abhiksark/unfocus/releases)
-and choose the package for your system:
+**Step-by-step install for each OS and package type:** [docs/install.md](docs/install.md)
+(verify downloads, first run, tray notes, uninstall, troubleshooting).
 
-On macOS, install the same prerelease through the public Homebrew tap:
+### Ubuntu / Debian (X11): preferred Linux path
+
+On **Ubuntu** (and other Debian-based systems) with an **X11** session, install
+the alpha from the public APT repository at [apt.abhik.ai](https://apt.abhik.ai).
+The suite is signed with the Unfocus archive OpenPGP key; `apt update` verifies
+that signature before trusting package lists. Optional detached `.deb.asc`
+signatures are published next to each pool package for offline checks.
+
+```sh
+curl -fsSL https://apt.abhik.ai/public-key.asc \
+  | sudo gpg --dearmor -o /usr/share/keyrings/unfocus-archive-keyring.gpg
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://apt.abhik.ai alpha main' \
+  | sudo tee /etc/apt/sources.list.d/unfocus-alpha.list
+sudo apt update
+sudo apt install unfocus
+```
+
+Use an X11 session (`echo $XDG_SESSION_TYPE` should print `x11`). On Ubuntu
+GNOME, pick **Ubuntu on Xorg** at login if needed. Wayland is unsupported.
+Enable the **Ubuntu AppIndicators** extension if the tray icon is missing.
+
+Upgrade with `sudo apt update && sudo apt install --only-upgrade unfocus`.
+Full notes (remove the source, offline `.deb.asc` verify, tray, and X11) are
+in the [install guide](docs/install.md#debian--ubuntu-apt-preferred).
+
+### Other platforms
+
+Download packages from [GitHub Releases](https://github.com/abhiksark/unfocus/releases),
+or on macOS use the public Homebrew tap:
 
 ```sh
 brew install --cask abhiksark/unfocus/unfocus@alpha
@@ -46,15 +75,18 @@ brew install --cask abhiksark/unfocus/unfocus@alpha
 
 | Platform | Choose | Status and first-run notes |
 | --- | --- | --- |
-| Linux X11 | `.deb` for Debian or Ubuntu, `.rpm` for Fedora or RHEL, or `.AppImage` for a portable build | Qualified; Wayland is unsupported |
-| Windows x64 | Setup `.exe` for a normal install or `.msi` for managed installation | Early build; idle and fullscreen probes are implemented, interactive qualification pending |
-| macOS Apple silicon | `aarch64.dmg` | Preview; right-click the app and choose **Open** on first launch |
-| macOS Intel | `x64.dmg` | Preview; right-click the app and choose **Open** on first launch |
+| **Ubuntu / Debian X11** | **APT** (`apt install unfocus`) preferred; also `.deb` from releases | **Qualified** on Linux X11; packages signed via the APT archive OpenPGP key |
+| Other Linux X11 | `.deb`, `.rpm`, or `.AppImage` from releases | Qualified backend; verify `SHA256SUMS`; Wayland unsupported |
+| Windows x64 | Setup `.exe` or `.msi` | Early build; not application code-signed; SmartScreen may warn |
+| macOS Apple silicon | `aarch64.dmg` or Homebrew | Preview; not notarized; right-click → **Open** on first launch |
+| macOS Intel | `x64.dmg` or Homebrew | Preview; not notarized; right-click → **Open** on first launch |
 
-These early builds are not code-signed or notarized. Download only from the
-official releases page, read the release notes, and verify packages with the
-accompanying `SHA256SUMS` file and GitHub build-provenance attestations.
-Unfocus does not update itself yet, so check the releases page for new builds.
+**Signing today:** Ubuntu/Debian APT packages use the archive OpenPGP key on
+[apt.abhik.ai](https://apt.abhik.ai) (normal third-party repo model). macOS and
+Windows installers are not application code-signed or notarized. For release
+assets from GitHub, verify `SHA256SUMS` and optional build-provenance
+attestations. Unfocus does not auto-update; use `apt upgrade`, `brew upgrade`,
+or a newer release package.
 
 ## How it works
 
@@ -122,7 +154,7 @@ not just whether a package can be produced.
 
 | Platform | Status | Current behavior |
 | --- | --- | --- |
-| Linux X11 | Qualified | AppIndicator tray where the desktop provides a host, synchronized multi-monitor overlays, XScreenSaver idle detection, and EWMH fullscreen detection |
+| Linux X11 (Ubuntu primary) | Qualified | Preferred install on Ubuntu/Debian via signed APT at [apt.abhik.ai](https://apt.abhik.ai). AppIndicator tray where the desktop provides a host, synchronized multi-monitor overlays, XScreenSaver idle detection, and EWMH fullscreen detection |
 | macOS | Preview | Quartz idle and fullscreen probes work interactively; multi-monitor behavior has not completed an acceptance run |
 | Windows | Early build | Packages are produced; `GetLastInputInfo` idle and foreground-monitor fullscreen probes are implemented. Interactive multi-monitor qualification is still pending |
 | Linux Wayland | Unsupported | Default packages have no Wayland probes. An opt-in `wayland-sway` developer feature scaffolds a Sway 1.11+ candidate only; it is not qualified and must not be described as supported |
@@ -143,14 +175,16 @@ missing, keep the dashboard open, enable or restart the desktop's indicator
 host, and restart Unfocus. A known setup error appears in the dashboard, and
 closing that dashboard exits instead of hiding an unreachable process.
 
-![The consumer dashboard showing focus time, reminder actions, and the saved rhythm](.github/media/dashboard.png)
+![The consumer dashboard with focus countdown, Your day activity strip, break outcomes, and saved rhythm](.github/media/dashboard.png)
 
 ## Build from source
 
-Install the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
-for your platform (the listed system libraries on Linux or the Xcode command
-line tools on macOS) plus the Bun and Rust versions declared in `.bun-version`
-and `rust-toolchain.toml`, then:
+End users should prefer a [release package](docs/install.md). To develop or
+build from source, install the
+[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your
+platform (the listed system libraries on Linux or the Xcode command line tools
+on macOS) plus the Bun and Rust versions declared in `.bun-version` and
+`rust-toolchain.toml`, then:
 
 ```sh
 bun install --frozen-lockfile

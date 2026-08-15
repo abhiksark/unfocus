@@ -39,6 +39,15 @@ as `export let` or `$:` reactive statements.
   `get_today_activity`. Keep copy observational (active / away / deep blocks);
   no streaks, badges, or gamification. Empty, loading, probe-unavailable, and
   error captions stay distinct and note that the timer is unaffected.
+- The strip's time axis derives client-side: `stripAxisTicks` converts the
+  payload's `windowSeconds` and the render-time clock into round-hour ticks, so
+  no timestamp crosses the Rust boundary. Labels use `Intl.DateTimeFormat` with
+  the system locale; never hardcode a 12- or 24-hour format.
+- The day start is a display preference in browser storage
+  (`day-start.ts`, key `unfocus.day-start-hour.v1`), never in
+  `reminder-settings.json`. The timer must not read it. `stripAxisTicks` takes
+  the hour and flags exactly one matching tick per local day, so a day start
+  already on the four-hour grid is marked rather than duplicated.
 - The strip is presence-only (OS idle). Never request or display keylogging.
 - `break-summary.ts` formats calm counts from `get_break_summary`. Day captions
   must not re-list the grid counts; mute zeros in the UI rather than inventing
@@ -65,7 +74,8 @@ as `export let` or `$:` reactive statements.
   effects, full-width gradient bands, or drop-shadow halos.
 - Full-viewport layers stay static; a repainted full-screen gradient previously
   reached 217% CPU. Continuous motion is limited to transform/opacity on small
-  layers and stepped with `steps()` so repaints land every 2-3 seconds; state
+  layers and stepped with `steps()` so no layer repaints more often than about
+  every two seconds; current layers land between two and five seconds. State
   changes use one-shot opacity transitions.
 - `prefers-reduced-motion` stops every loop and reduces state fades to 120 ms.
   `prefers-contrast: more` must keep copy legible over the scene.
