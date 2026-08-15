@@ -36,6 +36,9 @@
   "dependencies": {
     "@tauri-apps/api": "^2"
   },
+  "overrides": {
+    "nanoid": "3.3.18"
+  },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",
     "@sveltejs/kit": "^2.9.0",
