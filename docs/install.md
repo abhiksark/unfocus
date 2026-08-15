@@ -75,10 +75,10 @@ when one exists) from:
 
 **https://github.com/abhiksark/unfocus/releases**
 
-Filenames embed the full version (example: `0.3.1-alpha.1`). Replace
+Filenames embed the full version (example: `0.4.0-alpha.1`). Replace
 `VERSION` in the commands below with that string, or download the matching
 file from the release page in a browser. The release tag is the same string
-with a `v` prefix (example: `v0.3.1-alpha.1`).
+with a `v` prefix (example: `v0.4.0-alpha.1`).
 
 | You have | Download or install path |
 | --- | --- |
@@ -111,11 +111,11 @@ you install or run anything.
 ### 1. Download the package and `SHA256SUMS`
 
 From the same **published** release tag as the package (example tag
-`v0.3.1-alpha.1`):
+`v0.4.0-alpha.1`):
 
 ```sh
 # Example version; use the version from the release page.
-VERSION=0.3.1-alpha.1
+VERSION=0.4.0-alpha.1
 BASE="https://github.com/abhiksark/unfocus/releases/download/v${VERSION}"
 
 curl -fsSL -O "${BASE}/SHA256SUMS"
@@ -141,7 +141,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 **Windows (PowerShell), for one file:**
 
 ```powershell
-Get-FileHash .\Unfocus_0.3.1-alpha.1_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\Unfocus_0.4.0-alpha.1_x64-setup.exe -Algorithm SHA256
 # Compare the hash to the matching line in SHA256SUMS
 ```
 
@@ -267,7 +267,7 @@ Use this for offline install or when you want to verify a specific release
 asset yourself.
 
 ```sh
-VERSION=0.3.1-alpha.1
+VERSION=0.4.0-alpha.1
 # After downloading Unfocus_${VERSION}_amd64.deb and verifying SHA256SUMS:
 
 sudo apt install "./Unfocus_${VERSION}_amd64.deb"
@@ -278,8 +278,8 @@ sudo apt install "./Unfocus_${VERSION}_amd64.deb"
 
 **Upgrade:** install a newer `.deb` the same way. Prerelease Debian versions
 are ordered so later alphas and stables can upgrade normally. The filename
-keeps the full SemVer (for example `0.3.1-alpha.1`); the package’s embedded
-Debian `Version` uses tilde ordering (for example `0.3.1~alpha.1-1`) so
+keeps the full SemVer (for example `0.4.0-alpha.1`); the package’s embedded
+Debian `Version` uses tilde ordering (for example `0.4.0~alpha.1-1`) so
 upgrades sort correctly.
 
 **Remove the package:**
@@ -292,7 +292,7 @@ sudo apt remove unfocus
 ### Fedora / RHEL (`.rpm`)
 
 ```sh
-VERSION=0.3.1-alpha.1
+VERSION=0.4.0-alpha.1
 # After downloading Unfocus-${VERSION}-1.x86_64.rpm and verifying SHA256SUMS:
 
 sudo dnf install "./Unfocus-${VERSION}-1.x86_64.rpm"
@@ -308,7 +308,7 @@ sudo dnf remove unfocus
 ### Portable AppImage
 
 ```sh
-VERSION=0.3.1-alpha.1
+VERSION=0.4.0-alpha.1
 chmod +x "./Unfocus_${VERSION}_amd64.AppImage"
 "./Unfocus_${VERSION}_amd64.AppImage"
 ```
@@ -456,11 +456,11 @@ verifying its checksum.
 2. Double-click the MSI, or for scripted install:
 
 ```powershell
-msiexec /i Unfocus_0.3.1-alpha.1_x64_en-US.msi
+msiexec /i Unfocus_0.4.0-alpha.1_x64_en-US.msi
 ```
 
-The MSI **ProductVersion** is the numeric core only (for example `0.3.1` for
-`0.3.1-alpha.1`) because Windows requires that format. The filename still
+The MSI **ProductVersion** is the numeric core only (for example `0.4.0` for
+`0.4.0-alpha.1`) because Windows requires that format. The filename still
 carries the full prerelease version.
 
 ### SmartScreen and unsigned builds
