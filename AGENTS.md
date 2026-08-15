@@ -60,14 +60,25 @@ plans/            Local working notes only (gitignored; not tracked docs)
 - Reminder defaults: 20-minute work interval, 20-second break. Valid ranges:
   work 1–120 minutes, break 3–30 seconds. Settings live in local app config as
   `reminder-settings.json` (schema v2; includes bounded pause expiry).
+- Local reflection data also lives in app config as a 24-hour hot
+  `activity-history.json`, fixed 30-day epoch
+  `activity-archive-<key>.json` chunks, and a `break-events.json` ledger.
+  Retention is at least 90 days going forward because whole archive chunks age
+  out together. Existing installs cannot backfill activity from before this
+  retention feature.
 - Pause is a fixed 30-minute local pause. Resume starts a fresh work interval.
 - Closing the dashboard hides into the tray when the tray is available; if tray
   setup failed, closing the dashboard exits so a silent unreachable process
   cannot keep running.
 - Dashboard has consumer mode (default) and developer mode (platform signals,
   monitors, raw probe errors). Mode is remembered on device.
+- Consumer mode also has a transient History view in the main window. It shows
+  three local 30-day pages aligned to the saved Day starts preference, requests
+  longer history only when opened, and never changes the reminder timer,
+  probes, or overlays.
 - Tauri commands registered on the main window: `get_diagnostics`,
-  `get_today_activity`, `get_activity_range`, `get_break_summary`,
+  `get_today_activity`, `get_activity_range`, `get_break_range`,
+  `get_break_summary`,
   `get_reminder_settings`, `get_reminder_status`, `save_reminder_settings`,
   `reset_reminder_settings`, `pause_reminders`, `resume_reminders`,
   `take_break_now`, `show_overlay_test`, `close_overlay_test`. Overlay windows

@@ -10,8 +10,9 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
+        mpsc, Arc, Mutex,
     },
+    thread,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -26,18 +27,20 @@ const RETENTION_SECONDS: u64 = 90 * 24 * 60 * 60;
 /// events are retained. Retention is storage; this is what "last seven days"
 /// means on screen.
 const WEEK_SECONDS: u64 = 7 * 24 * 60 * 60;
-/// Bounds a pathological event rate; retention above is what normally bounds
-/// the file. `512` was a live defect: a 20-minute work interval yields up to
-/// 72 scheduled breaks a day, so with natural-idle and fullscreen-suppress
-/// events the old cap could bite inside even the prior 7-day window, silently
-/// undercounting the dashboard's week totals. At the densest plausible rate
-/// (a 1-minute work interval, 1,440 scheduled breaks a day) retention still
-/// bounds the file for the first several days before this cap would; a
-/// genuinely pathological rate is still stopped.
-const MAX_EVENTS: usize = 16_384;
 const MILLIS_PER_SECOND: u64 = 1_000;
+const MAX_RANGE_MS: u64 = 31 * 24 * 60 * 60 * MILLIS_PER_SECOND;
 
 static LEDGER_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(test)]
+struct TestPersistBarrier {
+    path: PathBuf,
+    started: std::sync::mpsc::Sender<()>,
+    release: std::sync::mpsc::Receiver<()>,
+}
+
+#[cfg(test)]
+static TEST_PERSIST_BARRIER: Mutex<Option<TestPersistBarrier>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,25 +86,48 @@ pub(crate) struct BreakLedgerSummary {
     pub(crate) week_manual_take_break: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BreakRangeRecord {
+    pub(crate) at_ms: u64,
+    pub(crate) kind: BreakEventKind,
+}
+
 #[derive(Debug)]
 struct BreakLedgerState {
-    path: PathBuf,
     events: Vec<BreakEvent>,
+}
+
+#[derive(Debug)]
+enum PersistenceMessage {
+    Record(BreakEvent),
+    Shutdown,
+}
+
+#[derive(Debug)]
+struct PersistenceWorker {
+    sender: mpsc::Sender<PersistenceMessage>,
+    join: Option<thread::JoinHandle<()>>,
+}
+
+impl Drop for PersistenceWorker {
+    fn drop(&mut self) {
+        let _ = self.sender.send(PersistenceMessage::Shutdown);
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct BreakLedgerHandle {
     inner: Arc<Mutex<BreakLedgerState>>,
+    persistence: Arc<PersistenceWorker>,
 }
 
 impl Default for BreakLedgerHandle {
     fn default() -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(BreakLedgerState {
-                path: PathBuf::from(LEDGER_FILE_NAME),
-                events: Vec::new(),
-            })),
-        }
+        Self::start(PathBuf::from(LEDGER_FILE_NAME), Vec::new())
     }
 }
 
@@ -110,22 +136,37 @@ impl BreakLedgerHandle {
         let path = config_dir.join(LEDGER_FILE_NAME);
         let now_ms = epoch_ms(SystemTime::now());
         let events = load_or_repair_ledger(&path, now_ms)?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(BreakLedgerState { path, events })),
-        })
+        Ok(Self::start(path, events))
     }
 
     #[cfg(test)]
     fn new_with_path(path: PathBuf) -> Self {
+        Self::start(path, Vec::new())
+    }
+
+    fn start(path: PathBuf, events: Vec<BreakEvent>) -> Self {
+        let (sender, receiver) = mpsc::channel();
+        let worker_events = events.clone();
+        let path_display = path.display().to_string();
+        let join = thread::Builder::new()
+            .name("break-ledger-persistence".into())
+            .spawn(move || persistence_worker(path, worker_events, receiver))
+            .map_err(|error| {
+                eprintln!(
+                    "could not start break ledger persistence worker for {path_display}: {error}"
+                );
+                error
+            })
+            .ok();
+
         Self {
-            inner: Arc::new(Mutex::new(BreakLedgerState {
-                path,
-                events: Vec::new(),
-            })),
+            inner: Arc::new(Mutex::new(BreakLedgerState { events })),
+            persistence: Arc::new(PersistenceWorker { sender, join }),
         }
     }
 
-    /// Append one outcome. Persist failures are logged; memory still updates.
+    /// Append one outcome in memory and queue it for persistence.
+    /// Persistence failures are logged; memory still updates.
     pub(crate) fn record(
         &self,
         kind: BreakEventKind,
@@ -136,21 +177,22 @@ impl BreakLedgerHandle {
         let Ok(mut state) = self.inner.lock() else {
             return;
         };
-        state.events.push(BreakEvent {
+        let event = BreakEvent {
             at_ms: now_ms,
             kind,
             work_minutes,
             break_seconds,
-        });
+        };
+        state.events.push(event.clone());
         prune_events(&mut state.events, now_ms);
-        if let Err(error) = persist_ledger(
-            &state.path,
-            &PersistedBreakLedger {
-                version: LEDGER_SCHEMA_VERSION,
-                events: state.events.clone(),
-            },
-        ) {
-            eprintln!("could not persist break event ledger: {error}");
+        let queued = self
+            .persistence
+            .sender
+            .send(PersistenceMessage::Record(event))
+            .is_ok();
+        drop(state);
+        if !queued {
+            eprintln!("could not queue break event for persistence; keeping it in memory");
         }
     }
 
@@ -161,6 +203,64 @@ impl BreakLedgerHandle {
             .map(|state| state.events.clone())
             .unwrap_or_default();
         summarize_events(&events, now_ms)
+    }
+
+    pub(crate) fn range(
+        &self,
+        start_ms: u64,
+        end_ms: u64,
+    ) -> Result<Vec<BreakRangeRecord>, String> {
+        if end_ms <= start_ms {
+            return Err("range must have endMs greater than startMs".into());
+        }
+        if end_ms.saturating_sub(start_ms) > MAX_RANGE_MS {
+            return Err(format!(
+                "range must not exceed {MAX_RANGE_MS} elapsed milliseconds"
+            ));
+        }
+
+        let events = self
+            .inner
+            .lock()
+            .map(|state| state.events.clone())
+            .unwrap_or_default();
+        Ok(events_in_range(&events, start_ms, end_ms))
+    }
+}
+
+fn persistence_worker(
+    path: PathBuf,
+    mut events: Vec<BreakEvent>,
+    receiver: mpsc::Receiver<PersistenceMessage>,
+) {
+    while let Ok(first) = receiver.recv() {
+        let mut changed = false;
+        let mut shutdown = false;
+        for message in std::iter::once(first).chain(receiver.try_iter()) {
+            match message {
+                PersistenceMessage::Record(event) => {
+                    let now_ms = event.at_ms;
+                    events.push(event);
+                    prune_events(&mut events, now_ms);
+                    changed = true;
+                }
+                PersistenceMessage::Shutdown => shutdown = true,
+            }
+        }
+
+        if changed {
+            let ledger = PersistedBreakLedger {
+                version: LEDGER_SCHEMA_VERSION,
+                events: std::mem::take(&mut events),
+            };
+            if let Err(error) = persist_ledger(&path, &ledger) {
+                eprintln!("could not persist break event ledger: {error}");
+            }
+            events = ledger.events;
+        }
+        if shutdown {
+            return;
+        }
     }
 }
 
@@ -185,10 +285,6 @@ fn week_ms() -> u64 {
 fn prune_events(events: &mut Vec<BreakEvent>, now_ms: u64) {
     let cutoff = now_ms.saturating_sub(retention_ms());
     events.retain(|event| event.at_ms >= cutoff && event.at_ms <= now_ms);
-    if events.len() > MAX_EVENTS {
-        let drop = events.len() - MAX_EVENTS;
-        events.drain(0..drop);
-    }
 }
 
 fn summarize_events(events: &[BreakEvent], now_ms: u64) -> BreakLedgerSummary {
@@ -219,6 +315,19 @@ fn summarize_events(events: &[BreakEvent], now_ms: u64) -> BreakLedgerSummary {
         week_fullscreen_suppress: week.fullscreen_suppress,
         week_manual_take_break: week.manual_take_break,
     }
+}
+
+fn events_in_range(events: &[BreakEvent], start_ms: u64, end_ms: u64) -> Vec<BreakRangeRecord> {
+    let mut records: Vec<_> = events
+        .iter()
+        .filter(|event| event.at_ms >= start_ms && event.at_ms < end_ms)
+        .map(|event| BreakRangeRecord {
+            at_ms: event.at_ms,
+            kind: event.kind,
+        })
+        .collect();
+    records.sort_by_key(|record| record.at_ms);
+    records
 }
 
 #[derive(Default)]
@@ -336,6 +445,21 @@ fn replace_ledger_file(temp_path: &Path, path: &Path) -> io::Result<()> {
 }
 
 fn persist_ledger(path: &Path, ledger: &PersistedBreakLedger) -> io::Result<()> {
+    #[cfg(test)]
+    {
+        let barrier = TEST_PERSIST_BARRIER.lock().ok().and_then(|mut slot| {
+            if slot.as_ref().is_some_and(|barrier| barrier.path == path) {
+                slot.take()
+            } else {
+                None
+            }
+        });
+        if let Some(barrier) = barrier {
+            let _ = barrier.started.send(());
+            let _ = barrier.release.recv();
+        }
+    }
+
     let parent = path.parent().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -369,6 +493,17 @@ pub(crate) fn get_break_summary(
 ) -> Result<BreakLedgerSummary, String> {
     crate::authorize_main_caller(window.label())?;
     Ok(ledger.summary(epoch_ms(SystemTime::now())))
+}
+
+#[tauri::command]
+pub(crate) fn get_break_range(
+    window: tauri::WebviewWindow,
+    ledger: tauri::State<'_, BreakLedgerHandle>,
+    start_ms: u64,
+    end_ms: u64,
+) -> Result<Vec<BreakRangeRecord>, String> {
+    crate::authorize_main_caller(window.label())?;
+    ledger.range(start_ms, end_ms)
 }
 
 #[cfg(test)]
@@ -498,6 +633,7 @@ mod tests {
         first.record(BreakEventKind::ScheduledShown, 20, 20, t0);
         first.record(BreakEventKind::NaturalIdle, 20, 20, t0 + 1_000);
         first.record(BreakEventKind::ManualTakeBreak, 25, 30, t0 + 2_000);
+        drop(first);
 
         let reloaded = BreakLedgerHandle::load(&dir.path).expect("load");
         // load uses wall clock; re-read file at synthetic time via summarize
@@ -512,67 +648,83 @@ mod tests {
     }
 
     #[test]
-    fn prune_drops_events_outside_retention_and_caps_length() {
-        let t0 = 1_700_000_000_000_u64;
-        let mut events = Vec::new();
-        for index in 0..(MAX_EVENTS + 40) {
-            events.push(BreakEvent {
-                at_ms: t0 + index as u64,
-                kind: BreakEventKind::ScheduledShown,
-                work_minutes: 20,
-                break_seconds: 20,
-            });
-        }
-        // One event far outside retention.
-        events.push(BreakEvent {
-            at_ms: t0.saturating_sub(retention_ms() + 1_000),
-            kind: BreakEventKind::NaturalIdle,
-            work_minutes: 20,
-            break_seconds: 20,
+    fn delayed_persistence_does_not_delay_record() {
+        use std::{sync::mpsc, thread, time::Duration};
+
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        let handle = BreakLedgerHandle::new_with_path(path.clone());
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        *TEST_PERSIST_BARRIER.lock().expect("barrier lock") = Some(TestPersistBarrier {
+            path,
+            started: started_tx,
+            release: release_rx,
         });
-        prune_events(&mut events, t0 + MAX_EVENTS as u64 + 40);
-        assert!(events.len() <= MAX_EVENTS);
-        assert!(events
-            .iter()
-            .all(|event| event.kind != BreakEventKind::NaturalIdle
-                || event.at_ms >= (t0 + MAX_EVENTS as u64 + 40).saturating_sub(retention_ms())));
+        let (recorded_tx, recorded_rx) = mpsc::channel();
+
+        let recorder = thread::spawn(move || {
+            handle.record(BreakEventKind::ScheduledShown, 20, 20, 1_700_000_000_000);
+            let _ = recorded_tx.send(());
+        });
+
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("persistence should start");
+        let returned_while_persistence_was_blocked =
+            recorded_rx.recv_timeout(Duration::from_millis(100)).is_ok();
+        release_tx.send(()).expect("release persistence");
+        recorder.join().expect("record thread");
+
+        assert!(
+            returned_while_persistence_was_blocked,
+            "record must return without waiting for persistence"
+        );
     }
 
     #[test]
-    fn retention_keeps_ninety_days_at_a_realistic_rate() {
-        // ~80 events a day (scheduled breaks plus natural-idle and
-        // fullscreen-suppress outcomes) is a realistic heavy-use rate, well
-        // above a 20-minute interval's ~72 scheduled breaks alone. Ninety
-        // days at that rate is 7,200 events, far under MAX_EVENTS, so
-        // retention alone must decide what stays; nothing inside the window
-        // may be dropped by the cap.
-        const EVENTS_PER_DAY: u64 = 80;
-        const DAYS: u64 = 90;
-        let spacing_ms = day_ms() / EVENTS_PER_DAY;
+    fn prune_drops_events_outside_retention() {
         let t0 = 1_700_000_000_000_u64;
-        let total = EVENTS_PER_DAY * DAYS;
-        let mut events = Vec::with_capacity(total as usize);
-        for index in 0..total {
-            events.push(BreakEvent {
-                at_ms: t0 + index * spacing_ms,
+        let mut events = vec![
+            BreakEvent {
+                at_ms: t0,
                 kind: BreakEventKind::ScheduledShown,
                 work_minutes: 20,
                 break_seconds: 20,
+            },
+            BreakEvent {
+                at_ms: t0.saturating_sub(retention_ms() + 1_000),
+                kind: BreakEventKind::NaturalIdle,
+                work_minutes: 20,
+                break_seconds: 20,
+            },
+        ];
+
+        prune_events(&mut events, t0);
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, BreakEventKind::ScheduledShown);
+    }
+
+    #[test]
+    fn retention_keeps_ninety_days_at_minimum_work_interval() {
+        const EXPECTED_EVENTS: usize = 90 * 24 * 60;
+        const ONE_MINUTE_MS: u64 = 60_000;
+        let t0 = 1_700_000_000_000_u64;
+        let mut events = Vec::with_capacity(EXPECTED_EVENTS);
+        for index in 0..EXPECTED_EVENTS {
+            events.push(BreakEvent {
+                at_ms: t0 + index as u64 * ONE_MINUTE_MS,
+                kind: BreakEventKind::ScheduledShown,
+                work_minutes: 1,
+                break_seconds: 20,
             });
         }
-        let now_ms = t0 + (total - 1) * spacing_ms;
+        let now_ms = t0 + EXPECTED_EVENTS as u64 * ONE_MINUTE_MS;
 
         prune_events(&mut events, now_ms);
 
-        assert!(
-            (total as usize) < MAX_EVENTS,
-            "test rate must stay realistic, not already exceed the cap"
-        );
-        assert_eq!(
-            events.len(),
-            total as usize,
-            "no event inside the ninety-day window should be dropped"
-        );
+        assert_eq!(events.len(), EXPECTED_EVENTS);
     }
 
     #[test]
@@ -644,5 +796,98 @@ mod tests {
         .expect("seed future");
         let events = load_or_repair_ledger(&path, now).expect("repair");
         assert!(events.is_empty());
+    }
+
+    #[test]
+    fn range_rejects_empty_or_reversed_windows() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        let handle = BreakLedgerHandle::new_with_path(path);
+        let t0 = 1_700_000_000_000_u64;
+
+        assert!(
+            handle.range(t0, t0).is_err(),
+            "empty windows must be rejected"
+        );
+        assert!(
+            handle.range(t0 + 1, t0).is_err(),
+            "reversed windows must be rejected"
+        );
+    }
+
+    #[test]
+    fn range_rejects_windows_longer_than_thirty_one_days() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        let handle = BreakLedgerHandle::new_with_path(path);
+        let t0 = 1_700_000_000_000_u64;
+        let thirty_one_days_ms = 31 * day_ms();
+
+        assert!(
+            handle.range(t0, t0 + thirty_one_days_ms).is_ok(),
+            "exactly thirty-one elapsed days must be accepted"
+        );
+        assert!(
+            handle.range(t0, t0 + thirty_one_days_ms + 1).is_err(),
+            "windows wider than thirty-one elapsed days must be rejected"
+        );
+    }
+
+    #[test]
+    fn range_returns_filtered_chronological_privacy_preserving_records() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        let handle = BreakLedgerHandle::new_with_path(path);
+        let t0 = 1_700_000_000_000_u64;
+
+        handle.inner.lock().expect("lock").events = vec![
+            BreakEvent {
+                at_ms: t0 + 120_000,
+                kind: BreakEventKind::ManualTakeBreak,
+                work_minutes: 25,
+                break_seconds: 30,
+            },
+            BreakEvent {
+                at_ms: t0 + 20_000,
+                kind: BreakEventKind::ScheduledShown,
+                work_minutes: 20,
+                break_seconds: 20,
+            },
+            BreakEvent {
+                at_ms: t0 + 80_000,
+                kind: BreakEventKind::NaturalIdle,
+                work_minutes: 15,
+                break_seconds: 10,
+            },
+            BreakEvent {
+                at_ms: t0 + 200_000,
+                kind: BreakEventKind::FullscreenSuppress,
+                work_minutes: 20,
+                break_seconds: 20,
+            },
+        ];
+
+        let events = handle
+            .range(t0 + 10_000, t0 + 150_000)
+            .expect("range succeeds");
+        let serialized = serde_json::to_value(&events).expect("serialize range");
+
+        assert_eq!(
+            serialized,
+            serde_json::json!([
+                {
+                    "atMs": t0 + 20_000,
+                    "kind": "scheduledShown"
+                },
+                {
+                    "atMs": t0 + 80_000,
+                    "kind": "naturalIdle"
+                },
+                {
+                    "atMs": t0 + 120_000,
+                    "kind": "manualTakeBreak"
+                }
+            ])
+        );
     }
 }

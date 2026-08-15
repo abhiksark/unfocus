@@ -13,7 +13,7 @@ mod reminder;
 mod tray;
 
 use activity::{get_activity_range, get_today_activity, ActivityTrackerHandle};
-use break_ledger::{get_break_summary, BreakLedgerHandle};
+use break_ledger::{get_break_range, get_break_summary, BreakLedgerHandle};
 use diagnostics::get_diagnostics;
 #[cfg(desktop)]
 use instance::handle_secondary_launch;
@@ -137,6 +137,7 @@ pub fn run() {
             get_diagnostics,
             get_today_activity,
             get_activity_range,
+            get_break_range,
             get_break_summary,
             get_reminder_settings,
             get_reminder_status,

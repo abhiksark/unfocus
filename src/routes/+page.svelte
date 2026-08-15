@@ -2,6 +2,7 @@
   import BreakOverlay from "$lib/BreakOverlay.svelte";
   import ConsumerDashboard from "$lib/ConsumerDashboard.svelte";
   import DeveloperDashboard from "$lib/DeveloperDashboard.svelte";
+  import HistoryView from "$lib/HistoryView.svelte";
   import {
     consumerReminderPresentation,
     consumerWarning
@@ -39,6 +40,7 @@
   const overlayParameters = windowRoute.kind === "overlay" ? windowRoute.parameters : null;
 
   let dashboardMode = $state<DashboardMode>("consumer");
+  let dashboardView = $state<"dashboard" | "history">("dashboard");
   let dayStartHour = $state(DEFAULT_DAY_START_HOUR);
   let report = $state<DiagnosticsReport | null>(null);
   let diagnosticsError = $state<string | null>(null);
@@ -105,7 +107,19 @@
 
   function setDashboardMode(mode: DashboardMode) {
     dashboardMode = mode;
+    if (mode !== "consumer") dashboardView = "dashboard";
     writeDashboardMode(browserStorage(), mode);
+  }
+
+  function openHistory(): void {
+    dashboardView = "history";
+  }
+
+  function returnFromHistory(): void {
+    dashboardView = "dashboard";
+    window.requestAnimationFrame(() => {
+      document.getElementById("view-history-trigger")?.focus();
+    });
   }
 
   function setDayStartHour(hour: number): void {
@@ -393,6 +407,8 @@
     onSaveSettings={() => void saveReminderSettings()}
     onResetSettings={() => void resetReminderSettings()}
   />
+{:else if dashboardView === "history"}
+  <HistoryView {dayStartHour} onBack={returnFromHistory} />
 {:else}
   <ConsumerDashboard
     presentation={reminderPresentation}
@@ -429,6 +445,7 @@
     onSaveSettings={() => void saveReminderSettings()}
     onResetSettings={() => void resetReminderSettings()}
     onOpenDeveloperMode={() => setDashboardMode("developer")}
+    onViewHistory={openHistory}
   />
 {/if}
 

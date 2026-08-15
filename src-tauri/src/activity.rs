@@ -472,6 +472,7 @@ pub(crate) struct ActivitySummary {
 pub(crate) struct RangeBucket {
     pub(crate) active_ms: u64,
     pub(crate) afk_ms: u64,
+    pub(crate) longest_active_ms: u64,
 }
 
 /// Sum active/afk overlap between `[start, end)` and `segments`, using the
@@ -479,6 +480,7 @@ pub(crate) struct RangeBucket {
 fn bucket_occupancy(segments: &[Segment], start: u64, end: u64) -> RangeBucket {
     let mut active_ms = 0_u64;
     let mut afk_ms = 0_u64;
+    let mut longest_active_ms = 0_u64;
     for segment in segments {
         let overlap_start = segment.start_ms.max(start);
         let overlap_end = segment.end_ms.min(end);
@@ -487,12 +489,19 @@ fn bucket_occupancy(segments: &[Segment], start: u64, end: u64) -> RangeBucket {
         }
         let overlap = overlap_end - overlap_start;
         match segment.kind {
-            ActivityKind::Active => active_ms = active_ms.saturating_add(overlap),
+            ActivityKind::Active => {
+                active_ms = active_ms.saturating_add(overlap);
+                longest_active_ms = longest_active_ms.max(overlap);
+            }
             ActivityKind::Afk => afk_ms = afk_ms.saturating_add(overlap),
             ActivityKind::Unknown => {}
         }
     }
-    RangeBucket { active_ms, afk_ms }
+    RangeBucket {
+        active_ms,
+        afk_ms,
+        longest_active_ms,
+    }
 }
 
 #[derive(Debug)]
@@ -1714,6 +1723,34 @@ mod tests {
             "a segment present in both the hot set and the archive must be counted once"
         );
         assert_eq!(buckets[0].afk_ms, 0);
+    }
+
+    #[test]
+    fn range_serializes_longest_active_ms_clamped_to_bucket_overlap() {
+        let dir = TestDirectory::new();
+        let t0 = 1_700_000_000_000_u64;
+        let mut seeded = tracker();
+        seeded.restore_segments(
+            vec![Segment {
+                kind: ActivityKind::Active,
+                start_ms: t0.saturating_sub(20_000),
+                end_ms: t0 + 50_000,
+            }],
+            t0 + 50_000,
+        );
+        let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
+
+        let buckets = handle.range(&[t0, t0 + 20_000]).expect("range succeeds");
+        let serialized = serde_json::to_value(&buckets).expect("serialize buckets");
+
+        assert_eq!(
+            serialized,
+            serde_json::json!([{
+                "activeMs": 20_000,
+                "afkMs": 0,
+                "longestActiveMs": 20_000
+            }])
+        );
     }
 
     #[test]

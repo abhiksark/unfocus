@@ -8,22 +8,34 @@ released versions link to their GitHub release.
 ### Added
 
 - Kept raw **Your day** presence history on this device for at least 90 days,
-  beyond the 24-hour live window the strip already shows. Segments that age
-  out of the live file are archived to local files in the same config
-  directory rather than deleted; this stays local-only like everything else
-  in Unfocus, with no account and no network call. History fills forward
-  only: existing installs start with none of this longer history, and nothing
-  from before this change can be backfilled. A new query command reads the
-  longer history back, but nothing in the UI uses it yet.
+  beyond the 24-hour live window the strip already shows. The existing
+  `activity-history.json` file stays hot for the latest day, and segments that
+  age out of it are archived into local `activity-archive-<key>.json` 30-day
+  epoch chunks in the same config directory. This stays local-only like
+  everything else in Unfocus, with no account and no network call. History
+  fills forward only: existing installs start with none of this longer
+  history, and nothing from before this change can be backfilled.
+- Added main-window-only range history commands for the consumer dashboard.
+  `get_activity_range` returns bucketed `activeMs`, `afkMs`, and
+  `longestActiveMs` values for caller-provided boundaries, and
+  `get_break_range` returns chronological privacy-safe `{atMs, kind}` break
+  outcomes for `[start, end)` queries up to 31 elapsed days.
+- Added a transient consumer History view with three local 30-day pages. It
+  follows the saved **Day starts** preference, loads on demand, shows activity
+  and break outcomes together, and does not change the reminder timer, probes,
+  or overlays.
 
 ### Changed
 
 - Raised the break-outcome ledger's retention from 7 to at least 90 days and
-  its event cap from 512 to 16,384, matching the activity history above. The
-  old cap was a live defect: a 20-minute work interval can produce up to 72
-  scheduled breaks a day, and with natural-idle and fullscreen-suppress
-  outcomes added in, the cap could already be reached inside the old 7-day
-  window, silently undercounting the dashboard's week totals.
+  removed its fixed event cap, matching the activity history above.
+  `break-events.json` is now bounded by the 90-day time window and keeps enough
+  local break outcomes to back the history view as well as the existing day
+  and week summaries. The old 512-event cap was a live defect: a 20-minute
+  work interval can produce up to 72 scheduled breaks a day, and with
+  natural-idle and fullscreen-suppress outcomes added in, the cap could
+  already be reached inside the old 7-day window, silently undercounting the
+  dashboard's week totals.
 
 ## [0.4.0-alpha.1] - 2026-08-15
 

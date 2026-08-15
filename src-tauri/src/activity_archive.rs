@@ -125,15 +125,20 @@ pub(crate) fn read_range(config_dir: &Path, start_ms: u64, end_ms: u64) -> Vec<S
     if end_ms <= start_ms {
         return Vec::new();
     }
-    let start_key = chunk_key(start_ms);
     let end_key = chunk_key(end_ms.saturating_sub(1));
 
     let mut results = Vec::new();
-    if start_key > 0 {
-        results.extend(read_chunk_segments(&chunk_path(config_dir, start_key - 1)));
-    }
-    for key in start_key..=end_key {
-        results.extend(read_chunk_segments(&chunk_path(config_dir, key)));
+    let Ok(entries) = fs::read_dir(config_dir) else {
+        return results;
+    };
+    for entry in entries.flatten() {
+        let file_name = entry.file_name();
+        let Some(key) = file_name.to_str().and_then(parse_chunk_key) else {
+            continue;
+        };
+        if key <= end_key {
+            results.extend(read_chunk_segments(&entry.path()));
+        }
     }
 
     // Keep every segment that overlaps the requested window, straddlers at
@@ -172,7 +177,11 @@ pub(crate) fn prune_chunks(config_dir: &Path, cutoff_ms: u64) -> io::Result<()> 
         let Some(key) = parse_chunk_key(name) else {
             continue;
         };
-        if key.saturating_add(1).saturating_mul(ARCHIVE_BLOCK_MS) <= cutoff_ms {
+        if key.saturating_add(1).saturating_mul(ARCHIVE_BLOCK_MS) <= cutoff_ms
+            && read_chunk_segments(&entry.path())
+                .iter()
+                .all(|segment| segment.end_ms <= cutoff_ms)
+        {
             if let Err(error) = fs::remove_file(entry.path()) {
                 if error.kind() != io::ErrorKind::NotFound {
                     last_error = Some(error);
@@ -337,6 +346,24 @@ mod tests {
     }
 
     #[test]
+    fn read_range_finds_segment_spanning_multiple_preceding_chunks() {
+        let dir = TestDirectory::new();
+        let straddler = Segment {
+            kind: ActivityKind::Active,
+            start_ms: ARCHIVE_BLOCK_MS - 100,
+            end_ms: ARCHIVE_BLOCK_MS * 3 + 50,
+        };
+        archive_segments(&dir.path, &[straddler]).expect("archive");
+
+        let results = read_range(
+            &dir.path,
+            ARCHIVE_BLOCK_MS * 3,
+            ARCHIVE_BLOCK_MS * 3 + 1_000,
+        );
+        assert_eq!(results, vec![straddler]);
+    }
+
+    #[test]
     fn read_range_returns_each_segment_once() {
         let dir = TestDirectory::new();
         let segment = Segment {
@@ -440,6 +467,26 @@ mod tests {
 
         assert!(!chunk_path(&dir.path, 0).exists());
         assert!(chunk_path(&dir.path, 1).exists());
+    }
+
+    #[test]
+    fn prune_chunks_keeps_start_block_until_its_long_segment_expires() {
+        let dir = TestDirectory::new();
+        let segment = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 500,
+            end_ms: ARCHIVE_BLOCK_MS * 2 + 500,
+        };
+        archive_segments(&dir.path, &[segment]).expect("archive");
+
+        prune_chunks(&dir.path, ARCHIVE_BLOCK_MS * 2).expect("prune overlapping chunk");
+        assert!(
+            chunk_path(&dir.path, 0).exists(),
+            "start chunk must remain while its segment overlaps the retained range"
+        );
+
+        prune_chunks(&dir.path, segment.end_ms).expect("prune expired chunk");
+        assert!(!chunk_path(&dir.path, 0).exists());
     }
 
     #[test]
