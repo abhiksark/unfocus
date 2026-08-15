@@ -78,6 +78,17 @@ jobs:
       - name: Toolchain declarations agree
         run: bun run toolchains:check
 
+      - name: Compose release notes
+        env:
+          REHEARSAL: ${{ inputs.rehearsal }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$REHEARSAL" = true ]; then
+            TAG="v$(bun -e 'console.log(require("./package.json").version)')"
+          fi
+          bun run release:notes "$TAG" > /dev/null
+
       - name: Refuse to mutate an existing published release
         if: ${{ !inputs.rehearsal }}
         env:
@@ -265,6 +276,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+          no-cache: true
+
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-candidate
@@ -278,22 +294,7 @@ jobs:
       - name: Compose release notes
         env:
           TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          node scripts/extract-release-notes.js "$TAG" > changes.md
-
-          {
-            echo "These early builds are not code-signed or notarized. Verify downloads with SHA256SUMS and the GitHub build-provenance attestations."
-            echo "The release also includes a CycloneDX SBOM and the bundled third-party notices."
-            echo
-            echo "- **Linux**: install the \`.deb\`, \`.rpm\`, or \`.AppImage\`. X11 only; Wayland is unsupported."
-            echo "- **macOS**: right-click the app and choose Open the first time. Multi-monitor behavior is not yet qualified."
-            echo "- **Windows**: idle and fullscreen probes report as unavailable."
-            echo
-            echo "## Changes"
-            echo
-            cat changes.md
-          } > notes.md
+        run: bun run release:notes "$TAG" > notes.md
 
       - name: Create or update a draft release
         env:

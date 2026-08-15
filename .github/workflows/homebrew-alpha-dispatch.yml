@@ -3,6 +3,8 @@ name: Dispatch Homebrew alpha update
 on:
   release:
     types: [published]
+  repository_dispatch:
+    types: [unfocus-homebrew-alpha-published]
   workflow_dispatch:
     inputs:
       tag_name:
@@ -14,28 +16,107 @@ permissions:
   contents: read
 
 concurrency:
-  group: homebrew-alpha-dispatch-${{ github.event.release.tag_name || inputs.tag_name }}
+  group: homebrew-alpha-dispatch-${{ github.event.release.tag_name || github.event.client_payload.tag_name || inputs.tag_name }}
   cancel-in-progress: false
 
 jobs:
+  relay:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate the published prerelease
+        env:
+          EVENT_RELEASE: ${{ toJSON(github.event.release) }}
+        run: |
+          set -euo pipefail
+          TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*$'
+          ID=$(jq -r '.id // empty' <<<"$EVENT_RELEASE")
+          TAG=$(jq -r '.tag_name // empty' <<<"$EVENT_RELEASE")
+          DRAFT=$(jq -r '.draft | if type == "boolean" then tostring else empty end' <<<"$EVENT_RELEASE")
+          PRERELEASE=$(jq -r '.prerelease | if type == "boolean" then tostring else empty end' <<<"$EVENT_RELEASE")
+          PUBLISHED_AT=$(jq -r '.published_at // empty' <<<"$EVENT_RELEASE")
+
+          [[ "$ID" =~ ^[0-9]+$ ]] || {
+            echo "Release event did not provide a numeric release id." >&2
+            exit 1
+          }
+          [[ "$TAG" =~ $TAG_PATTERN ]] || {
+            echo "Release event tag $TAG is not a supported prerelease version." >&2
+            exit 1
+          }
+          if [ "$DRAFT" != false ] || [ "$PRERELEASE" != true ] || [ -z "$PUBLISHED_AT" ]; then
+            echo "$TAG is not a published, non-draft prerelease." >&2
+            exit 1
+          fi
+
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          git fetch --no-tags origin "+refs/tags/$TAG:refs/tags/$TAG"
+          TAG_COMMIT=$(git rev-parse --verify "${TAG}^{commit}")
+          git merge-base --is-ancestor "$TAG_COMMIT" refs/remotes/origin/main || {
+            echo "$TAG does not point to a commit on origin/main." >&2
+            exit 1
+          }
+
+      - name: Relay the published release through the default branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ github.event.release.id }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --argjson release_id "$RELEASE_ID" \
+            --arg tag_name "$TAG_NAME" \
+            '{
+              event_type: "unfocus-homebrew-alpha-published",
+              client_payload: {
+                release_id: $release_id,
+                tag_name: $tag_name
+              }
+            }' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" --input -
+
   dispatch:
+    if: github.event_name != 'release'
     runs-on: ubuntu-24.04
     environment: homebrew-tap-automation
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Resolve a published prerelease
         id: release
         env:
           EVENT_NAME: ${{ github.event_name }}
-          EVENT_RELEASE: ${{ toJSON(github.event.release) }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_TAG: ${{ inputs.tag_name }}
+          RELAY_RELEASE_ID: ${{ github.event.client_payload.release_id }}
+          RELAY_TAG: ${{ github.event.client_payload.tag_name }}
         run: |
           set -euo pipefail
+          TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*$'
 
-          if [ "$EVENT_NAME" = release ]; then
-            RELEASE=$(jq -c . <<<"$EVENT_RELEASE")
+          if [ "$EVENT_NAME" = repository_dispatch ]; then
+            [[ "$RELAY_RELEASE_ID" =~ ^[0-9]+$ ]] || {
+              echo "Release relay did not provide a numeric release id." >&2
+              exit 1
+            }
+            [[ "$RELAY_TAG" =~ $TAG_PATTERN ]] || {
+              echo "Release relay tag $RELAY_TAG is not a supported prerelease version." >&2
+              exit 1
+            }
+            RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELAY_RELEASE_ID")
           else
-            [[ "$INPUT_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$ ]] || {
+            [[ "$INPUT_TAG" =~ $TAG_PATTERN ]] || {
               echo "Manual retries require a v-prefixed prerelease tag." >&2
               exit 1
             }
@@ -52,18 +133,40 @@ jobs:
             echo "GitHub did not return a numeric release id." >&2
             exit 1
           }
-          [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$ ]] || {
+          [[ "$TAG" =~ $TAG_PATTERN ]] || {
             echo "Release tag $TAG is not a supported prerelease version." >&2
             exit 1
           }
-          if [ "$EVENT_NAME" = workflow_dispatch ] && [ "$TAG" != "$INPUT_TAG" ]; then
-            echo "GitHub returned tag $TAG for requested tag $INPUT_TAG." >&2
-            exit 1
-          fi
+          case "$EVENT_NAME" in
+            repository_dispatch)
+              if [ "$ID" != "$RELAY_RELEASE_ID" ] || [ "$TAG" != "$RELAY_TAG" ]; then
+                echo "GitHub returned release $ID ($TAG) for relayed release $RELAY_RELEASE_ID ($RELAY_TAG)." >&2
+                exit 1
+              fi
+              ;;
+            workflow_dispatch)
+              if [ "$TAG" != "$INPUT_TAG" ]; then
+                echo "GitHub returned tag $TAG for requested tag $INPUT_TAG." >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unsupported dispatch event $EVENT_NAME." >&2
+              exit 1
+              ;;
+          esac
           if [ "$DRAFT" != false ] || [ "$PRERELEASE" != true ] || [ -z "$PUBLISHED_AT" ]; then
             echo "$TAG is not a published, non-draft prerelease." >&2
             exit 1
           fi
+
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          git fetch --no-tags origin "+refs/tags/$TAG:refs/tags/$TAG"
+          TAG_COMMIT=$(git rev-parse --verify "${TAG}^{commit}")
+          git merge-base --is-ancestor "$TAG_COMMIT" refs/remotes/origin/main || {
+            echo "$TAG does not point to a commit on origin/main." >&2
+            exit 1
+          }
 
           {
             echo "release_id=$ID"
