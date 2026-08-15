@@ -512,6 +512,7 @@ struct ActivityTrackerState {
     /// same directory.
     config_dir: PathBuf,
     last_persisted_at_ms: Option<u64>,
+    last_retention_pruned_at_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -528,6 +529,7 @@ impl Default for ActivityTrackerHandle {
                 path: PathBuf::from(HISTORY_FILE_NAME),
                 config_dir: PathBuf::new(),
                 last_persisted_at_ms: None,
+                last_retention_pruned_at_ms: None,
             })),
         }
     }
@@ -544,12 +546,14 @@ impl ActivityTrackerHandle {
         let mut tracker = ActivityTracker::default();
         let segments = load_or_repair_history(&path, now_ms, tracker.window_seconds)?;
         tracker.restore_segments(segments, now_ms);
+        prune_expired_archives(config_dir, now_ms);
         Ok(Self {
             inner: Arc::new(Mutex::new(ActivityTrackerState {
                 tracker,
                 path,
                 config_dir: config_dir.to_path_buf(),
                 last_persisted_at_ms: None,
+                last_retention_pruned_at_ms: Some(now_ms),
             })),
         })
     }
@@ -563,6 +567,7 @@ impl ActivityTrackerHandle {
                 path,
                 config_dir,
                 last_persisted_at_ms: None,
+                last_retention_pruned_at_ms: None,
             })),
         }
     }
@@ -576,6 +581,10 @@ impl ActivityTrackerHandle {
         let kind_changed = state.tracker.last_kind != previous_kind;
 
         let due = match state.last_persisted_at_ms {
+            None => true,
+            Some(previous) => now_ms.saturating_sub(previous) >= PERSIST_MIN_INTERVAL_MS,
+        };
+        let retention_due = match state.last_retention_pruned_at_ms {
             None => true,
             Some(previous) => now_ms.saturating_sub(previous) >= PERSIST_MIN_INTERVAL_MS,
         };
@@ -596,17 +605,16 @@ impl ActivityTrackerHandle {
             match archive_segments(&state.config_dir, &archivable) {
                 Ok(()) => {
                     state.tracker.drop_archived(now_ms);
-                    let retention_cutoff = now_ms.saturating_sub(
-                        HISTORY_RETENTION_SECONDS.saturating_mul(MILLIS_PER_SECOND),
-                    );
-                    if let Err(error) = prune_chunks(&state.config_dir, retention_cutoff) {
-                        eprintln!("could not prune expired activity archives: {error}");
-                    }
                 }
                 Err(error) => {
                     eprintln!("could not archive activity history: {error}; will retry");
                 }
             }
+        }
+
+        if retention_due {
+            prune_expired_archives(&state.config_dir, now_ms);
+            state.last_retention_pruned_at_ms = Some(now_ms);
         }
 
         if !kind_changed && !due {
@@ -715,6 +723,14 @@ impl ActivityTrackerHandle {
         combined.sort_by_key(|segment| segment.start_ms);
         combined.dedup();
         combined
+    }
+}
+
+fn prune_expired_archives(config_dir: &Path, now_ms: u64) {
+    let retention_cutoff =
+        now_ms.saturating_sub(HISTORY_RETENTION_SECONDS.saturating_mul(MILLIS_PER_SECOND));
+    if let Err(error) = prune_chunks(config_dir, retention_cutoff) {
+        eprintln!("could not prune expired activity archives: {error}");
     }
 }
 
@@ -1222,6 +1238,31 @@ mod tests {
     }
 
     #[test]
+    fn load_prunes_expired_archive_chunks_without_hot_segments() {
+        let dir = TestDirectory::new();
+        let ancient = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 500,
+            end_ms: 900,
+        };
+        activity_archive::archive_segments(&dir.path, &[ancient]).expect("seed expired chunk");
+        let expired_chunk = activity_archive::chunk_path(&dir.path, 0);
+
+        let now = HISTORY_RETENTION_SECONDS
+            .saturating_mul(MILLIS_PER_SECOND)
+            .saturating_add(ARCHIVE_BLOCK_MS)
+            .saturating_add(1);
+        let handle =
+            ActivityTrackerHandle::load_at(&dir.path, now).expect("load empty hot history");
+
+        assert!(
+            !expired_chunk.exists(),
+            "startup must prune expired archive chunks even when hot history is empty"
+        );
+        assert_eq!(handle.summary(now).active_seconds, 0);
+    }
+
+    #[test]
     fn load_retains_straddling_segment_whole() {
         let dir = TestDirectory::new();
         let path = dir.path.join(HISTORY_FILE_NAME);
@@ -1573,6 +1614,39 @@ mod tests {
         assert!(
             activity_archive::chunk_path(&dir.path, 3).exists(),
             "the freshly archived chunk must survive the same prune pass"
+        );
+    }
+
+    #[test]
+    fn observe_prunes_expired_chunks_without_archivable_segments() {
+        let dir = TestDirectory::new();
+        let now = HISTORY_RETENTION_SECONDS
+            .saturating_mul(MILLIS_PER_SECOND)
+            .saturating_add(ARCHIVE_BLOCK_MS)
+            .saturating_add(1);
+        let handle =
+            ActivityTrackerHandle::new_with_path(tracker(), dir.path.join(HISTORY_FILE_NAME));
+
+        // Establish the live retention cadence before an expired chunk
+        // appears; the only hot segment remains open and cannot be archived.
+        handle.observe(now, Some(0));
+        let ancient = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 500,
+            end_ms: 900,
+        };
+        activity_archive::archive_segments(&dir.path, &[ancient]).expect("seed expired chunk");
+        let expired_chunk = activity_archive::chunk_path(&dir.path, 0);
+
+        handle.observe(now + PERSIST_MIN_INTERVAL_MS, Some(0));
+
+        assert!(
+            !expired_chunk.exists(),
+            "the live retention cadence must prune without a newly archivable segment"
+        );
+        assert!(
+            activity_archive::read_range(&dir.path, now, now + 1).is_empty(),
+            "the observing segment must remain hot rather than being archived"
         );
     }
 
