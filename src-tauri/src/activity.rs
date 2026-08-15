@@ -586,7 +586,9 @@ impl ActivityTrackerHandle {
         };
         let retention_due = match state.last_retention_pruned_at_ms {
             None => true,
-            Some(previous) => now_ms.saturating_sub(previous) >= PERSIST_MIN_INTERVAL_MS,
+            Some(previous) => {
+                now_ms < previous || now_ms.saturating_sub(previous) >= PERSIST_MIN_INTERVAL_MS
+            }
         };
 
         // Flush before prune: a segment leaves the hot set only once it is
@@ -1647,6 +1649,33 @@ mod tests {
         assert!(
             activity_archive::read_range(&dir.path, now, now + 1).is_empty(),
             "the observing segment must remain hot rather than being archived"
+        );
+    }
+
+    #[test]
+    fn observe_prunes_expired_chunks_on_clock_reversal() {
+        let dir = TestDirectory::new();
+        let now = HISTORY_RETENTION_SECONDS
+            .saturating_mul(MILLIS_PER_SECOND)
+            .saturating_add(ARCHIVE_BLOCK_MS)
+            .saturating_add(1_000);
+        let handle =
+            ActivityTrackerHandle::new_with_path(tracker(), dir.path.join(HISTORY_FILE_NAME));
+
+        handle.observe(now, Some(0));
+        let ancient = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 500,
+            end_ms: 900,
+        };
+        activity_archive::archive_segments(&dir.path, &[ancient]).expect("seed expired chunk");
+        let expired_chunk = activity_archive::chunk_path(&dir.path, 0);
+
+        handle.observe(now - 1, Some(0));
+
+        assert!(
+            !expired_chunk.exists(),
+            "a clock reversal must immediately retry retention pruning"
         );
     }
 
