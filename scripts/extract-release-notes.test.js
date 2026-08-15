@@ -82,6 +82,17 @@ describe("release-note extraction", () => {
     expect(() => extractReleaseNotes(changelog, "0.2.0-alpha.1")).toThrow("canonical v-prefixed version");
   });
 
+  test("rejects a numeric prerelease identifier with a leading zero", () => {
+    expect(() => extractReleaseNotes(changelog, "v0.4.0-01")).toThrow("canonical v-prefixed version");
+  });
+
+  test("accepts a prerelease identifier that contains letters after a leading zero", () => {
+    const alphanumeric = changelog.replace("[0.2.0-alpha.1] - 2026-08-11", "[0.2.0-01alpha] - 2026-08-11");
+    expect(extractReleaseNotes(alphanumeric, "v0.2.0-01alpha")).toBe(
+      "### Added\n\n- Consumer dashboard.\n\n### Changed\n\n- Debian ordering.\n",
+    );
+  });
+
   test("does not include changelog comparison references after the final section", () => {
     expect(extractReleaseNotes(changelog, "v0.1.0-alpha.1")).toBe("### Added\n\n- First alpha.\n");
   });

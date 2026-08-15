@@ -46,8 +46,8 @@ as `export let` or `$:` reactive statements.
 - The day start is a display preference in browser storage
   (`day-start.ts`, key `unfocus.day-start-hour.v1`), never in
   `reminder-settings.json`. The timer must not read it. `stripAxisTicks` takes
-  the hour and flags exactly one tick, so a day start already on the four-hour
-  grid is marked rather than duplicated.
+  the hour and flags exactly one matching tick per local day, so a day start
+  already on the four-hour grid is marked rather than duplicated.
 - The strip is presence-only (OS idle). Never request or display keylogging.
 - `break-summary.ts` formats calm counts from `get_break_summary`. Day captions
   must not re-list the grid counts; mute zeros in the UI rather than inventing
