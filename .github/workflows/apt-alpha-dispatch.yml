@@ -22,6 +22,10 @@ jobs:
     runs-on: ubuntu-24.04
     environment: apt-repo-automation
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Resolve a published prerelease
         id: release
         env:
@@ -31,11 +35,12 @@ jobs:
           INPUT_TAG: ${{ inputs.tag_name }}
         run: |
           set -euo pipefail
+          TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*$'
 
           if [ "$EVENT_NAME" = release ]; then
             RELEASE=$(jq -c . <<<"$EVENT_RELEASE")
           else
-            [[ "$INPUT_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$ ]] || {
+            [[ "$INPUT_TAG" =~ $TAG_PATTERN ]] || {
               echo "Manual retries require a v-prefixed prerelease tag." >&2
               exit 1
             }
@@ -52,7 +57,7 @@ jobs:
             echo "GitHub did not return a numeric release id." >&2
             exit 1
           }
-          [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$ ]] || {
+          [[ "$TAG" =~ $TAG_PATTERN ]] || {
             echo "Release tag $TAG is not a supported prerelease version." >&2
             exit 1
           }
@@ -64,6 +69,14 @@ jobs:
             echo "$TAG is not a published, non-draft prerelease." >&2
             exit 1
           fi
+
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          git fetch --no-tags origin "+refs/tags/$TAG:refs/tags/$TAG"
+          TAG_COMMIT=$(git rev-parse --verify "${TAG}^{commit}")
+          git merge-base --is-ancestor "$TAG_COMMIT" refs/remotes/origin/main || {
+            echo "$TAG does not point to a commit on origin/main." >&2
+            exit 1
+          }
 
           {
             echo "release_id=$ID"

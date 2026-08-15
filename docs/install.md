@@ -62,7 +62,7 @@ Authenticode.
 
 | Audience | Linux | macOS | Windows |
 | --- | --- | --- | --- |
-| **End user (release package)** | No extra libraries for the APT package / `.deb` / `.rpm` / AppImage. A tray host is recommended on GNOME (below). | **None.** No Xcode. | **None** beyond a normal Windows 10/11 x64 system. The WebView2 runtime is usually already present on those systems. |
+| **End user (release package)** | No extra libraries for APT / `.deb` / `.rpm`. AppImage may need your distribution's FUSE / AppImage support. A tray host is recommended on GNOME (below). | **None.** No Xcode. | **None** beyond a normal Windows 10/11 x64 system. The WebView2 runtime is usually already present on those systems. |
 | **Developer (build from source)** | WebKitGTK 4.1, AppIndicator, libxdo, and related deps; see [Build from source](#build-from-source-all-platforms) and [Tauri Linux prerequisites](https://v2.tauri.app/start/prerequisites/#linux). | Xcode Command Line Tools; see [Tauri macOS prerequisites](https://v2.tauri.app/start/prerequisites/#macos). | MSVC C++ build tools and WebView2 where required; see [Tauri Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows). |
 
 ### Choose a package
@@ -217,9 +217,13 @@ sudo apt install unfocus
 key once):
 
 ```sh
-curl -fsSL -O https://apt.abhik.ai/pool/main/u/unfocus/unfocus_0.3.0~alpha.1-1_amd64.deb
-curl -fsSL -O https://apt.abhik.ai/pool/main/u/unfocus/unfocus_0.3.0~alpha.1-1_amd64.deb.asc
-gpg --verify unfocus_0.3.0~alpha.1-1_amd64.deb.asc unfocus_0.3.0~alpha.1-1_amd64.deb
+DEB_VERSION=0.4.0~alpha.1-1
+DEB_FILE="unfocus_${DEB_VERSION}_amd64.deb"
+curl -fsSL -O "https://apt.abhik.ai/pool/main/u/unfocus/${DEB_FILE}"
+curl -fsSL -O "https://apt.abhik.ai/pool/main/u/unfocus/${DEB_FILE}.asc"
+gpg --no-default-keyring \
+  --keyring /usr/share/keyrings/unfocus-archive-keyring.gpg \
+  --verify "${DEB_FILE}.asc" "$DEB_FILE"
 ```
 
 Launch from the application menu as **Unfocus**, or:
