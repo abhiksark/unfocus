@@ -1,0 +1,96 @@
+name: Dispatch APT alpha update
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Published prerelease tag to redispatch
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apt-alpha-dispatch-${{ github.event.release.tag_name || inputs.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    environment: apt-repo-automation
+    steps:
+      - name: Resolve a published prerelease
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RELEASE: ${{ toJSON(github.event.release) }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag_name }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = release ]; then
+            RELEASE=$(jq -c . <<<"$EVENT_RELEASE")
+          else
+            [[ "$INPUT_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$ ]] || {
+              echo "Manual retries require a v-prefixed prerelease tag." >&2
+              exit 1
+            }
+            RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$INPUT_TAG")
+          fi
+
+          ID=$(jq -r '.id // empty' <<<"$RELEASE")
+          TAG=$(jq -r '.tag_name // empty' <<<"$RELEASE")
+          DRAFT=$(jq -r '.draft | if type == "boolean" then tostring else empty end' <<<"$RELEASE")
+          PRERELEASE=$(jq -r '.prerelease | if type == "boolean" then tostring else empty end' <<<"$RELEASE")
+          PUBLISHED_AT=$(jq -r '.published_at // empty' <<<"$RELEASE")
+
+          [[ "$ID" =~ ^[0-9]+$ ]] || {
+            echo "GitHub did not return a numeric release id." >&2
+            exit 1
+          }
+          [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$ ]] || {
+            echo "Release tag $TAG is not a supported prerelease version." >&2
+            exit 1
+          }
+          if [ "$EVENT_NAME" = workflow_dispatch ] && [ "$TAG" != "$INPUT_TAG" ]; then
+            echo "GitHub returned tag $TAG for requested tag $INPUT_TAG." >&2
+            exit 1
+          fi
+          if [ "$DRAFT" != false ] || [ "$PRERELEASE" != true ] || [ -z "$PUBLISHED_AT" ]; then
+            echo "$TAG is not a published, non-draft prerelease." >&2
+            exit 1
+          fi
+
+          {
+            echo "release_id=$ID"
+            echo "tag_name=$TAG"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch the apt repository update
+        env:
+          GH_TOKEN: ${{ secrets.APT_DISPATCH_TOKEN }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          [ -n "${GH_TOKEN:-}" ] || {
+            echo "APT_DISPATCH_TOKEN is required in the apt-repo-automation environment." >&2
+            exit 1
+          }
+          jq -n \
+            --arg source_repository "$GITHUB_REPOSITORY" \
+            --argjson release_id "$RELEASE_ID" \
+            --arg tag_name "$TAG_NAME" \
+            '{
+              event_type: "unfocus-alpha-published",
+              client_payload: {
+                source_repository: $source_repository,
+                release_id: $release_id,
+                tag_name: $tag_name
+              }
+            }' \
+            | gh api --method POST "repos/abhiksark/unfocus-apt/dispatches" --input -

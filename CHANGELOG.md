@@ -7,6 +7,8 @@ released versions link to their GitHub release.
 
 ### Added
 
+- Documented Ubuntu/Debian package trust via the APT archive OpenPGP key on
+  [apt.abhik.ai](https://apt.abhik.ai), including optional `.deb.asc` verification.
 - Added a time axis to the **Your day** activity strip. Faint gridlines mark
   every fourth hour behind the bars, with the hour labeled beneath in the
   system clock format and the right edge marked `now`, so a bar can be traced
@@ -25,9 +27,17 @@ released versions link to their GitHub release.
   and tray notes), macOS (DMG/Homebrew and Gatekeeper), Windows (setup/MSI and
   SmartScreen), first-run defaults, local data paths and clean uninstall,
   build-from-source pins, and troubleshooting.
+- Added a public **APT** install path for Debian and Ubuntu alphas via
+  [abhiksark/unfocus-apt](https://github.com/abhiksark/unfocus-apt) (`apt install
+  unfocus`), with release dispatch automation parallel to the Homebrew tap.
 
 ### Changed
 
+- Clarified Ubuntu as the primary qualified Linux install path: README and
+  [docs/install.md](docs/install.md) put the signed APT repo
+  ([apt.abhik.ai](https://apt.abhik.ai)) first, separate package trust from
+  macOS/Windows application code signing, and document APT upgrade and privacy
+  notes for that path.
 - Updated the README consumer dashboard screenshot to the single-column layout
   with **Your day** activity strip and break outcome counts. Break-screen media
   is unchanged.
