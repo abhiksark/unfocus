@@ -39,26 +39,39 @@ Labels describe tested behavior, not only whether a package exists.
 
 | Platform | Status | Install notes |
 | --- | --- | --- |
-| Linux **X11** | **Qualified** | Preferred Linux path. Tray needs an AppIndicator host (see [Tray icon on Linux](#tray-icon-on-linux)). |
+| **Ubuntu / Debian on Linux X11** | **Qualified** | Preferred install: signed APT repo at [apt.abhik.ai](https://apt.abhik.ai). Tray needs an AppIndicator host (on Ubuntu GNOME: **Ubuntu AppIndicators**; see [Tray icon on Linux](#tray-icon-on-linux)). |
+| Other Linux **X11** | **Qualified** backend | Same probes and overlays as Ubuntu; install via release `.deb` / `.rpm` / AppImage and verify `SHA256SUMS`. |
 | Linux **Wayland** | **Unsupported** | Packages may start, but idle and fullscreen probes are not qualified. Do not treat Wayland as supported. |
-| Windows x64 | Early build | Installers ship; interactive multi-monitor qualification is still pending. Idle and fullscreen probes are implemented in current alphas. |
+| Windows x64 | Early build | Installers ship; interactive multi-monitor qualification is still pending. Idle and fullscreen probes are implemented in current alphas. Not application code-signed. |
 | macOS (Apple silicon and Intel) | Preview | Multi-monitor acceptance has not completed. Builds are not code-signed or notarized. |
+
+### Package trust and install sources
+
+| Path | Trust model | Where to get it |
+| --- | --- | --- |
+| **Ubuntu / Debian APT** (preferred on those systems) | Archive signed with the Unfocus OpenPGP key; `apt` verifies `InRelease` on every update. Optional `.deb.asc` next to each pool package. | [apt.abhik.ai](https://apt.abhik.ai); see [Debian / Ubuntu (APT)](#debian--ubuntu-apt-preferred) |
+| GitHub release assets (`.deb`, `.rpm`, AppImage, DMG, setup/MSI) | Verify `SHA256SUMS` (required). Optional GitHub build-provenance attestations. | [GitHub Releases](https://github.com/abhiksark/unfocus/releases); **published** prereleases only, not draft releases |
+| macOS Homebrew cask | Homebrew’s cask install path | `brew install --cask abhiksark/unfocus/unfocus@alpha` |
+
+macOS and Windows packages are **not** application code-signed or notarized.
+Ubuntu/Debian APT is the path that is archive-signed today. That is normal
+Linux third-party repository signing, not Apple Developer ID or Windows
+Authenticode.
 
 ### Preinstalls
 
 | Audience | Linux | macOS | Windows |
 | --- | --- | --- | --- |
-| **End user (release package)** | No extra libraries for the `.deb` / `.rpm` / AppImage. A tray host is recommended on GNOME (below). | **None.** No Xcode. | **None** beyond a normal Windows 10/11 x64 system. The WebView2 runtime is usually already present on those systems. |
+| **End user (release package)** | No extra libraries for the APT package / `.deb` / `.rpm` / AppImage. A tray host is recommended on GNOME (below). | **None.** No Xcode. | **None** beyond a normal Windows 10/11 x64 system. The WebView2 runtime is usually already present on those systems. |
 | **Developer (build from source)** | WebKitGTK 4.1, AppIndicator, libxdo, and related deps; see [Build from source](#build-from-source-all-platforms) and [Tauri Linux prerequisites](https://v2.tauri.app/start/prerequisites/#linux). | Xcode Command Line Tools; see [Tauri macOS prerequisites](https://v2.tauri.app/start/prerequisites/#macos). | MSVC C++ build tools and WebView2 where required; see [Tauri Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows). |
-
-Release packages are **not code-signed or notarized**. Install only from the
-official GitHub Releases page for this repository. Prefer a **published**
-prerelease or stable release; do not treat draft releases as install sources.
 
 ### Choose a package
 
-Always take the **latest published prerelease** (or stable release when one
-exists) from:
+**Ubuntu or Debian (X11):** use the [APT source](#debian--ubuntu-apt-preferred)
+first. You do not need a GitHub download for the normal path.
+
+**Everyone else:** take the **latest published prerelease** (or stable release
+when one exists) from:
 
 **https://github.com/abhiksark/unfocus/releases**
 
@@ -69,29 +82,31 @@ with a `v` prefix (example: `v0.3.1-alpha.1`).
 
 | You have | Download or install path |
 | --- | --- |
-| Debian, Ubuntu, or similar (X11) | **APT source** (preferred) or `Unfocus_VERSION_amd64.deb` |
+| **Ubuntu or Debian (X11)** | **APT** (`apt install unfocus` via [apt.abhik.ai](https://apt.abhik.ai)) preferred; or `Unfocus_VERSION_amd64.deb` from releases |
 | Fedora, RHEL, or similar (X11) | `Unfocus-VERSION-1.x86_64.rpm` |
 | Portable Linux (X11) | `Unfocus_VERSION_amd64.AppImage` |
 | macOS Apple silicon | `Unfocus_VERSION_aarch64.dmg` or Homebrew |
 | macOS Intel | `Unfocus_VERSION_x64.dmg` or Homebrew |
 | Windows (normal install) | `Unfocus_VERSION_x64-setup.exe` |
 | Windows (managed / MSI) | `Unfocus_VERSION_x64_en-US.msi` |
-| Checksums for every asset | `SHA256SUMS` |
+| Checksums for every GitHub asset | `SHA256SUMS` |
 | License texts for dependencies | `THIRD_PARTY_NOTICES.txt` |
 | Software bill of materials | `unfocus.cdx.json` |
 
-Debian and Ubuntu can install the alpha from the public APT repository (see
-[Linux (X11)](#linux-x11)). macOS can install the alpha through Homebrew (see
-[macOS](#macos)).
-
-Unfocus does **not** update itself in-app. Use `apt upgrade`, `brew upgrade`, or
-a newer package from the releases page.
+Unfocus does **not** update itself in-app. On Ubuntu/Debian use `apt upgrade`
+(or `apt install --only-upgrade unfocus`). Elsewhere use `brew upgrade` or a
+newer package from the releases page.
 
 ---
 
 ## Verify every download
 
-Do this for every package, on every OS, before you install or run it.
+**APT users on Ubuntu/Debian:** `apt update` already checks the signed
+repository metadata. You can skip this section for the normal `apt install
+unfocus` path. Use the optional [`.deb.asc` offline check](#debian--ubuntu-apt-preferred)
+if you download a pool package by hand. For GitHub release assets (manual
+`.deb`, `.rpm`, AppImage, DMG, Windows installers), do the steps below before
+you install or run anything.
 
 ### 1. Download the package and `SHA256SUMS`
 
@@ -154,8 +169,10 @@ the CLI. Checksum verification remains required either way.
 
 ## Linux (X11)
 
-Qualified backend. Use an **X11** session. Wayland is unsupported for probes
-and is not a qualified install target.
+**Ubuntu on X11** is the primary qualified install target. Other Linux X11
+desktops share the same qualified probes and multi-monitor overlay path when
+they provide an AppIndicator host. Use an **X11** session. Wayland is
+unsupported for probes and is not a qualified install target.
 
 ### Confirm an X11 session
 
@@ -172,14 +189,18 @@ desktop.
 
 ### Debian / Ubuntu (APT, preferred)
 
-Install the alpha from the public APT repository. The suite name is **`alpha`**.
+This is the supported day-to-day install path on Ubuntu and Debian.
 
-On Ubuntu and Debian, “signed packages” means the **APT archive** is signed
-with the Unfocus archive OpenPGP key (`public-key.asc`), not Apple/Microsoft
-application code signing. `apt update` checks that signature before it trusts
-package lists. Each pool `.deb` also has a matching detached signature
-(`.deb.asc`) for optional offline checks. That is the normal Linux trust model
-for third-party repositories.
+Install the alpha from the public APT repository at
+[https://apt.abhik.ai](https://apt.abhik.ai). The suite name is **`alpha`**
+(architecture **amd64** only for now).
+
+**What “signed” means here:** the **APT archive** is signed with the Unfocus
+archive OpenPGP key (`public-key.asc`). That is not Apple Developer ID or
+Windows Authenticode application code signing. `apt update` checks the
+`InRelease` signature before it trusts package lists. Each pool `.deb` also
+has a matching detached signature (`.deb.asc`) for optional offline checks.
+That is the normal Linux trust model for third-party repositories.
 
 ```sh
 curl -fsSL https://apt.abhik.ai/public-key.asc \
@@ -312,11 +333,12 @@ The desktop must provide a **StatusNotifier / AppIndicator** host.
 
 | Symptom | What to try |
 | --- | --- |
-| Checksum mismatch | Do not install; re-download from the official release and re-verify |
-| No tray icon | Enable an AppIndicator host; restart Unfocus; check developer mode diagnostics |
+| `apt update` rejects the Unfocus source | Confirm the keyring path and `signed-by=` line match the install commands; re-import `public-key.asc` from https://apt.abhik.ai/public-key.asc |
+| Checksum mismatch (GitHub asset) | Do not install; re-download from the official release and re-verify |
+| No tray icon | On Ubuntu GNOME enable **Ubuntu AppIndicators**; restart Unfocus; check developer mode diagnostics |
 | Closing the dashboard exits the app | Tray setup failed; fix the tray host, then restart |
-| Wayland session | Unsupported for probes; switch to an X11 session for qualified behavior |
-| AppImage will not run | `chmod +x`; install FUSE/AppImage support; or use `.deb` / `.rpm` |
+| Wayland session | Unsupported for probes; switch to an X11 session (on Ubuntu: **Ubuntu on Xorg**) for qualified behavior |
+| AppImage will not run | `chmod +x`; install FUSE/AppImage support; or use APT / `.deb` / `.rpm` |
 | Break never appears while away or fullscreen | Expected when probes work; check **Your day** / developer diagnostics for idle and fullscreen |
 
 ---
@@ -568,14 +590,24 @@ immediately. Pause expiry is local and bounded.
 
 ### Updates
 
-Unfocus does not auto-update. Install a newer package from
-[GitHub Releases](https://github.com/abhiksark/unfocus/releases) after verifying
-`SHA256SUMS`, or on macOS with Homebrew:
+Unfocus does not auto-update.
+
+**Ubuntu / Debian (APT):**
+
+```sh
+sudo apt update
+sudo apt install --only-upgrade unfocus
+```
+
+**macOS (Homebrew):**
 
 ```sh
 brew update
 brew upgrade --cask abhiksark/unfocus/unfocus@alpha
 ```
+
+**GitHub release packages:** download a newer published asset and verify
+`SHA256SUMS` before installing.
 
 ---
 
@@ -631,9 +663,10 @@ Remove-Item -Recurse -Force "$env:APPDATA\com.unfocus.desktop"
 
 Unfocus has no accounts, telemetry, cloud dependency, or packaged-app runtime
 network calls. Timing, day history, and break outcomes stay on this device.
-Download and install steps use GitHub only to fetch the package you chose.
-Homebrew users also contact GitHub (and the Homebrew infrastructure) to fetch
-the cask and bottle metadata.
+Install steps may contact a download host only to fetch the package you chose:
+APT users contact [apt.abhik.ai](https://apt.abhik.ai); GitHub release
+downloads use GitHub; Homebrew users also contact GitHub (and the Homebrew
+infrastructure) for the cask.
 
 ---
 

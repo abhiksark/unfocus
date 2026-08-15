@@ -33,6 +33,11 @@ released versions link to their GitHub release.
 
 ### Changed
 
+- Clarified Ubuntu as the primary qualified Linux install path: README and
+  [docs/install.md](docs/install.md) put the signed APT repo
+  ([apt.abhik.ai](https://apt.abhik.ai)) first, separate package trust from
+  macOS/Windows application code signing, and document APT upgrade and privacy
+  notes for that path.
 - Updated the README consumer dashboard screenshot to the single-column layout
   with **Your day** activity strip and break outcome counts. Break-screen media
   is unchanged.
