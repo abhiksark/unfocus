@@ -3,32 +3,34 @@
 Notable changes to Unfocus are recorded here. Dates use `YYYY-MM-DD`, and
 released versions link to their GitHub release.
 
-## [Unreleased]
+## [0.5.0-alpha.1] - 2026-08-16
 
 ### Added
 
-- Added an attribution line to the foot of the consumer dashboard, crediting
-  **Abhik Sarkar** and linking the name to `abhik.ai`. The link hands a fixed address to the
-  desktop's default browser rather than navigating the dashboard away, and says
-  so plainly if no browser could be opened. Unfocus itself still makes no
-  network call.
+- Added `© 2026 Abhik Sarkar` to the foot of the consumer dashboard, with only
+  **Abhik Sarkar** linked. Explicitly activating the name asks the system browser
+  to open the fixed `https://abhik.ai` address rather than navigating the
+  dashboard away, and says so plainly if no browser could be opened. Unfocus
+  itself still makes no application-originated runtime network call.
 - Kept raw **Your day** presence history on this device for at least 90 days,
   beyond the 24-hour live window the strip already shows. The existing
   `activity-history.json` file stays hot for the latest day, and segments that
   age out of it are archived into local `activity-archive-<key>.json` 30-day
   epoch chunks in the same config directory. This stays local-only like
   everything else in Unfocus, with no account and no network call. History
-  fills forward only: existing installs start with none of this longer
-  history, and nothing from before this change can be backfilled.
+  fills forward only: compatible existing local data is preserved, but activity
+  from before History was installed cannot be backfilled. Whole archive chunks
+  expire together, so an older partial chunk can remain until its complete
+  30-day block expires.
 - Added main-window-only range history commands for the consumer dashboard.
   `get_activity_range` returns bucketed `activeMs`, `afkMs`, and
   `longestActiveMs` values for caller-provided boundaries, and
   `get_break_range` returns chronological privacy-safe `{atMs, kind}` break
   outcomes for `[start, end)` queries up to 31 elapsed days.
-- Added a transient consumer History view with three local 30-day pages. It
-  follows the saved **Day starts** preference, loads on demand, shows activity
-  and break outcomes together, and does not change the reminder timer, probes,
-  or overlays.
+- Added a transient consumer History view exposing the newest 90 browser-local
+  days as three newest-first 30-day pages. It follows the saved **Day starts**
+  preference, loads on demand, shows activity and break outcomes together, and
+  does not change the reminder timer, probes, or overlays.
 
 ### Changed
 
@@ -216,7 +218,8 @@ changes are included in and superseded by [0.4.0-alpha.1].
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
-[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.4.0-alpha.1...dev
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.5.0-alpha.1...dev
+[0.5.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.4.0-alpha.1...v0.5.0-alpha.1
 [0.4.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.4.0-alpha.1
 [0.3.1-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.3.1-alpha.1
 [0.3.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.2.0-alpha.1...v0.3.0-alpha.1

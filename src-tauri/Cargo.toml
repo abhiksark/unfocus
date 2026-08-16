@@ -1,6 +1,6 @@
 [package]
 name = "unfocus"
-version = "0.4.0-alpha.1"
+version = "0.5.0-alpha.1"
 description = "Local-first break and reflection app"
 authors = ["Unfocus contributors <14940119+abhiksark@users.noreply.github.com>"]
 edition = "2021"
