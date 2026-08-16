@@ -32,7 +32,7 @@
   import type { TodayActivity } from "$lib/today-activity";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
 
   type SettingsResult = "saved" | "reset" | null;
 
@@ -116,11 +116,10 @@
     dashboardView = "history";
   }
 
-  function returnFromHistory(): void {
+  async function returnFromHistory(): Promise<void> {
     dashboardView = "dashboard";
-    window.requestAnimationFrame(() => {
-      document.getElementById("view-history-trigger")?.focus();
-    });
+    await tick();
+    document.getElementById("view-history-trigger")?.focus();
   }
 
   function setDayStartHour(hour: number): void {
@@ -418,7 +417,7 @@
     onResetSettings={() => void resetReminderSettings()}
   />
 {:else if dashboardView === "history"}
-  <HistoryView {dayStartHour} onBack={returnFromHistory} />
+  <HistoryView {dayStartHour} onBack={() => void returnFromHistory()} />
 {:else}
   <ConsumerDashboard
     presentation={reminderPresentation}

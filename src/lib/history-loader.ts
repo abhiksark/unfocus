@@ -11,7 +11,7 @@ export type HistoryPageFetcher = {
   getBreakRange: (request: { startMs: number; endMs: number }) => Promise<BreakHistoryEvent[]>;
 };
 
-export type HistoryLoadResult = "applied" | "stale";
+export type HistoryLoadResult = "applied" | "failed" | "stale";
 
 export function createHistoryPageLoader(
   fetcher: HistoryPageFetcher,
@@ -34,7 +34,7 @@ export function createHistoryPageLoader(
     } catch (error) {
       if (loadGeneration !== generation) return "stale";
       fail(error);
-      return "applied";
+      return "failed";
     }
   };
 }

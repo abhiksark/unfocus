@@ -77,12 +77,21 @@ async fn open_author_website(window: tauri::WebviewWindow) -> Result<(), String>
         launcher
     };
 
-    let status = tauri::async_runtime::spawn_blocking(move || launcher.status())
-        .await
-        .map_err(|error| format!("could not open {AUTHOR_WEBSITE}: {error}"))?;
-    browser_launch_result(status)
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    {
+        let status = tauri::async_runtime::spawn_blocking(move || launcher.status())
+            .await
+            .map_err(|error| format!("could not open {AUTHOR_WEBSITE}: {error}"))?;
+        browser_launch_result(status)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    Err(format!(
+        "opening the author website is unsupported on {}",
+        std::env::consts::OS
+    ))
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn browser_launch_result(status: io::Result<std::process::ExitStatus>) -> Result<(), String> {
     match status {
         Ok(status) if status.success() => Ok(()),

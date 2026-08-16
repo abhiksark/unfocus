@@ -67,8 +67,8 @@ orchestration, OS probes, timing, and diagnostics.
 - A segment straddling the 24-hour cutoff stays hot whole and is never
   truncated; the same rule applies at chunk boundaries — a segment is keyed by
   its `start_ms` even when it ends in the next chunk, and a range read also
-  loads the chunk immediately before the window start so a straddler is never
-  missed.
+  loads every preceding chunk so a straddler spanning one or more blocks is
+  never missed.
 - Retention deletes whole chunk files once their entire 30-day block is older
   than the cutoff, not individual segments. That makes effective retention run
   between the configured minimum and about one archive block longer, so state
