@@ -127,7 +127,7 @@ time away from the keyboard:
   twenty-five minutes of continuous activity are counted as deep blocks
 - A half-hour strip sketches the day at a glance, with calm empty or
   probe-unavailable states when samples are missing
-- History exposes the newest 90 browser-local days as a compact Monday-aligned
+- History exposes the newest 90 local days as a compact Monday-aligned
   calendar whose fixed intensity levels represent confirmed active minutes.
   Selecting a day reveals its hourly activity and break outcomes; boundaries
   follow the saved **Day starts** preference

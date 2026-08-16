@@ -154,6 +154,22 @@ export function historyActivationUsesKeyboard(detail: number): boolean {
   return detail === 0;
 }
 
+export function historyCalendarNeedsRefresh(
+  active: boolean,
+  calendarRequested: boolean,
+  request: HistoryCalendarRequest,
+  nowMs: number
+): boolean {
+  if (!active) return false;
+  if (!calendarRequested) return true;
+  const anchorMs = request.pages[0]?.endMs;
+  return (
+    anchorMs === undefined ||
+    historyDayBoundsAt(anchorMs, request.dayStartHour).startMs !==
+      historyDayBoundsAt(nowMs, request.dayStartHour).startMs
+  );
+}
+
 export function historyEscapeAction(
   openBreakSlotIndex: number | null
 ): "close-break-popover" | "return-dashboard" {
@@ -194,7 +210,7 @@ export function moveHistoryGridFocus(
   if (days.length === 0) return null;
   const currentIndex = Math.max(0, days.findIndex((day) => day.dateKey === currentDateKey));
   const offset =
-    key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : key === "ArrowUp" ? -7 : 7;
+    key === "ArrowUp" ? -1 : key === "ArrowDown" ? 1 : key === "ArrowLeft" ? -7 : 7;
   const nextIndex = Math.max(0, Math.min(days.length - 1, currentIndex + offset));
   return days[nextIndex].dateKey;
 }

@@ -3,6 +3,7 @@
     buildHistoryCalendarRequest,
     buildHistoryDayDetailRequest,
     historyActivationUsesKeyboard,
+    historyCalendarNeedsRefresh,
     historyEscapeAction,
     historyHourDetailLabel,
     historyMonthMarkers,
@@ -22,7 +23,7 @@
   } from "$lib/history-loader";
   import { breakOutcomeStats } from "$lib/break-summary";
   import { invoke } from "@tauri-apps/api/core";
-  import { onMount, tick, untrack } from "svelte";
+  import { tick, untrack } from "svelte";
 
   type Props = {
     dayStartHour: number;
@@ -45,10 +46,11 @@
   let previewHourIndex = $state<number | null>(null);
   let openBreakSlotIndex = $state<number | null>(null);
 
-  const calendarRequest = buildHistoryCalendarRequest(
+  let calendarRequest = buildHistoryCalendarRequest(
     Date.now(),
     untrack(() => dayStartHour)
   );
+  let calendarRequested = false;
   const fetcher = {
     getActivityRange: ({ boundaries }: { boundaries: number[] }) =>
       invoke<ActivityRangeBucket[]>("get_activity_range", { boundaries }),
@@ -133,6 +135,8 @@
   );
 
   function requestCalendar(): void {
+    calendarRequest = buildHistoryCalendarRequest(Date.now(), untrack(() => dayStartHour));
+    calendarRequested = true;
     calendar = null;
     calendarLoading = true;
     calendarError = null;
@@ -313,8 +317,10 @@
       : `${slot.breakMarkers.length} break outcomes: ${outcomes}`;
   }
 
-  onMount(() => {
-    requestCalendar();
+  $effect(() => {
+    if (historyCalendarNeedsRefresh(active, calendarRequested, calendarRequest, Date.now())) {
+      requestCalendar();
+    }
   });
 </script>
 

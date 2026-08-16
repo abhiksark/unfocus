@@ -8,7 +8,7 @@ released versions link to their GitHub release.
 ### Changed
 
 - Reworked History into a compact Monday-aligned calendar covering the newest
-  90 browser-local days. Fixed intensity levels represent confirmed active
+  90 local days. Fixed intensity levels represent confirmed active
   minutes, while zero activity and unavailable data remain distinct. Selecting
   a day reveals only that day's totals, hourly activity, and grouped break
   outcomes without streaks, scores, or timer controls.

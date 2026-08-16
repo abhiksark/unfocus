@@ -573,7 +573,7 @@ one machine as cross-platform qualification.
    `unfocus` binary (Linux packages).
 2. The consumer dashboard shows the next break. Where the idle probe works,
    **Your day** shows a local, presence-only summary of continuous computer use
-   versus time away. History exposes the newest 90 browser-local days as a
+   versus time away. History exposes the newest 90 local days as a
    compact Monday-aligned calendar of confirmed active minutes. Selecting a day
    reveals its hourly activity and break outcomes, aligned to the saved **Day
    starts** preference (no keylogging, no cloud).

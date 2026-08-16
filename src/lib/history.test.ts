@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   historyActivationUsesKeyboard,
   historyActivityLevel,
+  historyCalendarNeedsRefresh,
   historyEscapeAction,
   historyHourDetailLabel,
   initialHistoryDateKey,
@@ -743,6 +744,26 @@ console.log(JSON.stringify(mod.historyMonthMarkers(calendar).map((marker) => ({
     expect(moveHistoryHourFocus(23, "ArrowRight", 24)).toBe(23);
   });
 
+  test("refreshes a mounted calendar only after its logical day changes", () => {
+    const result = runInTimezone<boolean[]>(
+      "UTC",
+      `
+const request = mod.buildHistoryCalendarRequest(
+  Date.parse("2026-08-17T10:00:00Z"),
+  4
+);
+console.log(JSON.stringify([
+  mod.historyCalendarNeedsRefresh(false, false, request, Date.parse("2026-08-17T10:00:00Z")),
+  mod.historyCalendarNeedsRefresh(true, false, request, Date.parse("2026-08-17T10:00:00Z")),
+  mod.historyCalendarNeedsRefresh(true, true, request, Date.parse("2026-08-18T03:59:59Z")),
+  mod.historyCalendarNeedsRefresh(true, true, request, Date.parse("2026-08-18T04:00:00Z"))
+]));
+`
+    );
+
+    expect(result).toEqual([false, true, false, true]);
+  });
+
   test("describes exact hourly activity durations", () => {
     expect(
       historyHourDetailLabel({
@@ -767,10 +788,10 @@ console.log(JSON.stringify(mod.historyMonthMarkers(calendar).map((marker) => ({
       calendarDay(`day-${index}`, 1_000, 0)
     );
 
-    expect(moveHistoryGridFocus(days, "day-4", "ArrowLeft")).toBe("day-3");
-    expect(moveHistoryGridFocus(days, "day-4", "ArrowRight")).toBe("day-5");
-    expect(moveHistoryGridFocus(days, "day-4", "ArrowUp")).toBe("day-0");
-    expect(moveHistoryGridFocus(days, "day-4", "ArrowDown")).toBe("day-9");
+    expect(moveHistoryGridFocus(days, "day-4", "ArrowLeft")).toBe("day-0");
+    expect(moveHistoryGridFocus(days, "day-4", "ArrowRight")).toBe("day-9");
+    expect(moveHistoryGridFocus(days, "day-4", "ArrowUp")).toBe("day-3");
+    expect(moveHistoryGridFocus(days, "day-4", "ArrowDown")).toBe("day-5");
     expect(moveHistoryGridFocus(days, "day-0", "ArrowLeft")).toBe("day-0");
     expect(moveHistoryGridFocus(days, "day-9", "ArrowDown")).toBe("day-9");
   });
@@ -835,17 +856,6 @@ function calendarDay(dateKey: string, activeMs: number, afkMs: number): HistoryC
       longestLabel: "",
       isBlank: activeMs === 0 && afkMs === 0
     },
-    activityLevel:
-      activeMs === 0 && afkMs === 0
-        ? "no-data"
-        : activeMs === 0
-          ? 0
-          : activeMs < 60 * 60_000
-            ? 1
-            : activeMs < 3 * 60 * 60_000
-              ? 2
-              : activeMs < 5 * 60 * 60_000
-                ? 3
-                : 4
+    activityLevel: historyActivityLevel({ activeMs, afkMs })
   };
 }
