@@ -6,7 +6,13 @@
 //! Segment history is stored locally next to app config as JSON. Writes are
 //! atomic (temp file + replace). Probe or write failures never mutate the
 //! reminder timer.
+//!
+//! Segments that age out of the rolling window are archived to cold storage
+//! (`activity_archive`) before being dropped from the hot set. A failed
+//! archive write leaves a segment hot so it is retried on a later prune;
+//! nothing is lost to a failed write or a crash between the two.
 
+use crate::activity_archive::{archive_segments, prune_chunks, read_range, ARCHIVE_BLOCK_MS};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File, OpenOptions},
@@ -31,13 +37,20 @@ pub(crate) const LONG_AFK_SECONDS: u64 = AFK_THRESHOLD_SECONDS;
 pub(crate) const RECENT_AFK_GRACE_SECONDS: u64 = 2 * 60;
 /// Rolling observation window for the dashboard strip and totals.
 pub(crate) const ACTIVITY_WINDOW_SECONDS: u64 = 24 * 60 * 60;
+/// How long raw history is kept on disk, distinct from the live window.
+/// Whole chunks are deleted only once fully expired, so effective retention
+/// runs between this and this plus one archive block.
+const HISTORY_RETENTION_SECONDS: u64 = 90 * 24 * 60 * 60;
 /// Half-hour buckets across the rolling window (48 × 30 min = 24 h).
 pub(crate) const STRIP_BUCKET_COUNT: usize = 48;
 /// Minimum spacing between background history writes while a segment extends.
 const PERSIST_MIN_INTERVAL_MS: u64 = 30_000;
 const HISTORY_FILE_NAME: &str = "activity-history.json";
-const HISTORY_SCHEMA_VERSION: u32 = 1;
+pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 1;
 const MILLIS_PER_SECOND: u64 = 1_000;
+/// Upper bound on buckets per query. A 30-day grid at hourly resolution needs
+/// 720 buckets, so 721 boundaries.
+const MAX_RANGE_BUCKETS: usize = 1_024;
 
 static HISTORY_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -51,13 +64,13 @@ pub(crate) enum ActivityKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum PersistedKind {
+pub(crate) enum PersistedKind {
     Active,
     Afk,
 }
 
 impl PersistedKind {
-    fn from_activity(kind: ActivityKind) -> Option<Self> {
+    pub(crate) fn from_activity(kind: ActivityKind) -> Option<Self> {
         match kind {
             ActivityKind::Active => Some(Self::Active),
             ActivityKind::Afk => Some(Self::Afk),
@@ -65,7 +78,7 @@ impl PersistedKind {
         }
     }
 
-    fn into_activity(self) -> ActivityKind {
+    pub(crate) fn into_activity(self) -> ActivityKind {
         match self {
             Self::Active => ActivityKind::Active,
             Self::Afk => ActivityKind::Afk,
@@ -74,25 +87,25 @@ impl PersistedKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Segment {
-    kind: ActivityKind,
-    start_ms: u64,
-    end_ms: u64,
+pub(crate) struct Segment {
+    pub(crate) kind: ActivityKind,
+    pub(crate) start_ms: u64,
+    pub(crate) end_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct PersistedSegment {
-    kind: PersistedKind,
-    start_ms: u64,
-    end_ms: u64,
+pub(crate) struct PersistedSegment {
+    pub(crate) kind: PersistedKind,
+    pub(crate) start_ms: u64,
+    pub(crate) end_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct PersistedActivityHistory {
-    version: u32,
-    segments: Vec<PersistedSegment>,
+pub(crate) struct PersistedActivityHistory {
+    pub(crate) version: u32,
+    pub(crate) segments: Vec<PersistedSegment>,
 }
 
 #[derive(Debug, Clone)]
@@ -141,10 +154,15 @@ impl ActivityTracker {
         }
     }
 
-    /// Replace live segments with a pruned history snapshot.
+    /// Replace live segments with a loaded history snapshot.
     ///
-    /// Future wall-clock ends (clock skew) clear history rather than inventing
-    /// multi-day spans. Restored state is not treated as a live probe success.
+    /// The caller (the loader in `load_or_repair_history`) has already
+    /// archived-before-dropping anything aged out of the window; this must
+    /// not re-drop anything itself, or a segment kept hot for a later
+    /// archive retry (because the write failed at load time) would be
+    /// silently destroyed here instead. Future wall-clock ends (clock skew)
+    /// still clear history rather than inventing multi-day spans. Restored
+    /// state is not treated as a live probe success.
     fn restore_segments(&mut self, segments: Vec<Segment>, now_ms: u64) {
         self.segments = segments;
         if self
@@ -158,7 +176,6 @@ impl ActivityTracker {
             self.last_probe_ok = false;
             return;
         }
-        self.prune(now_ms);
         self.last_sample_ms = self.segments.last().map(|segment| segment.end_ms);
         self.last_kind = self.segments.last().map(|segment| segment.kind);
         self.last_probe_ok = false;
@@ -168,6 +185,11 @@ impl ActivityTracker {
     ///
     /// `idle_seconds = None` means the probe failed; classification freezes and
     /// does not invent active or AFK time (fail open for the timer elsewhere).
+    ///
+    /// This never drops or archives aged-out segments itself: archiving is
+    /// I/O and must succeed before a segment leaves the hot set, so that
+    /// decision belongs to the caller (see `archivable_segments` /
+    /// `drop_archived`, driven by `ActivityTrackerHandle`).
     pub(crate) fn observe(&mut self, now_ms: u64, idle_seconds: Option<u64>) {
         if let Some(previous) = self.last_sample_ms {
             if now_ms < previous {
@@ -204,8 +226,6 @@ impl ActivityTracker {
                 self.last_kind = Some(kind);
             }
         }
-
-        self.prune(now_ms);
     }
 
     fn extend_or_open(&mut self, kind: ActivityKind, now_ms: u64) {
@@ -228,18 +248,30 @@ impl ActivityTracker {
         });
     }
 
-    fn prune(&mut self, now_ms: u64) {
+    fn window_cutoff(&self, now_ms: u64) -> u64 {
         let window_ms = self.window_seconds.saturating_mul(MILLIS_PER_SECOND);
-        let cutoff = now_ms.saturating_sub(window_ms);
-        self.segments.retain_mut(|segment| {
-            if segment.end_ms <= cutoff {
-                return false;
-            }
-            if segment.start_ms < cutoff {
-                segment.start_ms = cutoff;
-            }
-            true
-        });
+        now_ms.saturating_sub(window_ms)
+    }
+
+    /// Segments that have fully aged out of the rolling window: exactly the
+    /// segments a drop would remove, `end_ms <= cutoff`. Read-only; a
+    /// segment straddling the cutoff is never included and never truncated,
+    /// it stays hot and whole.
+    fn archivable_segments(&self, now_ms: u64) -> Vec<Segment> {
+        let cutoff = self.window_cutoff(now_ms);
+        self.segments
+            .iter()
+            .filter(|segment| segment.end_ms <= cutoff)
+            .copied()
+            .collect()
+    }
+
+    /// Drop segments already confirmed archived. Mirrors
+    /// `archivable_segments`'s predicate exactly, so callers must archive
+    /// first; a segment straddling the cutoff is never truncated.
+    fn drop_archived(&mut self, now_ms: u64) {
+        let cutoff = self.window_cutoff(now_ms);
+        self.segments.retain(|segment| segment.end_ms > cutoff);
     }
 
     fn to_persisted(&self) -> PersistedActivityHistory {
@@ -432,11 +464,55 @@ pub(crate) struct ActivitySummary {
     pub(crate) strip: Vec<StripBucket>,
 }
 
+/// One bucket of summed occupancy for `get_activity_range`. The frontend
+/// computes bucket boundaries (local days/hours); Rust only sums between
+/// them, see the module-level contract on `get_activity_range`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RangeBucket {
+    pub(crate) active_ms: u64,
+    pub(crate) afk_ms: u64,
+    pub(crate) longest_active_ms: u64,
+}
+
+/// Sum active/afk overlap between `[start, end)` and `segments`, using the
+/// same clamped-overlap arithmetic as `ActivityTracker::strip_buckets`.
+fn bucket_occupancy(segments: &[Segment], start: u64, end: u64) -> RangeBucket {
+    let mut active_ms = 0_u64;
+    let mut afk_ms = 0_u64;
+    let mut longest_active_ms = 0_u64;
+    for segment in segments {
+        let overlap_start = segment.start_ms.max(start);
+        let overlap_end = segment.end_ms.min(end);
+        if overlap_end <= overlap_start {
+            continue;
+        }
+        let overlap = overlap_end - overlap_start;
+        match segment.kind {
+            ActivityKind::Active => {
+                active_ms = active_ms.saturating_add(overlap);
+                longest_active_ms = longest_active_ms.max(overlap);
+            }
+            ActivityKind::Afk => afk_ms = afk_ms.saturating_add(overlap),
+            ActivityKind::Unknown => {}
+        }
+    }
+    RangeBucket {
+        active_ms,
+        afk_ms,
+        longest_active_ms,
+    }
+}
+
 #[derive(Debug)]
 struct ActivityTrackerState {
     tracker: ActivityTracker,
     path: PathBuf,
+    /// Directory `path` lives in; archives live beside the hot file in the
+    /// same directory.
+    config_dir: PathBuf,
     last_persisted_at_ms: Option<u64>,
+    last_retention_pruned_at_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -451,7 +527,9 @@ impl Default for ActivityTrackerHandle {
             inner: Arc::new(Mutex::new(ActivityTrackerState {
                 tracker: ActivityTracker::default(),
                 path: PathBuf::from(HISTORY_FILE_NAME),
+                config_dir: PathBuf::new(),
                 last_persisted_at_ms: None,
+                last_retention_pruned_at_ms: None,
             })),
         }
     }
@@ -468,22 +546,28 @@ impl ActivityTrackerHandle {
         let mut tracker = ActivityTracker::default();
         let segments = load_or_repair_history(&path, now_ms, tracker.window_seconds)?;
         tracker.restore_segments(segments, now_ms);
+        prune_expired_archives(config_dir, now_ms);
         Ok(Self {
             inner: Arc::new(Mutex::new(ActivityTrackerState {
                 tracker,
                 path,
+                config_dir: config_dir.to_path_buf(),
                 last_persisted_at_ms: None,
+                last_retention_pruned_at_ms: Some(now_ms),
             })),
         })
     }
 
     #[cfg(test)]
     fn new_with_path(tracker: ActivityTracker, path: PathBuf) -> Self {
+        let config_dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
         Self {
             inner: Arc::new(Mutex::new(ActivityTrackerState {
                 tracker,
                 path,
+                config_dir,
                 last_persisted_at_ms: None,
+                last_retention_pruned_at_ms: None,
             })),
         }
     }
@@ -495,10 +579,46 @@ impl ActivityTrackerHandle {
         let previous_kind = state.tracker.last_kind;
         state.tracker.observe(now_ms, idle_seconds);
         let kind_changed = state.tracker.last_kind != previous_kind;
+
         let due = match state.last_persisted_at_ms {
             None => true,
             Some(previous) => now_ms.saturating_sub(previous) >= PERSIST_MIN_INTERVAL_MS,
         };
+        let retention_due = match state.last_retention_pruned_at_ms {
+            None => true,
+            Some(previous) => {
+                now_ms < previous || now_ms.saturating_sub(previous) >= PERSIST_MIN_INTERVAL_MS
+            }
+        };
+
+        // Flush before prune: a segment leaves the hot set only once it is
+        // safely archived. A write failure leaves it hot for a later retry;
+        // nothing is lost, and this never blocks or mutates the timer. Only
+        // attempt the archive when the persist throttle below would already
+        // do work (a kind change or the throttle interval elapsing): under a
+        // persistent archive failure (full disk, blocked chunk path), the
+        // same segments would otherwise be retried, and rewritten in full,
+        // on every observation, which is exactly the unbounded hot-set
+        // growth this design exists to prevent. Segments simply wait for the
+        // next throttled attempt; nothing already archived is re-attempted,
+        // and nothing hot is ever lost.
+        let archivable = state.tracker.archivable_segments(now_ms);
+        if !archivable.is_empty() && (kind_changed || due) {
+            match archive_segments(&state.config_dir, &archivable) {
+                Ok(()) => {
+                    state.tracker.drop_archived(now_ms);
+                }
+                Err(error) => {
+                    eprintln!("could not archive activity history: {error}; will retry");
+                }
+            }
+        }
+
+        if retention_due {
+            prune_expired_archives(&state.config_dir, now_ms);
+            state.last_retention_pruned_at_ms = Some(now_ms);
+        }
+
         if !kind_changed && !due {
             return;
         }
@@ -526,6 +646,94 @@ impl ActivityTrackerHandle {
                 recent_afk_seconds: 0,
             })
     }
+
+    /// Sum occupancy into `boundaries.len() - 1` buckets, one per adjacent
+    /// pair, from the union of the hot segments and the archive. Fails
+    /// closed (a descriptive error, never a partial or empty success) when
+    /// `boundaries` has fewer than two entries, is not strictly increasing,
+    /// or would produce more than `MAX_RANGE_BUCKETS` buckets.
+    ///
+    /// `boundaries` are caller-computed epoch milliseconds: Rust has no
+    /// calendar and must not gain one, so it never buckets by local day or
+    /// hour itself, only sums between the boundaries it is given.
+    pub(crate) fn range(&self, boundaries: &[u64]) -> Result<Vec<RangeBucket>, String> {
+        if boundaries.len() < 2 {
+            return Err("boundaries must contain at least two values".into());
+        }
+        if boundaries.len() > MAX_RANGE_BUCKETS + 1 {
+            return Err(format!(
+                "boundaries must not exceed {} entries ({MAX_RANGE_BUCKETS} buckets)",
+                MAX_RANGE_BUCKETS + 1
+            ));
+        }
+        if !boundaries.windows(2).all(|pair| pair[1] > pair[0]) {
+            return Err("boundaries must be strictly increasing".into());
+        }
+
+        let span_start = boundaries[0];
+        let span_end = boundaries[boundaries.len() - 1];
+        // Bound the span itself, not just the bucket count: two boundaries
+        // spanning the full u64 range pass every check above (one bucket,
+        // strictly increasing) yet would ask `read_range` to walk from the
+        // first archive chunk key to the last, roughly seven billion reads.
+        // Retained history can never exceed retention plus one archive block
+        // (a chunk is only deleted once fully expired), so a wider span can
+        // never hold real data and is rejected outright.
+        let max_span_ms = HISTORY_RETENTION_SECONDS
+            .saturating_mul(MILLIS_PER_SECOND)
+            .saturating_add(ARCHIVE_BLOCK_MS);
+        if span_end.saturating_sub(span_start) > max_span_ms {
+            return Err(format!(
+                "boundaries must not span more than {max_span_ms} ms of retained history"
+            ));
+        }
+        let segments = self.segments_in_range(span_start, span_end);
+
+        Ok(boundaries
+            .windows(2)
+            .map(|pair| bucket_occupancy(&segments, pair[0], pair[1]))
+            .collect())
+    }
+
+    /// Every segment overlapping `[start_ms, end_ms)`, merged from the hot
+    /// set and the archive.
+    ///
+    /// A segment is archived, then dropped from the hot set, under the same
+    /// lock (see `observe`), so within one `observe` call it is never in
+    /// both places at once. But this method takes its own snapshot of the
+    /// hot set and only afterwards reads the archive from disk; a concurrent
+    /// `observe` can archive-and-drop a segment in between those two steps,
+    /// so the snapshot (taken before the drop) and the archive read (taken
+    /// after the archive write) can both contain it. Such a duplicate is a
+    /// value-identical `Segment`, since a dropped segment can never be
+    /// extended again (a later sample with the same kind opens a new
+    /// segment instead, see `extend_or_open`), so sorting and deduping by
+    /// value is exact, not a heuristic.
+    fn segments_in_range(&self, start_ms: u64, end_ms: u64) -> Vec<Segment> {
+        let (hot, config_dir) = {
+            let Ok(state) = self.inner.lock() else {
+                return Vec::new();
+            };
+            (state.tracker.segments.clone(), state.config_dir.clone())
+        };
+
+        let mut combined: Vec<Segment> = hot
+            .into_iter()
+            .filter(|segment| segment.end_ms > start_ms && segment.start_ms < end_ms)
+            .collect();
+        combined.extend(read_range(&config_dir, start_ms, end_ms));
+        combined.sort_by_key(|segment| (segment.start_ms, segment.end_ms, segment.kind as u8));
+        combined.dedup();
+        combined
+    }
+}
+
+fn prune_expired_archives(config_dir: &Path, now_ms: u64) {
+    let retention_cutoff =
+        now_ms.saturating_sub(HISTORY_RETENTION_SECONDS.saturating_mul(MILLIS_PER_SECOND));
+    if let Err(error) = prune_chunks(config_dir, retention_cutoff) {
+        eprintln!("could not prune expired activity archives: {error}");
+    }
 }
 
 pub(crate) fn epoch_ms(now: SystemTime) -> u64 {
@@ -537,13 +745,10 @@ pub(crate) fn epoch_ms(now: SystemTime) -> u64 {
 fn segments_from_persisted(
     history: PersistedActivityHistory,
     now_ms: u64,
-    window_seconds: u64,
 ) -> Result<Vec<Segment>, ()> {
     if history.version != HISTORY_SCHEMA_VERSION {
         return Err(());
     }
-    let window_ms = window_seconds.saturating_mul(MILLIS_PER_SECOND);
-    let cutoff = now_ms.saturating_sub(window_ms);
     let mut segments = Vec::with_capacity(history.segments.len());
     for item in history.segments {
         if item.end_ms < item.start_ms {
@@ -553,17 +758,54 @@ fn segments_from_persisted(
             // Future timestamps: treat as clock skew, drop whole history.
             return Err(());
         }
-        if item.end_ms <= cutoff {
-            continue;
-        }
-        let start_ms = item.start_ms.max(cutoff);
         segments.push(Segment {
             kind: item.kind.into_activity(),
-            start_ms,
+            start_ms: item.start_ms,
             end_ms: item.end_ms,
         });
     }
     Ok(segments)
+}
+
+/// Archive-before-drop for segments loaded from the hot file, mirroring the
+/// live prune contract in `ActivityTrackerHandle::observe` exactly: a
+/// segment fully aged out of the window (`end_ms <= cutoff`) is archived
+/// before it leaves the returned set. If the archive write fails, it stays
+/// in the returned set instead of being discarded — a later live prune will
+/// retry it, so a failed write here never destroys data. A segment
+/// straddling the cutoff is always returned whole, never truncated.
+///
+/// This closes the one path the live prune can never cover: the app closed
+/// for longer than the window and reopened, so the aged-out segments never
+/// reach memory for a live prune to archive at all.
+fn archive_before_drop(
+    path: &Path,
+    segments: Vec<Segment>,
+    now_ms: u64,
+    window_seconds: u64,
+) -> Vec<Segment> {
+    let window_ms = window_seconds.saturating_mul(MILLIS_PER_SECOND);
+    let cutoff = now_ms.saturating_sub(window_ms);
+    let (archivable, mut retained): (Vec<Segment>, Vec<Segment>) = segments
+        .into_iter()
+        .partition(|segment| segment.end_ms <= cutoff);
+
+    if archivable.is_empty() {
+        return retained;
+    }
+
+    let config_dir = path.parent().unwrap_or_else(|| Path::new(""));
+    match archive_segments(config_dir, &archivable) {
+        Ok(()) => retained,
+        Err(error) => {
+            eprintln!(
+                "could not archive aged-out activity history on load: {error}; keeping it hot for a later retry"
+            );
+            retained.extend(archivable);
+            retained.sort_by_key(|segment| segment.start_ms);
+            retained
+        }
+    }
 }
 
 fn load_or_repair_history(
@@ -575,9 +817,9 @@ fn load_or_repair_history(
         Ok(contents) => {
             let parsed = serde_json::from_slice::<PersistedActivityHistory>(&contents)
                 .ok()
-                .and_then(|history| segments_from_persisted(history, now_ms, window_seconds).ok());
+                .and_then(|history| segments_from_persisted(history, now_ms).ok());
             if let Some(segments) = parsed {
-                return Ok(segments);
+                return Ok(archive_before_drop(path, segments, now_ms, window_seconds));
             }
 
             // Invalid or untrusted content: write a complete empty history so
@@ -644,7 +886,7 @@ fn replace_history_file(temp_path: &Path, path: &Path) -> io::Result<()> {
     }
 }
 
-fn persist_history(path: &Path, history: &PersistedActivityHistory) -> io::Result<()> {
+pub(crate) fn persist_history(path: &Path, history: &PersistedActivityHistory) -> io::Result<()> {
     let parent = path.parent().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -681,9 +923,29 @@ pub(crate) fn get_today_activity(
     Ok(tracker.summary(epoch_ms(SystemTime::now())))
 }
 
+/// Historical occupancy across an arbitrary span, bucketed by the caller.
+///
+/// Rust has no calendar and must not gain one: the eventual grid's rows are
+/// local days and columns are local hours, which do not align to uniform
+/// UTC steps in half-hour-offset zones or on daylight-saving days. The
+/// frontend therefore computes `boundaries` (strictly increasing epoch
+/// milliseconds) and this command only sums between them, over the union of
+/// the hot segments and the archive. See `ActivityTrackerHandle::range` for
+/// the validation contract and the hot/archive merge.
+#[tauri::command]
+pub(crate) fn get_activity_range(
+    window: tauri::WebviewWindow,
+    tracker: tauri::State<'_, ActivityTrackerHandle>,
+    boundaries: Vec<u64>,
+) -> Result<Vec<RangeBucket>, String> {
+    crate::authorize_main_caller(window.label())?;
+    tracker.range(&boundaries)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::activity_archive;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static TEST_DIRECTORY_ID: AtomicU64 = AtomicU64::new(0);
@@ -935,6 +1197,168 @@ mod tests {
     }
 
     #[test]
+    fn load_archives_segments_aged_out_while_closed() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let t0 = 1_700_000_000_000_u64;
+        let old_segment = PersistedSegment {
+            kind: PersistedKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 60_000,
+        };
+        persist_history(
+            &path,
+            &PersistedActivityHistory {
+                version: HISTORY_SCHEMA_VERSION,
+                segments: vec![old_segment],
+            },
+        )
+        .expect("seed hot file with an aged segment");
+
+        // Reopen several days later, as if the app had been closed the whole
+        // time: the live prune never ran, so this segment never reached
+        // memory until now.
+        let reopened_at = t0 + 60_000 + 5 * 24 * 60 * 60 * 1_000;
+        let loaded = load_or_repair_history(&path, reopened_at, ACTIVITY_WINDOW_SECONDS)
+            .expect("load on reopen");
+
+        assert!(
+            loaded.is_empty(),
+            "the aged-out segment must leave the live set on load"
+        );
+
+        let archived = activity_archive::read_range(&dir.path, t0, t0 + 60_000 + 1);
+        assert_eq!(
+            archived,
+            vec![Segment {
+                kind: ActivityKind::Active,
+                start_ms: t0,
+                end_ms: t0 + 60_000,
+            }],
+            "the aged-out segment must be archived on load instead of discarded"
+        );
+    }
+
+    #[test]
+    fn load_prunes_expired_archive_chunks_without_hot_segments() {
+        let dir = TestDirectory::new();
+        let ancient = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 500,
+            end_ms: 900,
+        };
+        activity_archive::archive_segments(&dir.path, &[ancient]).expect("seed expired chunk");
+        let expired_chunk = activity_archive::chunk_path(&dir.path, 0);
+
+        let now = HISTORY_RETENTION_SECONDS
+            .saturating_mul(MILLIS_PER_SECOND)
+            .saturating_add(ARCHIVE_BLOCK_MS)
+            .saturating_add(1);
+        let handle =
+            ActivityTrackerHandle::load_at(&dir.path, now).expect("load empty hot history");
+
+        assert!(
+            !expired_chunk.exists(),
+            "startup must prune expired archive chunks even when hot history is empty"
+        );
+        assert_eq!(handle.summary(now).active_seconds, 0);
+    }
+
+    #[test]
+    fn load_retains_straddling_segment_whole() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let t0 = 1_700_000_000_000_u64;
+        let straddler = PersistedSegment {
+            kind: PersistedKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 250_000,
+        };
+        persist_history(
+            &path,
+            &PersistedActivityHistory {
+                version: HISTORY_SCHEMA_VERSION,
+                segments: vec![straddler],
+            },
+        )
+        .expect("seed hot file with a straddling segment");
+
+        // window is 300_000 ms, so cutoff = now - 300_000 = t0 + 100_000,
+        // which falls inside the segment's span.
+        let now = t0 + 400_000;
+        let loaded = load_or_repair_history(&path, now, 300).expect("load");
+
+        assert_eq!(
+            loaded,
+            vec![Segment {
+                kind: ActivityKind::Active,
+                start_ms: t0,
+                end_ms: t0 + 250_000,
+            }],
+            "a straddling segment must load with its original start_ms, not truncated"
+        );
+    }
+
+    #[test]
+    fn load_keeps_segments_hot_when_archive_write_fails() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let t0 = 1_700_000_000_000_u64;
+        let old_segment_start_ms = t0;
+        let old_segment = PersistedSegment {
+            kind: PersistedKind::Active,
+            start_ms: old_segment_start_ms,
+            end_ms: t0 + 60_000,
+        };
+        persist_history(
+            &path,
+            &PersistedActivityHistory {
+                version: HISTORY_SCHEMA_VERSION,
+                segments: vec![old_segment],
+            },
+        )
+        .expect("seed hot file with an aged segment");
+
+        // `path` must sit under a real, readable directory for `fs::read` to
+        // succeed at all, so the config-dir-under-a-file trick
+        // `prune_keeps_segments_hot_when_archive_write_fails` uses can't
+        // transfer here directly. The equivalent forced failure for a real
+        // config_dir is blocking the exact chunk file the segment would
+        // archive into with a directory, so `archive_segments`'s rename onto
+        // it fails the same way — same narrative (segment stays hot when the
+        // archive write fails), the closest available mechanism given a
+        // real, readable config_dir is required for the read to succeed.
+        let chunk_key = activity_archive::chunk_key(old_segment_start_ms);
+        fs::create_dir(activity_archive::chunk_path(&dir.path, chunk_key))
+            .expect("blocker directory in place of the chunk file");
+
+        // Go through `ActivityTrackerHandle::load_at`, not just
+        // `load_or_repair_history` directly: this is the path that also
+        // calls `restore_segments`, which is exactly what pins the bug this
+        // test exists for. `load_or_repair_history` alone correctly keeps a
+        // failed-to-archive segment in its returned set; the bug this
+        // guards against is `restore_segments` re-dropping that same
+        // segment a moment later via the `drop_archived` call this task
+        // removed, using the identical `end_ms <= cutoff` predicate at the
+        // identical `now_ms`. A test that stopped at `load_or_repair_history`
+        // would not observe that second drop at all.
+        let reopened_at = t0 + 60_000 + 5 * 24 * 60 * 60 * 1_000;
+        let handle =
+            ActivityTrackerHandle::load_at(&dir.path, reopened_at).expect("load on reopen");
+
+        let locked = handle.inner.lock().expect("lock tracker state");
+        assert!(
+            locked.tracker.segments.contains(&Segment {
+                kind: ActivityKind::Active,
+                start_ms: t0,
+                end_ms: t0 + 60_000,
+            }),
+            "a failed archive write at load time must keep the segment hot for a later retry, \
+             not be silently re-dropped by restore_segments"
+        );
+    }
+
+    #[test]
     fn reverse_wall_clock_drops_live_history() {
         let mut tracker = tracker();
         let t0 = 1_700_000_000_000_u64;
@@ -942,6 +1366,545 @@ mod tests {
         tracker.observe(t0 + 120_000, Some(0));
         tracker.observe(t0, Some(0));
         assert!(tracker.summary(t0).active_seconds < 60);
+    }
+
+    #[test]
+    fn prune_archives_segments_before_dropping_them() {
+        let dir = TestDirectory::new();
+        let t0 = 1_700_000_000_000_u64;
+        let old_segment = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 60_000,
+        };
+        let buffer_segment = Segment {
+            kind: ActivityKind::Afk,
+            start_ms: t0 + 60_000,
+            end_ms: t0 + 61_000,
+        };
+        let mut seeded = tracker();
+        seeded.restore_segments(vec![old_segment, buffer_segment], t0 + 61_000);
+
+        let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
+
+        // Advance far past the 24-hour window so `old_segment` is fully
+        // expired and archivable. The observation itself only ever extends
+        // the buffer segment (still hot); `old_segment` is untouched.
+        let later = t0 + 61_000 + 90_000_000;
+        handle.observe(later, Some(400));
+
+        let archived = activity_archive::read_range(&dir.path, t0, t0 + 60_000 + 1);
+        assert_eq!(
+            archived,
+            vec![old_segment],
+            "the expired segment must be archived"
+        );
+
+        let locked = handle.inner.lock().expect("lock tracker state");
+        assert!(
+            !locked.tracker.segments.contains(&old_segment),
+            "an archived segment must be dropped from the hot set"
+        );
+    }
+
+    #[test]
+    fn prune_keeps_segments_hot_when_archive_write_fails() {
+        let dir = TestDirectory::new();
+        let blocker = dir.path.join("not-a-directory");
+        fs::write(&blocker, b"x").expect("blocker file");
+        let broken_path = blocker.join(HISTORY_FILE_NAME);
+
+        let t0 = 1_700_000_000_000_u64;
+        let old_segment = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 60_000,
+        };
+        let buffer_segment = Segment {
+            kind: ActivityKind::Afk,
+            start_ms: t0 + 60_000,
+            end_ms: t0 + 61_000,
+        };
+        let mut seeded = tracker();
+        seeded.restore_segments(vec![old_segment, buffer_segment], t0 + 61_000);
+
+        // config_dir is derived from `broken_path`'s parent, which is a
+        // file, so both the archive write and the hot persist must fail.
+        let handle = ActivityTrackerHandle::new_with_path(seeded, broken_path);
+        let later = t0 + 61_000 + 90_000_000;
+        handle.observe(later, Some(400));
+
+        let locked = handle.inner.lock().expect("lock tracker state");
+        assert!(
+            locked.tracker.segments.contains(&old_segment),
+            "a failed archive write must keep the segment hot for a later retry"
+        );
+        assert_eq!(
+            locked.tracker.segments.len(),
+            2,
+            "nothing is lost when the archive write fails"
+        );
+    }
+
+    #[test]
+    fn archive_attempt_respects_the_persist_throttle() {
+        let dir = TestDirectory::new();
+        let t0 = 1_700_000_000_000_u64;
+
+        // A one-second window so a segment can age into "archivable" within
+        // milliseconds, without waiting anywhere near the 30-second persist
+        // throttle. `closed_segment` never gets extended again (its kind
+        // differs from the segment that follows it), so it stays fixed while
+        // the clock advances around it.
+        let closed_segment = Segment {
+            kind: ActivityKind::Afk,
+            start_ms: t0,
+            end_ms: t0 + 50,
+        };
+        let open_segment = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0 + 50,
+            end_ms: t0 + 50,
+        };
+        let mut seeded = ActivityTracker::new(60, 120, 1, 3);
+        seeded.restore_segments(vec![closed_segment, open_segment], t0 + 50);
+
+        let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
+
+        // First observation: `last_persisted_at_ms` is still `None`, so this
+        // call is due regardless of `kind_changed`. `closed_segment` has not
+        // aged out of the 1-second window yet, so nothing is archivable here
+        // — this call only establishes the persisted-at baseline.
+        let first_at = t0 + 100;
+        handle.observe(first_at, Some(0));
+
+        // Second observation: same kind (idle stays below the 60s AFK
+        // threshold, so both calls classify Active) and well inside the
+        // 30-second persist throttle, so this call is neither due nor a kind
+        // change. But 1.2 seconds have now passed, more than the 1-second
+        // window, so `closed_segment` has aged into archivable territory.
+        let second_at = first_at + 1_200;
+        handle.observe(second_at, Some(0));
+
+        let locked = handle.inner.lock().expect("lock tracker state");
+        assert!(
+            locked.tracker.segments.contains(&closed_segment),
+            "an archivable segment must stay hot when the observation that saw it \
+             was neither due nor a kind change"
+        );
+        drop(locked);
+
+        let archived = activity_archive::read_range(&dir.path, t0, t0 + 50 + 1);
+        assert!(
+            archived.is_empty(),
+            "no archive write must occur on an observation that is neither due nor a kind change"
+        );
+    }
+
+    #[test]
+    fn prune_retains_straddling_segment_whole() {
+        let mut tracker = ActivityTracker::new(60, 120, 300, 3);
+        let t0 = 1_700_000_000_000_u64;
+        let straddler = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 250_000,
+        };
+        // window is 300_000 ms, so cutoff = now - 300_000 = t0 + 100_000,
+        // which falls inside the segment's span.
+        let now = t0 + 400_000;
+        tracker.restore_segments(vec![straddler], now);
+
+        assert!(
+            tracker.archivable_segments(now).is_empty(),
+            "a straddling segment must not be treated as archivable"
+        );
+        tracker.drop_archived(now);
+        assert_eq!(
+            tracker.segments,
+            vec![straddler],
+            "a straddling segment must stay hot with its original start_ms, not truncated"
+        );
+    }
+
+    #[test]
+    fn straddling_segment_summary_matches_clamped_value() {
+        let mut tracker = ActivityTracker::new(60, 120, 300, 3);
+        let t0 = 1_700_000_000_000_u64;
+        let straddler = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 250_000,
+        };
+        let now = t0 + 400_000;
+        tracker.restore_segments(vec![straddler], now);
+
+        let summary = tracker.summary(now);
+        // window_start = now - 300_000 = t0 + 100_000; the clamped duration
+        // is (t0 + 250_000) - (t0 + 100_000) = 150_000 ms, identical to what
+        // truncating start_ms to the cutoff used to produce.
+        assert_eq!(summary.active_seconds, 150);
+    }
+
+    #[test]
+    fn prune_writes_nothing_when_no_segment_expired() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+        handle.observe(t0, Some(0));
+        handle.observe(t0 + 90_000, Some(2));
+
+        let archive_files: Vec<_> = fs::read_dir(&dir.path)
+            .expect("read config dir")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("activity-archive-")
+            })
+            .collect();
+        assert!(
+            archive_files.is_empty(),
+            "an idle prune with nothing expired must not write any archive chunk"
+        );
+    }
+
+    #[test]
+    fn prune_deletes_expired_chunks() {
+        let dir = TestDirectory::new();
+
+        // A chunk from long ago, seeded directly so it predates anything the
+        // handle itself will write.
+        let ancient = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 500,
+            end_ms: 900,
+        };
+        activity_archive::archive_segments(&dir.path, &[ancient]).expect("seed old chunk");
+        assert!(activity_archive::chunk_path(&dir.path, 0).exists());
+
+        // A segment that will become archivable once `later` is reached, so
+        // the same observation both archives fresh data and runs the
+        // retention prune alongside it.
+        let recent = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 8_000_000_000,
+            end_ms: 8_000_060_000,
+        };
+        let buffer = Segment {
+            kind: ActivityKind::Afk,
+            start_ms: 8_000_060_000,
+            end_ms: 8_000_061_000,
+        };
+        let mut seeded = tracker();
+        seeded.restore_segments(vec![recent, buffer], 8_000_061_000);
+
+        let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
+
+        // Past the 24h window (so `recent` is archivable) and past the
+        // 90-day retention cutoff for chunk 0's block, but not for the
+        // fresh chunk's block.
+        let later = 12_000_000_000_u64;
+        handle.observe(later, Some(0));
+
+        assert!(
+            !activity_archive::chunk_path(&dir.path, 0).exists(),
+            "chunk 0 is fully older than the retention cutoff and must be deleted"
+        );
+        assert!(
+            activity_archive::chunk_path(&dir.path, 3).exists(),
+            "the freshly archived chunk must survive the same prune pass"
+        );
+    }
+
+    #[test]
+    fn observe_prunes_expired_chunks_without_archivable_segments() {
+        let dir = TestDirectory::new();
+        let now = HISTORY_RETENTION_SECONDS
+            .saturating_mul(MILLIS_PER_SECOND)
+            .saturating_add(ARCHIVE_BLOCK_MS)
+            .saturating_add(1);
+        let handle =
+            ActivityTrackerHandle::new_with_path(tracker(), dir.path.join(HISTORY_FILE_NAME));
+
+        // Establish the live retention cadence before an expired chunk
+        // appears; the only hot segment remains open and cannot be archived.
+        handle.observe(now, Some(0));
+        let ancient = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 500,
+            end_ms: 900,
+        };
+        activity_archive::archive_segments(&dir.path, &[ancient]).expect("seed expired chunk");
+        let expired_chunk = activity_archive::chunk_path(&dir.path, 0);
+
+        handle.observe(now + PERSIST_MIN_INTERVAL_MS, Some(0));
+
+        assert!(
+            !expired_chunk.exists(),
+            "the live retention cadence must prune without a newly archivable segment"
+        );
+        assert!(
+            activity_archive::read_range(&dir.path, now, now + 1).is_empty(),
+            "the observing segment must remain hot rather than being archived"
+        );
+    }
+
+    #[test]
+    fn observe_prunes_expired_chunks_on_clock_reversal() {
+        let dir = TestDirectory::new();
+        let now = HISTORY_RETENTION_SECONDS
+            .saturating_mul(MILLIS_PER_SECOND)
+            .saturating_add(ARCHIVE_BLOCK_MS)
+            .saturating_add(1_000);
+        let handle =
+            ActivityTrackerHandle::new_with_path(tracker(), dir.path.join(HISTORY_FILE_NAME));
+
+        handle.observe(now, Some(0));
+        let ancient = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 500,
+            end_ms: 900,
+        };
+        activity_archive::archive_segments(&dir.path, &[ancient]).expect("seed expired chunk");
+        let expired_chunk = activity_archive::chunk_path(&dir.path, 0);
+
+        handle.observe(now - 1, Some(0));
+
+        assert!(
+            !expired_chunk.exists(),
+            "a clock reversal must immediately retry retention pruning"
+        );
+    }
+
+    #[test]
+    fn range_rejects_fewer_than_two_boundaries() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+
+        assert!(
+            handle.range(&[]).is_err(),
+            "empty boundaries must be rejected"
+        );
+        assert!(
+            handle.range(&[1_700_000_000_000]).is_err(),
+            "a single boundary must be rejected"
+        );
+    }
+
+    #[test]
+    fn range_rejects_non_increasing_boundaries() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+
+        assert!(
+            handle.range(&[t0, t0]).is_err(),
+            "equal adjacent boundaries must be rejected"
+        );
+        assert!(
+            handle.range(&[t0, t0 - 1]).is_err(),
+            "decreasing boundaries must be rejected"
+        );
+        assert!(
+            handle.range(&[t0, t0 + 10_000, t0 + 5_000]).is_err(),
+            "a later non-increasing pair must be rejected too"
+        );
+    }
+
+    #[test]
+    fn range_rejects_more_than_the_bucket_cap() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+
+        let at_cap: Vec<u64> = (0..=MAX_RANGE_BUCKETS as u64).map(|i| t0 + i).collect();
+        assert!(
+            handle.range(&at_cap).is_ok(),
+            "exactly MAX_RANGE_BUCKETS buckets must be accepted"
+        );
+
+        let over_cap: Vec<u64> = (0..=(MAX_RANGE_BUCKETS as u64 + 1))
+            .map(|i| t0 + i)
+            .collect();
+        assert!(
+            handle.range(&over_cap).is_err(),
+            "one more than the cap must be rejected"
+        );
+    }
+
+    #[test]
+    fn range_rejects_a_span_wider_than_retention() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+
+        // Two boundaries spanning almost the entire u64 range: exactly one
+        // bucket, strictly increasing, so this passes every check except the
+        // span cap. Without that cap, `read_range` would walk from the first
+        // archive chunk key to the last, roughly seven billion reads, inside
+        // a single command call.
+        let result = handle.range(&[0, u64::MAX]);
+        assert!(
+            result.is_err(),
+            "a span wider than retention plus one archive block must be rejected"
+        );
+
+        // A span that exactly matches the maximum allowed width must still
+        // be accepted, confirming the cap targets the span, not the request.
+        let t0 = 1_700_000_000_000_u64;
+        let max_span_ms = HISTORY_RETENTION_SECONDS
+            .saturating_mul(MILLIS_PER_SECOND)
+            .saturating_add(ARCHIVE_BLOCK_MS);
+        assert!(
+            handle.range(&[t0, t0 + max_span_ms]).is_ok(),
+            "a span exactly at the cap must still be accepted"
+        );
+        assert!(
+            handle.range(&[t0, t0 + max_span_ms + 1]).is_err(),
+            "one millisecond past the cap must be rejected"
+        );
+    }
+
+    #[test]
+    fn range_returns_one_bucket_per_adjacent_pair() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+
+        let boundaries = vec![t0, t0 + 10_000, t0 + 20_000, t0 + 45_000];
+        let buckets = handle.range(&boundaries).expect("range succeeds");
+        assert_eq!(buckets.len(), boundaries.len() - 1);
+    }
+
+    #[test]
+    fn range_reports_zero_for_an_empty_bucket() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+
+        let buckets = handle
+            .range(&[t0, t0 + 60_000])
+            .expect("range succeeds for a window with no data");
+        assert_eq!(buckets.len(), 1);
+        assert_eq!(buckets[0].active_ms, 0);
+        assert_eq!(buckets[0].afk_ms, 0);
+    }
+
+    #[test]
+    fn range_sums_hot_and_archived_segments_once() {
+        let dir = TestDirectory::new();
+        let t0 = 1_700_000_000_000_u64;
+        let segment = Segment {
+            kind: ActivityKind::Active,
+            start_ms: t0,
+            end_ms: t0 + 60_000,
+        };
+        let same_start = Segment {
+            kind: ActivityKind::Afk,
+            start_ms: t0,
+            end_ms: t0 + 30_000,
+        };
+
+        // Simulate the archive-before-drop race: `observe` archives a segment
+        // to disk and only then drops it from the hot set, under the same
+        // lock. A reader that snapshots the hot set just before that drop and
+        // reads the archive just after it can observe the identical segment
+        // in both places. `range` must still count its duration once.
+        activity_archive::archive_segments(&dir.path, &[segment]).expect("seed archive");
+        let mut seeded = tracker();
+        seeded.restore_segments(vec![segment, same_start], t0 + 60_000);
+        let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
+
+        let buckets = handle.range(&[t0, t0 + 60_000]).expect("range succeeds");
+
+        assert_eq!(buckets.len(), 1);
+        assert_eq!(
+            buckets[0].active_ms, 60_000,
+            "a segment present in both the hot set and the archive must be counted once"
+        );
+        assert_eq!(buckets[0].afk_ms, 30_000);
+    }
+
+    #[test]
+    fn range_serializes_longest_active_ms_clamped_to_bucket_overlap() {
+        let dir = TestDirectory::new();
+        let t0 = 1_700_000_000_000_u64;
+        let mut seeded = tracker();
+        seeded.restore_segments(
+            vec![Segment {
+                kind: ActivityKind::Active,
+                start_ms: t0.saturating_sub(20_000),
+                end_ms: t0 + 50_000,
+            }],
+            t0 + 50_000,
+        );
+        let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
+
+        let buckets = handle.range(&[t0, t0 + 20_000]).expect("range succeeds");
+        let serialized = serde_json::to_value(&buckets).expect("serialize buckets");
+
+        assert_eq!(
+            serialized,
+            serde_json::json!([{
+                "activeMs": 20_000,
+                "afkMs": 0,
+                "longestActiveMs": 20_000
+            }])
+        );
+    }
+
+    #[test]
+    fn range_matches_strip_buckets_for_an_equivalent_window() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let handle = ActivityTrackerHandle::new_with_path(tracker(), path);
+        let t0 = 1_700_000_000_000_u64;
+
+        // Spread active and afk time across more than one bucket.
+        handle.observe(t0, Some(0));
+        handle.observe(t0 + 30 * 60_000, Some(0));
+        handle.observe(t0 + 30 * 60_000 + 1_000, Some(400));
+        handle.observe(t0 + 90 * 60_000, Some(400));
+        handle.observe(t0 + 90 * 60_000 + 1_000, Some(0));
+
+        let now_ms = t0 + ACTIVITY_WINDOW_SECONDS * MILLIS_PER_SECOND;
+        let summary = handle.summary(now_ms);
+        assert_eq!(summary.strip.len(), STRIP_BUCKET_COUNT);
+
+        let window_ms = ACTIVITY_WINDOW_SECONDS * MILLIS_PER_SECOND;
+        let window_start = now_ms - window_ms;
+        let bucket_ms = window_ms / STRIP_BUCKET_COUNT as u64;
+        let boundaries: Vec<u64> = (0..=STRIP_BUCKET_COUNT as u64)
+            .map(|index| window_start + bucket_ms * index)
+            .collect();
+
+        let range_buckets = handle.range(&boundaries).expect("range succeeds");
+        assert_eq!(range_buckets.len(), STRIP_BUCKET_COUNT);
+
+        for (index, (strip_bucket, range_bucket)) in
+            summary.strip.iter().zip(range_buckets.iter()).enumerate()
+        {
+            let expected_active = (strip_bucket.active_ratio * bucket_ms as f64).round() as u64;
+            let expected_afk = (strip_bucket.afk_ratio * bucket_ms as f64).round() as u64;
+            assert!(
+                range_bucket.active_ms.abs_diff(expected_active) <= 1,
+                "bucket {index}: active_ms mismatch: strip-derived={expected_active} range={}",
+                range_bucket.active_ms
+            );
+            assert!(
+                range_bucket.afk_ms.abs_diff(expected_afk) <= 1,
+                "bucket {index}: afk_ms mismatch: strip-derived={expected_afk} range={}",
+                range_bucket.afk_ms
+            );
+        }
     }
 
     #[test]

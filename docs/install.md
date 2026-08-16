@@ -75,10 +75,10 @@ when one exists) from:
 
 **https://github.com/abhiksark/unfocus/releases**
 
-Filenames embed the full version (example: `0.3.1-alpha.1`). Replace
+Filenames embed the full version (example: `0.5.0-alpha.1`). Replace
 `VERSION` in the commands below with that string, or download the matching
 file from the release page in a browser. The release tag is the same string
-with a `v` prefix (example: `v0.3.1-alpha.1`).
+with a `v` prefix (example: `v0.5.0-alpha.1`).
 
 | You have | Download or install path |
 | --- | --- |
@@ -111,11 +111,11 @@ you install or run anything.
 ### 1. Download the package and `SHA256SUMS`
 
 From the same **published** release tag as the package (example tag
-`v0.3.1-alpha.1`):
+`v0.5.0-alpha.1`):
 
 ```sh
 # Example version; use the version from the release page.
-VERSION=0.3.1-alpha.1
+VERSION=0.5.0-alpha.1
 BASE="https://github.com/abhiksark/unfocus/releases/download/v${VERSION}"
 
 curl -fsSL -O "${BASE}/SHA256SUMS"
@@ -141,7 +141,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 **Windows (PowerShell), for one file:**
 
 ```powershell
-Get-FileHash .\Unfocus_0.3.1-alpha.1_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\Unfocus_0.5.0-alpha.1_x64-setup.exe -Algorithm SHA256
 # Compare the hash to the matching line in SHA256SUMS
 ```
 
@@ -217,7 +217,7 @@ sudo apt install unfocus
 key once):
 
 ```sh
-DEB_VERSION=0.4.0~alpha.1-1
+DEB_VERSION=0.5.0~alpha.1-1
 DEB_FILE="unfocus_${DEB_VERSION}_amd64.deb"
 curl -fsSL -O "https://apt.abhik.ai/pool/main/u/unfocus/${DEB_FILE}"
 curl -fsSL -O "https://apt.abhik.ai/pool/main/u/unfocus/${DEB_FILE}.asc"
@@ -267,7 +267,7 @@ Use this for offline install or when you want to verify a specific release
 asset yourself.
 
 ```sh
-VERSION=0.3.1-alpha.1
+VERSION=0.5.0-alpha.1
 # After downloading Unfocus_${VERSION}_amd64.deb and verifying SHA256SUMS:
 
 sudo apt install "./Unfocus_${VERSION}_amd64.deb"
@@ -278,8 +278,8 @@ sudo apt install "./Unfocus_${VERSION}_amd64.deb"
 
 **Upgrade:** install a newer `.deb` the same way. Prerelease Debian versions
 are ordered so later alphas and stables can upgrade normally. The filename
-keeps the full SemVer (for example `0.3.1-alpha.1`); the package’s embedded
-Debian `Version` uses tilde ordering (for example `0.3.1~alpha.1-1`) so
+keeps the full SemVer (for example `0.5.0-alpha.1`); the package’s embedded
+Debian `Version` uses tilde ordering (for example `0.5.0~alpha.1-1`) so
 upgrades sort correctly.
 
 **Remove the package:**
@@ -292,7 +292,7 @@ sudo apt remove unfocus
 ### Fedora / RHEL (`.rpm`)
 
 ```sh
-VERSION=0.3.1-alpha.1
+VERSION=0.5.0-alpha.1
 # After downloading Unfocus-${VERSION}-1.x86_64.rpm and verifying SHA256SUMS:
 
 sudo dnf install "./Unfocus-${VERSION}-1.x86_64.rpm"
@@ -308,7 +308,7 @@ sudo dnf remove unfocus
 ### Portable AppImage
 
 ```sh
-VERSION=0.3.1-alpha.1
+VERSION=0.5.0-alpha.1
 chmod +x "./Unfocus_${VERSION}_amd64.AppImage"
 "./Unfocus_${VERSION}_amd64.AppImage"
 ```
@@ -456,11 +456,11 @@ verifying its checksum.
 2. Double-click the MSI, or for scripted install:
 
 ```powershell
-msiexec /i Unfocus_0.3.1-alpha.1_x64_en-US.msi
+msiexec /i Unfocus_0.5.0-alpha.1_x64_en-US.msi
 ```
 
-The MSI **ProductVersion** is the numeric core only (for example `0.3.1` for
-`0.3.1-alpha.1`) because Windows requires that format. The filename still
+The MSI **ProductVersion** is the numeric core only (for example `0.5.0` for
+`0.5.0-alpha.1`) because Windows requires that format. The filename still
 carries the full prerelease version.
 
 ### SmartScreen and unsigned builds
@@ -573,7 +573,9 @@ one machine as cross-platform qualification.
    `unfocus` binary (Linux packages).
 2. The consumer dashboard shows the next break. Where the idle probe works,
    **Your day** shows a local, presence-only summary of continuous computer use
-   versus time away (no keylogging, no cloud).
+   versus time away. History exposes the newest 90 browser-local days as three
+   newest-first 30-day pages aligned to the saved **Day starts** preference (no
+   keylogging, no cloud).
 3. Defaults are a **20-minute** work interval and a **20-second** break. Valid
    ranges are work **1-120** minutes and break **3-30** seconds. Changes are
    stored only on this device.
@@ -632,11 +634,20 @@ Files written there include:
 | File | Purpose |
 | --- | --- |
 | `reminder-settings.json` | Work and break timing, pause state |
-| `activity-history.json` | Local presence / AFK segments for **Your day** |
-| `break-events.json` | Local break outcome ledger |
+| `activity-history.json` | Hot local presence / AFK segments for the last 24 hours, feeding **Your day** |
+| `activity-archive-<key>.json` | Older presence / AFK segments in fixed 30-day epoch chunks, kept at least 90 days |
+| `break-events.json` | Local break outcome ledger, kept at least 90 days |
 
-These files stay on this device. Removing the application package, DMG app
-bundle, or AppImage does **not** always delete them.
+`activity-archive-<key>.json` files hold the same presence-only data as
+`activity-history.json` (no keylogging, window titles, or telemetry), just
+older than 24 hours. Each archive file covers one fixed 30-day epoch block, so
+effective retention is at least 90 days rather than an exact cutoff. An older
+partial chunk can remain until its complete 30-day block expires. Retention
+fills forward only: compatible existing local data is preserved, but activity
+from before History was installed cannot be backfilled. There may be more than
+one archive file as history accumulates. These files stay on this device.
+Removing the application package, DMG app bundle, or AppImage does **not**
+always delete them.
 
 ### Optional full wipe after uninstall
 
@@ -665,8 +676,10 @@ Remove-Item -Recurse -Force "$env:APPDATA\com.unfocus.desktop"
 
 ## Privacy reminder
 
-Unfocus has no accounts, telemetry, cloud dependency, or packaged-app runtime
-network calls. Timing, day history, and break outcomes stay on this device.
+Unfocus has no accounts, telemetry, cloud dependency, or application-originated
+runtime network calls. Timing, day history, and break outcomes stay on this
+device. Only explicit activation of the linked author name asks the system
+browser to open the fixed `https://abhik.ai` address.
 Install steps may contact a download host only to fetch the package you chose:
 APT users contact [apt.abhik.ai](https://apt.abhik.ai); GitHub release
 downloads use GitHub; Homebrew users also contact GitHub (and the Homebrew

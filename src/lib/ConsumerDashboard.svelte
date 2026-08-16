@@ -76,6 +76,9 @@
     onResetSettings: () => void;
     onOpenDeveloperMode: () => void;
     onDayStartChange: (hour: number) => void;
+    authorWebsiteError: boolean;
+    onOpenAuthorWebsite: () => void;
+    onViewHistory: () => void;
   };
 
   let {
@@ -112,7 +115,10 @@
     onSaveSettings,
     onResetSettings,
     onOpenDeveloperMode,
-    onDayStartChange
+    onDayStartChange,
+    authorWebsiteError,
+    onOpenAuthorWebsite,
+    onViewHistory
   }: Props = $props();
 
   const progress = $derived(focusProgress(reminderStatus, savedSettings));
@@ -235,6 +241,14 @@
       <h2 id="today-title" class="t-title">Your day</h2>
       <div class="head-aside">
         <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
+        <button
+          id="view-history-trigger"
+          class="btn-text"
+          type="button"
+          onclick={onViewHistory}
+        >
+          View history
+        </button>
         <label class="day-start t-micro">
           Day starts
           <select
@@ -506,6 +520,24 @@
       </button>
     </section>
   {/if}
+
+  <hr class="rule" />
+
+  <footer class="credit">
+    <p class="t-micro">
+      © 2026 <button
+        class="btn-link"
+        type="button"
+        aria-label="Abhik Sarkar, opens abhik.ai in your browser"
+        onclick={onOpenAuthorWebsite}>Abhik Sarkar</button
+      >
+    </p>
+    {#if authorWebsiteError}
+      <p class="t-micro credit-error" role="alert">
+        We couldn’t open your browser. The address is abhik.ai
+      </p>
+    {/if}
+  </footer>
 </main>
 
 <style>
@@ -677,6 +709,21 @@
   }
 
   .btn-text:hover:not(:disabled) {
+    color: var(--ink);
+  }
+
+  .btn-link {
+    padding: 0;
+    border-radius: 0;
+    color: var(--ink-2);
+    background: transparent;
+    font-size: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--line-2);
+    text-underline-offset: 3px;
+  }
+
+  .btn-link:hover {
     color: var(--ink);
   }
 
@@ -888,7 +935,10 @@
     background: var(--away);
   }
 
-  .is-error {
+  .is-error,
+  .duration-field .field-error,
+  .form-error,
+  .credit-error {
     color: #ffc4c4;
   }
 
@@ -979,11 +1029,6 @@
     font-size: 0.68rem;
   }
 
-  .duration-field .field-error,
-  .form-error {
-    color: #ffc4c4;
-  }
-
   .settings-actions {
     display: flex;
     flex-wrap: wrap;
@@ -1037,6 +1082,12 @@
     .duration-fields {
       grid-template-columns: 1fr;
     }
+  }
+
+  .credit {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s1);
   }
 
   @media (max-width: 520px) {

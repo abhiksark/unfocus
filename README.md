@@ -127,10 +127,15 @@ time away from the keyboard:
   twenty-five minutes of continuous activity are counted as deep blocks
 - A half-hour strip sketches the day at a glance, with calm empty or
   probe-unavailable states when samples are missing
+- History exposes the newest 90 browser-local days as three newest-first
+  30-day pages aligned to the saved **Day starts** preference
 - Local break-outcome counts (shown, natural rest, manual rest, held for
   fullscreen) for the last day, with a quieter seven-day total
-- Segment history and the ledger live next to other Unfocus settings on this
-  device, pruned to the rolling window, and are never uploaded
+- Local archive chunks retain presence history for at least 90 days. Because
+  whole 30-day chunks expire together, an older partial chunk can remain until
+  its complete 30-day block expires
+- Compatible existing local data is preserved, but activity from before
+  History was installed cannot be backfilled
 - Observe-only: it does not pause, skip, or advance the break timer
 
 Scheduled break presentation may use that same local presence history so a long
@@ -143,6 +148,9 @@ still suppresses the overlay.
 - Runs local-first: no account, telemetry, cloud dependency, or packaged-app
   network calls
 - Timing, day history, and break outcomes stay on this device
+- Only explicit activation of the linked author name asks the system browser to
+  open the fixed `https://abhik.ai` address; Unfocus makes no
+  application-originated runtime network call
 - Expand **Advanced** in the timing editor and select **Open developer mode**
   for live platform signals, monitor coordinates, raw probe errors, and manual
   refresh; the selected consumer or developer view is remembered locally
@@ -238,19 +246,19 @@ compilation. The `Required CI` check fails unless every required job passes.
 
 Releases are cut by tagging a commit already contained in `main`. The tag must
 be `v` followed by the complete declared version, such as
-`v0.3.0-alpha.1`. The workflow reruns the quality gate before packaging,
+`v0.5.0-alpha.1`. The workflow reruns the quality gate before packaging,
 isolates release credentials from build jobs, and prepares a draft prerelease
 with checksums, build-provenance attestations, a CycloneDX SBOM, and third-party
 notices. Published releases are never overwritten.
 
 Prerelease labels remain in artifact filenames so candidate and final builds
 cannot collide. The Windows MSI's internal ProductVersion is the one exception:
-Windows requires a numeric-only value, so `0.3.0-alpha.1` is represented there
-as `0.3.0`.
+Windows requires a numeric-only value, so `0.5.0-alpha.1` is represented there
+as `0.5.0`.
 
 Debian packages also retain the canonical SemVer in their filename. Their
-embedded `Version` uses Debian ordering, so `0.3.0-alpha.1` becomes
-`0.3.0~alpha.1-1` and upgrades normally through later candidates to the stable
+embedded `Version` uses Debian ordering, so `0.5.0-alpha.1` becomes
+`0.5.0~alpha.1-1` and upgrades normally through later candidates to the stable
 package.
 
 ## Privacy and security

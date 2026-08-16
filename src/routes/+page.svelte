@@ -2,6 +2,7 @@
   import BreakOverlay from "$lib/BreakOverlay.svelte";
   import ConsumerDashboard from "$lib/ConsumerDashboard.svelte";
   import DeveloperDashboard from "$lib/DeveloperDashboard.svelte";
+  import HistoryView from "$lib/HistoryView.svelte";
   import {
     consumerReminderPresentation,
     consumerWarning
@@ -31,7 +32,7 @@
   import type { TodayActivity } from "$lib/today-activity";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
 
   type SettingsResult = "saved" | "reset" | null;
 
@@ -39,11 +40,13 @@
   const overlayParameters = windowRoute.kind === "overlay" ? windowRoute.parameters : null;
 
   let dashboardMode = $state<DashboardMode>("consumer");
+  let dashboardView = $state<"dashboard" | "history">("dashboard");
   let dayStartHour = $state(DEFAULT_DAY_START_HOUR);
   let report = $state<DiagnosticsReport | null>(null);
   let diagnosticsError = $state<string | null>(null);
   let overlayError = $state<string | null>(null);
   let invalidOverlayCloseError = $state<string | null>(null);
+  let authorWebsiteError = $state(false);
   let refreshing = $state(false);
   let overlayRunning = $state(false);
   let timingEditorExpanded = $state(false);
@@ -105,7 +108,18 @@
 
   function setDashboardMode(mode: DashboardMode) {
     dashboardMode = mode;
+    if (mode !== "consumer") dashboardView = "dashboard";
     writeDashboardMode(browserStorage(), mode);
+  }
+
+  function openHistory(): void {
+    dashboardView = "history";
+  }
+
+  async function returnFromHistory(): Promise<void> {
+    dashboardView = "dashboard";
+    await tick();
+    document.getElementById("view-history-trigger")?.focus();
   }
 
   function setDayStartHour(hour: number): void {
@@ -285,6 +299,15 @@
     settingsResult = null;
   }
 
+  async function openAuthorWebsite() {
+    authorWebsiteError = false;
+    try {
+      await invoke("open_author_website");
+    } catch {
+      authorWebsiteError = true;
+    }
+  }
+
   async function closeOverlays() {
     if (!overlayParameters) throw new Error("Overlay parameters are unavailable");
     await invoke("close_overlay_test", { runId: overlayParameters.runId });
@@ -393,6 +416,8 @@
     onSaveSettings={() => void saveReminderSettings()}
     onResetSettings={() => void resetReminderSettings()}
   />
+{:else if dashboardView === "history"}
+  <HistoryView {dayStartHour} onBack={() => void returnFromHistory()} />
 {:else}
   <ConsumerDashboard
     presentation={reminderPresentation}
@@ -429,6 +454,9 @@
     onSaveSettings={() => void saveReminderSettings()}
     onResetSettings={() => void resetReminderSettings()}
     onOpenDeveloperMode={() => setDashboardMode("developer")}
+    {authorWebsiteError}
+    onOpenAuthorWebsite={() => void openAuthorWebsite()}
+    onViewHistory={openHistory}
   />
 {/if}
 

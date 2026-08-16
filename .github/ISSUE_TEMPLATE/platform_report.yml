@@ -10,8 +10,8 @@ body:
 
         Linux X11 is the only backend that has had a multi-monitor acceptance
         run. macOS reads idle and fullscreen through Quartz but has **not**
-        completed multi-monitor acceptance. Windows has no probes. Wayland is
-        unsupported.
+        completed multi-monitor acceptance. Windows: probes implemented,
+        interactive qualification pending. Wayland is unsupported.
 
         This form is the evidence format for lifecycle and accessibility
         qualification (issue #30). Tick only what you actually tried. A full
@@ -50,7 +50,7 @@ body:
       description: >-
         Release tag or short commit, package filename if packaged, and how you
         launched it (AppImage, deb, dmg, `bun run tauri dev`).
-      placeholder: "v0.3.1-alpha.1 — unfocus_0.3.1-alpha.1_amd64.AppImage"
+      placeholder: "vX.Y.Z-prerelease, Unfocus_X.Y.Z-prerelease_amd64.AppImage"
     validations:
       required: true
 
@@ -63,7 +63,7 @@ body:
         OS build, architecture, desktop/WM, app version, assistive settings
         (screen reader, reduce motion, contrast, text size).
       placeholder: |
-        commit: abc1234 / tag: v0.3.1-alpha.1
+        commit: abc1234 / tag: vX.Y.Z-prerelease
         package: AppImage (packaged)
         OS: Ubuntu 22.04.5 x86_64 — GNOME 42.9 X11
         a11y: reduce-motion off, Orca not used, 100% text scale
@@ -112,7 +112,7 @@ body:
         - label: The overlay covered every display edge to edge — no gaps, no leftover desktop.
         - label: Every display showed the same countdown at the same moment.
         - label: Escape dismissed the overlay on every display at once.
-        - label: **End break** dismissed the overlay on every display at once.
+        - label: "**End break** dismissed the overlay on every display at once."
         - label: Idle climbed while idle and reset on input; fullscreen flipped for another app, not for Unfocus overlays.
         - label: Reduce motion stopped every looping scene animation.
 
