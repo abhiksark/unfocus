@@ -50,11 +50,10 @@ const AUTHOR_WEBSITE: &str = "https://abhik.ai";
 /// call; the browser does, and only when the reader asks for it. A failure is
 /// reported to the caller, never panics, and never touches the reminder timer.
 ///
-/// The launcher is spawned rather than waited on, so a missing handler is
-/// reported but a handler that starts and then fails is not. Waiting would
-/// block this command for as long as a cold browser start takes.
+/// The launcher runs off the async runtime so a cold browser start cannot
+/// block the command handler.
 #[tauri::command]
-fn open_author_website(window: tauri::WebviewWindow) -> Result<(), String> {
+async fn open_author_website(window: tauri::WebviewWindow) -> Result<(), String> {
     authorize_main_caller(window.label())?;
 
     #[cfg(target_os = "linux")]
@@ -78,15 +77,20 @@ fn open_author_website(window: tauri::WebviewWindow) -> Result<(), String> {
         launcher
     };
 
-    let mut child = launcher
-        .spawn()
+    let status = tauri::async_runtime::spawn_blocking(move || launcher.status())
+        .await
         .map_err(|error| format!("could not open {AUTHOR_WEBSITE}: {error}"))?;
-    // Reap the launcher off this thread so a long-lived tray process does not
-    // accumulate a defunct child for every click.
-    std::thread::spawn(move || {
-        let _ = child.wait();
-    });
-    Ok(())
+    browser_launch_result(status)
+}
+
+fn browser_launch_result(status: io::Result<std::process::ExitStatus>) -> Result<(), String> {
+    match status {
+        Ok(status) if status.success() => Ok(()),
+        Ok(status) => Err(format!(
+            "could not open {AUTHOR_WEBSITE}: launcher returned {status}"
+        )),
+        Err(error) => Err(format!("could not open {AUTHOR_WEBSITE}: {error}")),
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -201,4 +205,20 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running Unfocus");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::browser_launch_result;
+    use std::process::Command;
+
+    #[test]
+    fn browser_launcher_nonzero_exit_is_an_error() {
+        #[cfg(unix)]
+        let status = Command::new("sh").args(["-c", "exit 1"]).status().unwrap();
+        #[cfg(windows)]
+        let status = Command::new("cmd").args(["/C", "exit 1"]).status().unwrap();
+
+        assert!(browser_launch_result(Ok(status)).is_err());
+    }
 }
