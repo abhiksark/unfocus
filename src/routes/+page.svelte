@@ -18,6 +18,7 @@
     writeDayStartHour
   } from "$lib/day-start";
   import type { DiagnosticsReport } from "$lib/diagnostics";
+  import { historyActivationUsesKeyboard } from "$lib/history";
   import { parseWindowLabel } from "$lib/overlay-label";
   import {
     type ReminderSettings,
@@ -41,6 +42,9 @@
 
   let dashboardMode = $state<DashboardMode>("consumer");
   let dashboardView = $state<"dashboard" | "history">("dashboard");
+  let historyMounted = $state(false);
+  let dashboardScrollY = 0;
+  let historyScrollY = 0;
   let dayStartHour = $state(DEFAULT_DAY_START_HOUR);
   let report = $state<DiagnosticsReport | null>(null);
   let diagnosticsError = $state<string | null>(null);
@@ -112,18 +116,31 @@
     writeDashboardMode(browserStorage(), mode);
   }
 
-  function openHistory(): void {
+  async function openHistory(event: MouseEvent): Promise<void> {
+    dashboardScrollY = window.scrollY;
+    historyMounted = true;
     dashboardView = "history";
+    await tick();
+    window.scrollTo({ top: historyScrollY, behavior: "auto" });
+    if (historyActivationUsesKeyboard(event.detail)) {
+      document.getElementById("history-back-button")?.focus({ preventScroll: true });
+    }
   }
 
-  async function returnFromHistory(): Promise<void> {
+  async function returnFromHistory(restoreFocus: boolean): Promise<void> {
+    historyScrollY = window.scrollY;
     dashboardView = "dashboard";
     await tick();
-    document.getElementById("view-history-trigger")?.focus();
+    window.scrollTo({ top: dashboardScrollY, behavior: "auto" });
+    if (restoreFocus) {
+      document.getElementById("view-history-trigger")?.focus({ preventScroll: true });
+    }
   }
 
   function setDayStartHour(hour: number): void {
     dayStartHour = hour;
+    historyMounted = false;
+    historyScrollY = 0;
     writeDayStartHour(browserStorage(), hour);
   }
 
@@ -416,48 +433,57 @@
     onSaveSettings={() => void saveReminderSettings()}
     onResetSettings={() => void resetReminderSettings()}
   />
-{:else if dashboardView === "history"}
-  <HistoryView {dayStartHour} onBack={() => void returnFromHistory()} />
 {:else}
-  <ConsumerDashboard
-    presentation={reminderPresentation}
-    {warning}
-    {reminderStatus}
-    {reminderActionPending}
-    {reminderActionResult}
-    {overlayRunning}
-    diagnosticsReady={report !== null}
-    {todayActivity}
-    {todayActivityError}
-    {breakSummary}
-    {breakSummaryError}
-    {dayStartHour}
-    onDayStartChange={setDayStartHour}
-    {savedSettings}
-    {timingEditorExpanded}
-    {workMinutesInput}
-    {breakSecondsInput}
-    {settingsLoading}
-    {settingsSaving}
-    {settingsValidation}
-    {workMinutesError}
-    {breakSecondsError}
-    {settingsError}
-    {settingsErrorContext}
-    {settingsResult}
-    onTakeBreak={() => void runReminderAction("take_break_now")}
-    onPauseAction={runPauseAction}
-    onPreview={() => void runOverlayTest()}
-    onToggleTimingEditor={() => (timingEditorExpanded = !timingEditorExpanded)}
-    onWorkMinutesInput={updateWorkMinutes}
-    onBreakSecondsInput={updateBreakSeconds}
-    onSaveSettings={() => void saveReminderSettings()}
-    onResetSettings={() => void resetReminderSettings()}
-    onOpenDeveloperMode={() => setDashboardMode("developer")}
-    {authorWebsiteError}
-    onOpenAuthorWebsite={() => void openAuthorWebsite()}
-    onViewHistory={openHistory}
-  />
+  <div class="view-shell" hidden={dashboardView !== "dashboard"}>
+    <ConsumerDashboard
+      presentation={reminderPresentation}
+      {warning}
+      {reminderStatus}
+      {reminderActionPending}
+      {reminderActionResult}
+      {overlayRunning}
+      diagnosticsReady={report !== null}
+      {todayActivity}
+      {todayActivityError}
+      {breakSummary}
+      {breakSummaryError}
+      {dayStartHour}
+      onDayStartChange={setDayStartHour}
+      {savedSettings}
+      {timingEditorExpanded}
+      {workMinutesInput}
+      {breakSecondsInput}
+      {settingsLoading}
+      {settingsSaving}
+      {settingsValidation}
+      {workMinutesError}
+      {breakSecondsError}
+      {settingsError}
+      {settingsErrorContext}
+      {settingsResult}
+      onTakeBreak={() => void runReminderAction("take_break_now")}
+      onPauseAction={runPauseAction}
+      onPreview={() => void runOverlayTest()}
+      onToggleTimingEditor={() => (timingEditorExpanded = !timingEditorExpanded)}
+      onWorkMinutesInput={updateWorkMinutes}
+      onBreakSecondsInput={updateBreakSeconds}
+      onSaveSettings={() => void saveReminderSettings()}
+      onResetSettings={() => void resetReminderSettings()}
+      onOpenDeveloperMode={() => setDashboardMode("developer")}
+      {authorWebsiteError}
+      onOpenAuthorWebsite={() => void openAuthorWebsite()}
+      onViewHistory={openHistory}
+    />
+  </div>
+  {#if historyMounted}
+    <div class="view-shell" hidden={dashboardView !== "history"}>
+      <HistoryView
+        {dayStartHour}
+        active={dashboardView === "history"}
+        onBack={(restoreFocus) => void returnFromHistory(restoreFocus)}
+      />
+    </div>
+  {/if}
 {/if}
 
 <style>
@@ -514,6 +540,14 @@
     min-width: 320px;
     min-height: 100vh;
     background: var(--bg);
+  }
+
+  .view-shell {
+    display: contents;
+  }
+
+  .view-shell[hidden] {
+    display: none;
   }
 
   .invalid-overlay {
