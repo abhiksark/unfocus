@@ -486,7 +486,7 @@ Declared license: MIT
 Upstream authors: Luke Edwards
 License text IDs: ba573393f24555ac0528612ad39665fab5bdcc80330a61096024bbf5f736526d
 
-JavaScript: nanoid@3.3.17
+JavaScript: nanoid@3.3.18
 Declared license: MIT
 Upstream authors: Andrey Sitnik <andrey@sitnik.ru>
 License text IDs: da4db1480d9beea3483a2eda5c53b22238d0827d57da162b48f122e04d2d9987
@@ -19909,7 +19909,7 @@ DEALINGS IN THE SOFTWARE.
 ===============================================================================
 License text ID: da4db1480d9beea3483a2eda5c53b22238d0827d57da162b48f122e04d2d9987
 Used by:
-  - JavaScript: nanoid@3.3.17
+  - JavaScript: nanoid@3.3.18
 -------------------------------------------------------------------------------
 The MIT License (MIT)
 

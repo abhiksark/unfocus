@@ -78,6 +78,7 @@
     onDayStartChange: (hour: number) => void;
     authorWebsiteError: boolean;
     onOpenAuthorWebsite: () => void;
+    onViewHistory: () => void;
   };
 
   let {
@@ -116,7 +117,8 @@
     onOpenDeveloperMode,
     onDayStartChange,
     authorWebsiteError,
-    onOpenAuthorWebsite
+    onOpenAuthorWebsite,
+    onViewHistory
   }: Props = $props();
 
   const progress = $derived(focusProgress(reminderStatus, savedSettings));
@@ -239,6 +241,14 @@
       <h2 id="today-title" class="t-title">Your day</h2>
       <div class="head-aside">
         <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
+        <button
+          id="view-history-trigger"
+          class="btn-text"
+          type="button"
+          onclick={onViewHistory}
+        >
+          View history
+        </button>
         <label class="day-start t-micro">
           Day starts
           <select
@@ -515,12 +525,12 @@
 
   <footer class="credit">
     <p class="t-micro">
-      Made by <button
+      © 2026 <button
         class="btn-link"
         type="button"
         aria-label="Abhik Sarkar, opens abhik.ai in your browser"
         onclick={onOpenAuthorWebsite}>Abhik Sarkar</button
-      > · © 2026 · All rights reserved
+      >
     </p>
     {#if authorWebsiteError}
       <p class="t-micro credit-error" role="alert">

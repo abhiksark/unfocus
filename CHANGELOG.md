@@ -12,6 +12,48 @@ released versions link to their GitHub release.
   desktop's default browser rather than navigating the dashboard away, and says
   so plainly if no browser could be opened. Unfocus itself still makes no
   network call.
+- Kept raw **Your day** presence history on this device for at least 90 days,
+  beyond the 24-hour live window the strip already shows. The existing
+  `activity-history.json` file stays hot for the latest day, and segments that
+  age out of it are archived into local `activity-archive-<key>.json` 30-day
+  epoch chunks in the same config directory. This stays local-only like
+  everything else in Unfocus, with no account and no network call. History
+  fills forward only: existing installs start with none of this longer
+  history, and nothing from before this change can be backfilled.
+- Added main-window-only range history commands for the consumer dashboard.
+  `get_activity_range` returns bucketed `activeMs`, `afkMs`, and
+  `longestActiveMs` values for caller-provided boundaries, and
+  `get_break_range` returns chronological privacy-safe `{atMs, kind}` break
+  outcomes for `[start, end)` queries up to 31 elapsed days.
+- Added a transient consumer History view with three local 30-day pages. It
+  follows the saved **Day starts** preference, loads on demand, shows activity
+  and break outcomes together, and does not change the reminder timer, probes,
+  or overlays.
+
+### Changed
+
+- Raised the break-outcome ledger's retention from 7 to at least 90 days and
+  removed its fixed event cap, matching the activity history above.
+  `break-events.json` is now bounded by the 90-day time window and keeps enough
+  local break outcomes to back the history view as well as the existing day
+  and week summaries. The old 512-event cap was a live defect: a 20-minute
+  work interval can produce up to 72 scheduled breaks a day, and with
+  natural-idle and fullscreen-suppress outcomes added in, the cap could
+  already be reached inside the old 7-day window, silently undercounting the
+  dashboard's week totals.
+
+## [0.4.0-alpha.1] - 2026-08-15
+
+Supersedes the unpublished `v0.3.1-alpha.1` draft. This public alpha includes all of that draft’s dashboard, accessibility, and release-integrity improvements.
+
+### Added
+
+- Added a full multi-platform [install guide](docs/install.md) covering package
+  selection, checksum and provenance verification, first-run defaults, local
+  data and uninstall paths, build-from-source pins, and platform troubleshooting.
+- Added an elapsed-progress indicator to the consumer dashboard. It appears only
+  during an active work interval and stays hidden while paused, during a break
+  or preview, and whenever reminder status is unavailable.
 - Added a time axis to the **Your day** activity strip. Faint gridlines mark
   every fourth hour behind the bars, with the hour labeled beneath in the
   system clock format and the right edge marked `now`, so a bar can be traced
@@ -20,53 +62,52 @@ released versions link to their GitHub release.
   marked with a stronger rule and a brighter label on the activity strip's time
   axis, so the day can be read from when it actually begins. The setting is kept
   on this device and never affects the break timer.
-- Added slow drift and twinkle to the break scene's stars. The sky now holds
-  24 slightly brighter stars, each stepping through its own baked 10-18 second
-  cadence within the scene's stepped repaint rhythm, and the starfield
-  fades as the dawn state gathers. Reduced-motion preferences stop the motion
-  entirely, leaving the stars at their resting brightness.
-- Added a full multi-platform [install guide](docs/install.md): package choice,
-  checksum and provenance verification, Linux (deb/rpm/AppImage, X11 session
-  and tray notes), macOS (DMG/Homebrew and Gatekeeper), Windows (setup/MSI and
-  SmartScreen), first-run defaults, local data paths and clean uninstall,
-  build-from-source pins, and troubleshooting.
+- Added a public **APT** install path for Debian and Ubuntu alphas via
+  [abhiksark/unfocus-apt](https://github.com/abhiksark/unfocus-apt) (`apt install
+  unfocus`). The archive metadata at [apt.abhik.ai](https://apt.abhik.ai) is
+  signed; application binaries remain unsigned.
+- Added slow, stepped drift and twinkle to the break scene's stars, with a
+  10-18 second cadence and a dawn fade. Reduced-motion preferences stop the
+  motion entirely.
 
 ### Changed
 
-- Updated the README consumer dashboard screenshot to the single-column layout
-  with **Your day** activity strip and break outcome counts. Break-screen media
-  is unchanged.
-
-## [0.3.1-alpha.1] - 2026-08-12
-
-### Added
-
-- Added an elapsed-progress indicator to the consumer dashboard, showing how
-  much of the current work interval has passed. It appears only during an active
-  work interval and stays hidden while paused, during a break or preview, and
-  whenever the reminder status is unavailable.
-
-### Changed
-
-- Rebuilt the consumer dashboard as a single quiet column. The scene-led hero is
-  gone, bordered sections became plain text separated by hairline rules, and
-  uppercase letterspaced labels became sentence case. The break screen keeps its
-  layout and behavior and now draws its display type from the shared font token.
-- Moved the dashboard onto a shared token layer for color, spacing, radius, and
-  type, and pinned body text to the system font stack. The previous stylesheet
-  asked for Inter, which was never vendored and could not be fetched, so body
-  text rendered in whatever font each machine happened to supply.
-- Raised dashboard label and caption contrast to meet WCAG AA at their rendered
-  sizes, and corrected increased-contrast mode so hover states raise contrast
-  instead of lowering it.
+- Rebuilt the consumer dashboard as a quieter single column with plain sections,
+  shared design tokens, system body fonts, sentence-case labels, and WCAG AA
+  contrast at rendered text sizes. The break screen keeps its layout and uses
+  the shared display font token.
 - Described Unfocus as both a break app and a local reflection surface in the
-  README and package metadata (Your day and break outcomes remain observe-only).
+  README and package metadata. **Your day** and break outcomes remain
+  observe-only.
+- Clarified Ubuntu as the primary qualified Linux install path: README and
+  [docs/install.md](docs/install.md) put the signed APT repo
+  ([apt.abhik.ai](https://apt.abhik.ai)) first, separate package trust from
+  macOS/Windows application code signing, and document APT upgrade and privacy
+  notes for that path.
+- Updated the README consumer dashboard screenshot to the single-column layout
+  with the **Your day** time axis and **Day starts** selector. Break-screen media
+  remains unchanged.
 - Updated the frontend toolchain to Vite 8.2.1, svelte-check 4.7.5, the Svelte
   Vite plugin 7.3.0, and Node type definitions 26.2.0, and regenerated the
   dependency license notices.
+
+### Fixed
+
 - Fixed SBOM generation when a dependency update leaves two copies of a package
   in the lockfile. Each dependency now resolves the way the runtime would, so a
   nested copy serves its own owner while everything else sees the root copy.
+- Relayed Homebrew release dispatch through the default branch so the
+  environment-restricted tap automation can receive alpha publication events.
+
+### Security
+
+- Overrode the transitive `nanoid` dependency to 3.3.18 to remediate its
+  advisory, and regenerated the lockfile and third-party notices.
+
+## [0.3.1-alpha.1] - 2026-08-12
+
+Tagged but unpublished. Its dashboard, accessibility, dependency, and SBOM
+changes are included in and superseded by [0.4.0-alpha.1].
 
 ## [0.3.0-alpha.1] - 2026-08-12
 
@@ -175,7 +216,8 @@ released versions link to their GitHub release.
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
-[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.3.1-alpha.1...dev
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.4.0-alpha.1...dev
+[0.4.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.4.0-alpha.1
 [0.3.1-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.3.1-alpha.1
 [0.3.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.2.0-alpha.1...v0.3.0-alpha.1
 [0.2.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.1.0-alpha.1...v0.2.0-alpha.1
