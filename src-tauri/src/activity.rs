@@ -722,7 +722,7 @@ impl ActivityTrackerHandle {
             .filter(|segment| segment.end_ms > start_ms && segment.start_ms < end_ms)
             .collect();
         combined.extend(read_range(&config_dir, start_ms, end_ms));
-        combined.sort_by_key(|segment| segment.start_ms);
+        combined.sort_by_key(|segment| (segment.start_ms, segment.end_ms, segment.kind as u8));
         combined.dedup();
         combined
     }
@@ -1807,6 +1807,11 @@ mod tests {
             start_ms: t0,
             end_ms: t0 + 60_000,
         };
+        let same_start = Segment {
+            kind: ActivityKind::Afk,
+            start_ms: t0,
+            end_ms: t0 + 30_000,
+        };
 
         // Simulate the archive-before-drop race: `observe` archives a segment
         // to disk and only then drops it from the hot set, under the same
@@ -1815,7 +1820,7 @@ mod tests {
         // in both places. `range` must still count its duration once.
         activity_archive::archive_segments(&dir.path, &[segment]).expect("seed archive");
         let mut seeded = tracker();
-        seeded.restore_segments(vec![segment], t0 + 60_000);
+        seeded.restore_segments(vec![segment, same_start], t0 + 60_000);
         let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
 
         let buckets = handle.range(&[t0, t0 + 60_000]).expect("range succeeds");
@@ -1825,7 +1830,7 @@ mod tests {
             buckets[0].active_ms, 60_000,
             "a segment present in both the hot set and the archive must be counted once"
         );
-        assert_eq!(buckets[0].afk_ms, 0);
+        assert_eq!(buckets[0].afk_ms, 30_000);
     }
 
     #[test]

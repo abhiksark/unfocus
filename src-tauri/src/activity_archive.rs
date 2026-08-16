@@ -5,12 +5,11 @@
 //! its `start_ms`, even when it ends in the next block, so chunk assignment
 //! never truncates a segment.
 //!
-//! Failure posture mirrors the rest of the crate: a missing, unreadable, or
-//! malformed chunk is skipped rather than panicking, and (unlike the 24-hour
-//! hot loader) a single bad segment inside an otherwise-good chunk is skipped
-//! individually rather than discarding the chunk or the whole range — across
-//! 90 days of archives, dropping everything for one bad timestamp would erase
-//! months of history.
+//! Failure posture mirrors the rest of the crate: an observational range read
+//! skips a missing, unreadable, or malformed chunk rather than panicking, while
+//! an update leaves an existing unreadable chunk untouched. Unlike the 24-hour
+//! hot loader, a single bad segment inside an otherwise-good chunk is skipped
+//! individually rather than discarding the chunk or the whole range.
 //!
 //! `archive_segments` and `prune_chunks` are wired into the hot-file prune in
 //! `activity.rs`. `read_range` is read through by the `get_activity_range`
@@ -46,22 +45,16 @@ pub(crate) fn chunk_path(config_dir: &Path, key: u64) -> PathBuf {
     config_dir.join(format!("{CHUNK_FILE_PREFIX}{key}{CHUNK_FILE_SUFFIX}"))
 }
 
-/// Parse a chunk file's segments, dropping any individually invalid entry
-/// (`end_ms < start_ms`). Returns an empty vector for a missing, unreadable,
-/// malformed, or schema-mismatched chunk rather than failing — callers decide
-/// what "empty" means for their situation (a fresh chunk on write, a gap in
-/// coverage on read).
-fn read_chunk_segments(path: &Path) -> Vec<Segment> {
-    let Ok(contents) = fs::read(path) else {
-        return Vec::new();
-    };
-    let Ok(history) = serde_json::from_slice::<PersistedActivityHistory>(&contents) else {
-        return Vec::new();
-    };
+fn parse_chunk_segments(contents: &[u8]) -> io::Result<Vec<Segment>> {
+    let history = serde_json::from_slice::<PersistedActivityHistory>(contents)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     if history.version != HISTORY_SCHEMA_VERSION {
-        return Vec::new();
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "archive chunk schema mismatch",
+        ));
     }
-    history
+    Ok(history
         .segments
         .into_iter()
         .filter(|item| item.end_ms >= item.start_ms)
@@ -70,7 +63,26 @@ fn read_chunk_segments(path: &Path) -> Vec<Segment> {
             start_ms: item.start_ms,
             end_ms: item.end_ms,
         })
-        .collect()
+        .collect())
+}
+
+/// Read a chunk for an observational range query. An unreadable chunk is a
+/// gap in that query, never a reason to fail the whole range.
+fn read_chunk_segments(path: &Path) -> Vec<Segment> {
+    fs::read(path)
+        .ok()
+        .and_then(|contents| parse_chunk_segments(&contents).ok())
+        .unwrap_or_default()
+}
+
+/// Read a chunk before updating or deleting it. A missing file is safe to
+/// treat as empty; an existing unreadable file must remain untouched.
+fn read_chunk_for_update(path: &Path) -> io::Result<Vec<Segment>> {
+    match fs::read(path) {
+        Ok(contents) => parse_chunk_segments(&contents),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) => Err(error),
+    }
 }
 
 fn persisted_from_segments(segments: &[Segment]) -> PersistedActivityHistory {
@@ -91,8 +103,9 @@ fn persisted_from_segments(segments: &[Segment]) -> PersistedActivityHistory {
     }
 }
 
-/// Merge segments into their chunks. Returns Err if any write failed; the
-/// caller must then keep those segments hot and retry later.
+/// Merge segments into their chunks. Returns Err if an existing chunk cannot
+/// be read or any write fails; the caller must then keep those segments hot
+/// and retry later.
 ///
 /// Merging is idempotent: re-archiving a segment already present in its chunk
 /// (as happens on a retry after a partial failure) does not duplicate it.
@@ -107,9 +120,9 @@ pub(crate) fn archive_segments(config_dir: &Path, segments: &[Segment]) -> io::R
 
     for (key, new_segments) in by_key {
         let path = chunk_path(config_dir, key);
-        let mut merged = read_chunk_segments(&path);
+        let mut merged = read_chunk_for_update(&path)?;
         merged.extend(new_segments);
-        merged.sort_by_key(|segment| segment.start_ms);
+        merged.sort_by_key(|segment| (segment.start_ms, segment.end_ms, segment.kind as u8));
         merged.dedup();
         persist_history(&path, &persisted_from_segments(&merged))?;
     }
@@ -152,7 +165,7 @@ pub(crate) fn read_range(config_dir: &Path, start_ms: u64, end_ms: u64) -> Vec<S
     // the window, like `summary`'s `start_ms.max(window_start)`, is the
     // caller's job, not this function's.
     results.retain(|segment| segment.end_ms > start_ms && segment.start_ms < end_ms);
-    results.sort_by_key(|segment| segment.start_ms);
+    results.sort_by_key(|segment| (segment.start_ms, segment.end_ms, segment.kind as u8));
     results.dedup();
     results
 }
@@ -177,15 +190,17 @@ pub(crate) fn prune_chunks(config_dir: &Path, cutoff_ms: u64) -> io::Result<()> 
         let Some(key) = parse_chunk_key(name) else {
             continue;
         };
-        if key.saturating_add(1).saturating_mul(ARCHIVE_BLOCK_MS) <= cutoff_ms
-            && read_chunk_segments(&entry.path())
-                .iter()
-                .all(|segment| segment.end_ms <= cutoff_ms)
-        {
-            if let Err(error) = fs::remove_file(entry.path()) {
-                if error.kind() != io::ErrorKind::NotFound {
-                    last_error = Some(error);
+        if key.saturating_add(1).saturating_mul(ARCHIVE_BLOCK_MS) <= cutoff_ms {
+            match read_chunk_for_update(&entry.path()) {
+                Ok(segments) if segments.iter().all(|segment| segment.end_ms <= cutoff_ms) => {
+                    if let Err(error) = fs::remove_file(entry.path()) {
+                        if error.kind() != io::ErrorKind::NotFound {
+                            last_error = Some(error);
+                        }
+                    }
                 }
+                Ok(_) => {}
+                Err(error) => last_error = Some(error),
             }
         }
     }
@@ -329,6 +344,57 @@ mod tests {
     }
 
     #[test]
+    fn archive_segments_preserves_unreadable_existing_chunks() {
+        for contents in [
+            b"{not-json".as_slice(),
+            br#"{"version":99,"segments":[]}"#.as_slice(),
+        ] {
+            let dir = TestDirectory::new();
+            let path = chunk_path(&dir.path, 0);
+            fs::write(&path, contents).expect("seed unreadable chunk");
+
+            let result = archive_segments(
+                &dir.path,
+                &[Segment {
+                    kind: ActivityKind::Active,
+                    start_ms: 1_000,
+                    end_ms: 2_000,
+                }],
+            );
+
+            assert!(result.is_err(), "an unreadable chunk must block the merge");
+            assert_eq!(
+                fs::read(path).expect("read preserved chunk"),
+                contents,
+                "a failed merge must leave the existing chunk unchanged"
+            );
+        }
+    }
+
+    #[test]
+    fn archive_segments_deduplicates_equal_segments_with_the_same_start() {
+        let dir = TestDirectory::new();
+        let duplicate = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 1_000,
+            end_ms: 2_000,
+        };
+        let separator = Segment {
+            kind: ActivityKind::Afk,
+            start_ms: 1_000,
+            end_ms: 1_500,
+        };
+
+        archive_segments(&dir.path, &[duplicate, separator]).expect("seed archive");
+        archive_segments(&dir.path, &[duplicate]).expect("repeat archive");
+
+        let chunk = read_chunk_segments(&chunk_path(&dir.path, 0));
+        assert_eq!(chunk.len(), 2);
+        assert!(chunk.contains(&duplicate));
+        assert!(chunk.contains(&separator));
+    }
+
+    #[test]
     fn read_range_includes_preceding_chunk_for_straddler() {
         let dir = TestDirectory::new();
         let straddler = Segment {
@@ -377,6 +443,32 @@ mod tests {
         // to read: this pins that chunk 0 is not read twice.
         let results = read_range(&dir.path, 0, ARCHIVE_BLOCK_MS);
         assert_eq!(results, vec![segment]);
+    }
+
+    #[test]
+    fn read_range_deduplicates_equal_segments_with_the_same_start() {
+        let dir = TestDirectory::new();
+        let duplicate = PersistedSegment {
+            kind: PersistedKind::Active,
+            start_ms: 10_000,
+            end_ms: 20_000,
+        };
+        let separator = PersistedSegment {
+            kind: PersistedKind::Afk,
+            start_ms: 10_000,
+            end_ms: 15_000,
+        };
+        persist_history(
+            &chunk_path(&dir.path, 0),
+            &PersistedActivityHistory {
+                version: HISTORY_SCHEMA_VERSION,
+                segments: vec![duplicate.clone(), separator, duplicate],
+            },
+        )
+        .expect("seed duplicate chunk");
+
+        let results = read_range(&dir.path, 0, ARCHIVE_BLOCK_MS);
+        assert_eq!(results.len(), 2);
     }
 
     #[test]
@@ -467,6 +559,21 @@ mod tests {
 
         assert!(!chunk_path(&dir.path, 0).exists());
         assert!(chunk_path(&dir.path, 1).exists());
+    }
+
+    #[test]
+    fn prune_chunks_preserves_unreadable_chunks() {
+        let dir = TestDirectory::new();
+        let path = chunk_path(&dir.path, 0);
+        fs::write(&path, b"{not-json").expect("seed unreadable chunk");
+
+        let result = prune_chunks(&dir.path, ARCHIVE_BLOCK_MS);
+
+        assert!(
+            result.is_err(),
+            "the unreadable chunk must surface an error"
+        );
+        assert_eq!(fs::read(path).expect("read preserved chunk"), b"{not-json");
     }
 
     #[test]

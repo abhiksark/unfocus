@@ -935,7 +935,10 @@
     background: var(--away);
   }
 
-  .is-error {
+  .is-error,
+  .duration-field .field-error,
+  .form-error,
+  .credit-error {
     color: #ffc4c4;
   }
 
@@ -1026,11 +1029,6 @@
     font-size: 0.68rem;
   }
 
-  .duration-field .field-error,
-  .form-error {
-    color: #ffc4c4;
-  }
-
   .settings-actions {
     display: flex;
     flex-wrap: wrap;
@@ -1090,10 +1088,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--s1);
-  }
-
-  .credit-error {
-    color: #ffc4c4;
   }
 
   @media (max-width: 520px) {

@@ -108,9 +108,7 @@
   }
 
   function slotTitle(slot: HistoryHourSlot): string {
-    return `${slot.label}: ${slot.activeMs > 0 ? "active" : ""}${
-      slot.activeMs > 0 && slot.afkMs > 0 ? " and " : ""
-    }${slot.afkMs > 0 ? "away" : ""}${slot.activeMs === 0 && slot.afkMs === 0 ? "blank" : ""}`;
+    return `${slot.label}: ${slotKindLabel(slot)}`;
   }
 
   function slotClass(slot: HistoryHourSlot): string {
@@ -124,7 +122,7 @@
       case "afk":
         return "away";
       case "mixed":
-        return "mixed";
+        return "active and away";
       case "blank":
         return "no data";
     }
@@ -162,11 +160,11 @@
     </div>
   </header>
 
-  <section class="history-panel" aria-live="polite" aria-busy={loading}>
+  <section class="history-panel" aria-busy={loading}>
     <div class="section-head">
       <div>
         <h2 class="t-title">Page {pageIndex + 1} of {HISTORY_PAGE_COUNT}</h2>
-        <p class="t-micro">{pageCaption}</p>
+        <p class="t-micro" aria-live="polite">{pageCaption}</p>
       </div>
       <nav class="page-actions" aria-label="History pages">
         <button class="btn-ghost" type="button" onclick={() => requestPage(pageIndex - 1)} disabled={!canGoNewer || loading}>
@@ -578,9 +576,4 @@
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .day-row {
-      scroll-behavior: auto;
-    }
-  }
 </style>

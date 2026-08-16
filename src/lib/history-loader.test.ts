@@ -141,4 +141,27 @@ describe("history page loading", () => {
     expect(applied).toEqual([0]);
     expect(failures).toEqual([]);
   });
+
+  test("reports a failure from the current request", async () => {
+    const request = buildHistoryPageRequest(0, Date.parse("2026-08-15T10:30:00Z"), 0);
+    const failure = new Error("current request failed");
+    const failures: string[] = [];
+    const loadPage = createHistoryPageLoader(
+      {
+        getActivityRange: async () => {
+          throw failure;
+        },
+        getBreakRange: async () => []
+      },
+      () => {
+        throw new Error("a failed load must not apply");
+      },
+      (error) => {
+        failures.push(error instanceof Error ? error.message : String(error));
+      }
+    );
+
+    await expect(loadPage(request)).resolves.toBe("failed");
+    expect(failures).toEqual([failure.message]);
+  });
 });

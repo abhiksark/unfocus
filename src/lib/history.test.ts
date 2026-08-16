@@ -8,7 +8,9 @@ function runInTimezone<Result>(timezone: string, script: string): Result {
       `const mod = await import(${JSON.stringify(new URL("./history.ts", import.meta.url).href)});\n${script}`
     ],
     cwd: import.meta.dir,
-    env: { ...process.env, TZ: timezone }
+    env: { ...process.env, TZ: timezone },
+    stdout: "pipe",
+    stderr: "pipe"
   });
   if (result.exitCode !== 0) {
     throw new Error(new TextDecoder().decode(result.stderr));
