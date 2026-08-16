@@ -2,9 +2,13 @@
   import {
     buildHistoryCalendarRequest,
     buildHistoryDayDetailRequest,
+    historyActivationUsesKeyboard,
+    historyEscapeAction,
+    historyHourDetailLabel,
     historyMonthMarkers,
     initialHistoryDateKey,
     moveHistoryGridFocus,
+    moveHistoryHourFocus,
     type ActivityRangeBucket,
     type BreakHistoryEvent,
     type HistoryCalendar,
@@ -16,15 +20,17 @@
     createHistoryCalendarLoader,
     createHistoryDayLoader
   } from "$lib/history-loader";
+  import { breakOutcomeStats } from "$lib/break-summary";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, tick, untrack } from "svelte";
 
   type Props = {
     dayStartHour: number;
-    onBack: () => void;
+    active: boolean;
+    onBack: (restoreFocus: boolean) => void;
   };
 
-  let { dayStartHour, onBack }: Props = $props();
+  let { dayStartHour, active, onBack }: Props = $props();
 
   let calendar = $state<HistoryCalendar | null>(null);
   let calendarLoading = $state(true);
@@ -35,7 +41,9 @@
   let detail = $state<HistoryDay | null>(null);
   let detailLoading = $state(false);
   let detailError = $state<string | null>(null);
-  let backButton: HTMLButtonElement;
+  let focusedHourIndex = $state(0);
+  let previewHourIndex = $state<number | null>(null);
+  let openBreakSlotIndex = $state<number | null>(null);
 
   const calendarRequest = buildHistoryCalendarRequest(
     Date.now(),
@@ -56,6 +64,29 @@
       selectedCalendarDay
   );
   const monthMarkers = $derived(calendar ? historyMonthMarkers(calendar) : []);
+  const previewHour = $derived(
+    detail?.hourSlots.find((slot) => slot.slotIndex === previewHourIndex) ?? null
+  );
+  const selectedBreakStats = $derived(
+    detail
+      ? breakOutcomeStats({
+          windowLabel: detail.label,
+          windowSeconds: Math.max(0, (detail.endMs - detail.startMs) / 1_000),
+          scheduledShown:
+            detail.breakCounts.find((count) => count.kind === "scheduledShown")?.count ?? 0,
+          naturalIdle:
+            detail.breakCounts.find((count) => count.kind === "naturalIdle")?.count ?? 0,
+          manualTakeBreak:
+            detail.breakCounts.find((count) => count.kind === "manualTakeBreak")?.count ?? 0,
+          fullscreenSuppress:
+            detail.breakCounts.find((count) => count.kind === "fullscreenSuppress")?.count ?? 0,
+          weekScheduledShown: 0,
+          weekNaturalIdle: 0,
+          weekManualTakeBreak: 0,
+          weekFullscreenSuppress: 0
+        })
+      : []
+  );
   const rangeLabel = $derived(
     calendar
       ? `${formatShortDate(calendar.days[0].startMs)} to ${formatShortDate(
@@ -110,6 +141,9 @@
     previewDateKey = null;
     detail = null;
     detailError = null;
+    focusedHourIndex = 0;
+    previewHourIndex = null;
+    openBreakSlotIndex = null;
     void loadCalendar(calendarRequest);
   }
 
@@ -122,6 +156,9 @@
     detail = null;
     detailLoading = true;
     detailError = null;
+    focusedHourIndex = 0;
+    previewHourIndex = null;
+    openBreakSlotIndex = null;
     void loadDay(buildHistoryDayDetailRequest(calendarRequest, dateKey), {
       activeMs: day.totals.activeMs,
       afkMs: day.totals.afkMs,
@@ -154,6 +191,52 @@
 
   function clearPreview(dateKey: string): void {
     if (previewDateKey === dateKey) previewDateKey = null;
+  }
+
+  async function moveHourFocus(event: KeyboardEvent, slotIndex: number): Promise<void> {
+    if (
+      event.key !== "ArrowLeft" &&
+      event.key !== "ArrowRight" &&
+      event.key !== "Home" &&
+      event.key !== "End"
+    ) {
+      return;
+    }
+    event.preventDefault();
+    const nextIndex = moveHistoryHourFocus(
+      slotIndex,
+      event.key,
+      detail?.hourSlots.length ?? 0
+    );
+    focusedHourIndex = nextIndex;
+    previewHourIndex = nextIndex;
+    await tick();
+    document.getElementById(`history-hour-${nextIndex}`)?.focus();
+  }
+
+  function clearHourPreview(slotIndex: number): void {
+    if (previewHourIndex === slotIndex) previewHourIndex = null;
+  }
+
+  function returnToDashboard(restoreFocus: boolean): void {
+    openBreakSlotIndex = null;
+    onBack(restoreFocus);
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent): void {
+    if (!active || event.key !== "Escape") return;
+    event.preventDefault();
+    if (historyEscapeAction(openBreakSlotIndex) === "close-break-popover") {
+      openBreakSlotIndex = null;
+      return;
+    }
+    returnToDashboard(true);
+  }
+
+  function handleWindowPointerDown(event: PointerEvent): void {
+    if (!active || openBreakSlotIndex === null || !(event.target instanceof Element)) return;
+    if (event.target.closest("[data-history-break-popover]")) return;
+    openBreakSlotIndex = null;
   }
 
   function formatShortDate(timestampMs: number): string {
@@ -231,14 +314,22 @@
   }
 
   onMount(() => {
-    backButton.focus();
     requestCalendar();
   });
 </script>
 
+<svelte:window onkeydown={handleWindowKeydown} onpointerdown={handleWindowPointerDown} />
+
 <main class="history-wrap">
   <header class="history-top">
-    <button bind:this={backButton} class="btn-text" type="button" onclick={onBack}>Back</button>
+    <button
+      id="history-back-button"
+      class="btn-text history-back"
+      type="button"
+      onclick={(event) => returnToDashboard(historyActivationUsesKeyboard(event.detail))}
+    >
+      <span aria-hidden="true">←</span> Dashboard
+    </button>
     <div>
       <p class="t-label">History</p>
       <h1 class="t-title">The last 90 days</h1>
@@ -331,7 +422,12 @@
         <li><span class="legend-swatch is-level-4" aria-hidden="true"></span>5h+</li>
       </ul>
 
-      <section class="day-panel" aria-busy={detailLoading} aria-labelledby="selected-day-title">
+      <section
+        class="day-panel"
+        class:is-loading={detailLoading}
+        aria-busy={detailLoading}
+        aria-labelledby="selected-day-title"
+      >
         <div class="section-head">
           <div>
             <p class="t-label">Selected day</p>
@@ -350,25 +446,37 @@
             <button class="btn-ghost" type="button" onclick={retryDay}>Retry</button>
           </div>
         {:else if detail}
-          <div class="stats" role="group" aria-label={`Activity and breaks for ${detail.label}`}>
-            <div class="stat" class:is-zero={detail.totals.activeMs <= 0}>
-              <span class="num">{detail.totals.activeLabel}</span>
-              <span class="t-micro">Active</span>
-            </div>
-            <div class="stat" class:is-zero={detail.totals.afkMs <= 0}>
-              <span class="num">{detail.totals.afkLabel}</span>
-              <span class="t-micro">Away</span>
-            </div>
-            <div class="stat" class:is-zero={detail.totals.longestActiveMs <= 0}>
-              <span class="num">{detail.totals.longestLabel}</span>
-              <span class="t-micro">Longest stretch</span>
-            </div>
-            {#each detail.breakCounts as count (count.kind)}
-              <div class="stat" class:is-zero={count.count <= 0}>
-                <span class="num">{count.count}</span>
-                <span class="t-micro">{count.label}</span>
+          <div class="summary-groups">
+            <section class="summary-group" aria-labelledby="history-activity-summary-title">
+              <h3 id="history-activity-summary-title" class="summary-title">Activity</h3>
+              <div class="stats">
+                <div class="stat" class:is-zero={detail.totals.activeMs <= 0}>
+                  <span class="num">{detail.totals.activeLabel}</span>
+                  <span class="t-micro">Active</span>
+                </div>
+                <div class="stat" class:is-zero={detail.totals.afkMs <= 0}>
+                  <span class="num">{detail.totals.afkLabel}</span>
+                  <span class="t-micro">Away</span>
+                </div>
+                <div class="stat" class:is-zero={detail.totals.longestActiveMs <= 0}>
+                  <span class="num">{detail.totals.longestLabel}</span>
+                  <span class="t-micro">Longest stretch</span>
+                </div>
               </div>
-            {/each}
+            </section>
+
+            <section class="summary-group" aria-labelledby="history-break-summary-title">
+              <h3 id="history-break-summary-title" class="summary-title">Break outcomes</h3>
+              <div class="break-stats">
+                {#each selectedBreakStats as stat (stat.kind)}
+                  <div class="stat" class:is-zero={stat.count <= 0}>
+                    <span class="num">{stat.count}</span>
+                    <span class="t-micro">{stat.label}</span>
+                    <span class="stat-hint">{stat.hint}</span>
+                  </div>
+                {/each}
+              </div>
+            </section>
           </div>
 
           <ul class="timeline-legend" aria-label="Hourly activity legend">
@@ -379,23 +487,80 @@
             <li><span class="break-symbol" aria-hidden="true">◆</span>Break outcome</li>
           </ul>
 
+          <p id="history-hour-instructions" class="sr-only">
+            Use Left and Right arrow keys to move between hours. Press Home or End to jump to the first or last hour.
+          </p>
+          <p class="hour-readout">
+            {#if previewHour}
+              {historyHourDetailLabel(previewHour)}
+            {:else}
+              Hover or focus an hour for exact activity.
+            {/if}
+          </p>
           <p class="sr-only">{daySlotSummary(detail)}</p>
-          <div class="timeline" aria-label={`Hourly activity for ${detail.label}`}>
-            {#each detail.hourSlots as slot (slot.slotIndex)}
-              <span class={slotClass(slot)} title={`${slot.label}: ${slotKindLabel(slot)}`}>
-                {#if slot.breakMarkers.length > 0}
-                  <button
-                    class="slot-marker"
-                    type="button"
-                    aria-label={breakMarkerLabel(slot, detail)}
-                    data-tooltip={breakMarkerLabel(slot, detail)}
-                    title={breakMarkerLabel(slot, detail)}
-                  >
-                    <span>{slot.breakMarkers.length > 1 ? slot.breakMarkers.length : ""}</span>
-                  </button>
-                {/if}
-              </span>
-            {/each}
+          <div
+            class="timeline"
+            role="grid"
+            aria-label={`Hourly activity for ${detail.label}`}
+            aria-describedby="history-hour-instructions"
+          >
+            <div class="timeline-row" role="row">
+              {#each detail.hourSlots as slot (slot.slotIndex)}
+                <span
+                  id={`history-hour-${slot.slotIndex}`}
+                  class={slotClass(slot)}
+                  role="gridcell"
+                  tabindex={focusedHourIndex === slot.slotIndex ? 0 : -1}
+                  aria-label={historyHourDetailLabel(slot)}
+                  title={historyHourDetailLabel(slot)}
+                  onkeydown={(event) => void moveHourFocus(event, slot.slotIndex)}
+                  onfocus={() => {
+                    focusedHourIndex = slot.slotIndex;
+                    previewHourIndex = slot.slotIndex;
+                  }}
+                  onblur={() => clearHourPreview(slot.slotIndex)}
+                  onmouseenter={() => (previewHourIndex = slot.slotIndex)}
+                  onmouseleave={() => clearHourPreview(slot.slotIndex)}
+                >
+                  {#if slot.breakMarkers.length > 0}
+                    <button
+                      class="slot-marker"
+                      type="button"
+                      aria-label={breakMarkerLabel(slot, detail)}
+                      aria-expanded={openBreakSlotIndex === slot.slotIndex}
+                      aria-controls={`history-break-popover-${slot.slotIndex}`}
+                      data-history-break-popover
+                      onclick={() =>
+                        (openBreakSlotIndex =
+                          openBreakSlotIndex === slot.slotIndex ? null : slot.slotIndex)}
+                    >
+                      <span>{slot.breakMarkers.length > 1 ? slot.breakMarkers.length : ""}</span>
+                    </button>
+                    {#if openBreakSlotIndex === slot.slotIndex}
+                      <div
+                        id={`history-break-popover-${slot.slotIndex}`}
+                        class="break-popover"
+                        class:align-left={slot.slotIndex < 4}
+                        class:align-right={slot.slotIndex > 19}
+                        role="region"
+                        aria-label={`Break outcomes at ${slot.label}`}
+                        data-history-break-popover
+                      >
+                        <p class="break-popover-title">{slot.label}</p>
+                        <ul>
+                          {#each slot.breakMarkers as event, index (`${event.atMs}-${event.kind}-${index}`)}
+                            <li>
+                              <time datetime={new Date(event.atMs).toISOString()}>{formatTime(event.atMs)}</time>
+                              <span>{breakKindLabel(event, detail)}</span>
+                            </li>
+                          {/each}
+                        </ul>
+                      </div>
+                    {/if}
+                  {/if}
+                </span>
+              {/each}
+            </div>
           </div>
           <div class="timeline-axis" aria-hidden="true">
             <span>{detail.hourSlots[0]?.label}</span>
@@ -432,6 +597,15 @@
 
   .section-head {
     justify-content: space-between;
+  }
+
+  .history-top {
+    position: sticky;
+    z-index: 10;
+    top: 0;
+    align-items: center;
+    padding: var(--s2) 0;
+    background: var(--bg);
   }
 
   .history-panel,
@@ -488,6 +662,11 @@
 
   .btn-text:hover {
     color: var(--ink);
+  }
+
+  .history-back {
+    min-height: 44px;
+    padding: 10px var(--s2);
   }
 
   .btn-ghost {
@@ -674,10 +853,40 @@
     padding-top: var(--s4);
   }
 
-  .stats {
+  .day-panel.is-loading {
+    min-height: 240px;
+  }
+
+  .summary-groups {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: var(--s5);
+  }
+
+  .summary-group {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--s3) var(--s5);
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--s3);
+  }
+
+  .summary-title {
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 0.76rem;
+    font-weight: 600;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s3);
+  }
+
+  .break-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s3) var(--s4);
   }
 
   .stat {
@@ -700,7 +909,25 @@
     letter-spacing: -0.02em;
   }
 
+  .stat-hint {
+    color: var(--ink-3);
+    font-size: 0.68rem;
+    line-height: 1.35;
+  }
+
+  .hour-readout {
+    min-height: 20px;
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 0.74rem;
+    line-height: 1.4;
+  }
+
   .timeline {
+    min-width: 0;
+  }
+
+  .timeline-row {
     display: grid;
     height: 44px;
     gap: 2px;
@@ -711,6 +938,12 @@
     position: relative;
     border-radius: 2px;
     background: var(--line);
+  }
+
+  .slot:focus-visible {
+    z-index: 2;
+    outline: 3px solid #d9efdf;
+    outline-offset: 3px;
   }
 
   .slot.is-active {
@@ -752,30 +985,60 @@
     transform: rotate(-45deg);
   }
 
-  .slot-marker::after {
+  .break-popover {
     position: absolute;
-    z-index: 2;
-    bottom: 18px;
+    z-index: 5;
+    bottom: calc(100% + var(--s2));
     left: 50%;
-    display: none;
     width: max-content;
-    max-width: 220px;
-    transform: translateX(-50%) rotate(-45deg);
+    min-width: 170px;
+    max-width: min(220px, calc(100vw - var(--s6)));
+    transform: translateX(-50%);
+    border: 1px solid var(--line-2);
     border-radius: var(--r-control);
-    padding: var(--s2);
-    color: var(--bg);
-    background: var(--ink);
-    content: attr(data-tooltip);
+    padding: var(--s3);
+    color: var(--ink);
+    background: #121a15;
     font-size: 0.72rem;
-    font-weight: 500;
     line-height: 1.35;
     text-align: left;
-    white-space: normal;
   }
 
-  .slot-marker:hover::after,
-  .slot-marker:focus-visible::after {
-    display: block;
+  .break-popover.align-left {
+    left: 0;
+    transform: none;
+  }
+
+  .break-popover.align-right {
+    right: 0;
+    left: auto;
+    transform: none;
+  }
+
+  .break-popover-title {
+    margin: 0 0 var(--s2);
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+
+  .break-popover ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .break-popover li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s4);
+  }
+
+  .break-popover time {
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
   }
 
   .timeline-axis {
@@ -801,11 +1064,6 @@
       padding: var(--s4) var(--s4) var(--s6);
     }
 
-    .calendar-preview {
-      width: 100%;
-      text-align: left;
-    }
-
     .calendar-plot {
       padding: var(--s2);
     }
@@ -814,8 +1072,8 @@
       margin-left: 32px;
     }
 
-    .stats {
-      gap: var(--s3) var(--s4);
+    .summary-groups {
+      gap: var(--s4);
     }
   }
 

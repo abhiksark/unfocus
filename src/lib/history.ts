@@ -147,10 +147,43 @@ export function historyMonthMarkers(calendar: HistoryCalendar): HistoryMonthMark
 }
 
 export function initialHistoryDateKey(days: HistoryCalendarDay[]): string | null {
-  const latest = days.at(-1);
-  if (!latest) return null;
-  if (!latest.totals.isBlank) return latest.dateKey;
-  return days.findLast((day) => !day.totals.isBlank)?.dateKey ?? latest.dateKey;
+  return days.at(-1)?.dateKey ?? null;
+}
+
+export function historyActivationUsesKeyboard(detail: number): boolean {
+  return detail === 0;
+}
+
+export function historyEscapeAction(
+  openBreakSlotIndex: number | null
+): "close-break-popover" | "return-dashboard" {
+  return openBreakSlotIndex === null ? "return-dashboard" : "close-break-popover";
+}
+
+export function moveHistoryHourFocus(
+  currentIndex: number,
+  key: "ArrowLeft" | "ArrowRight" | "Home" | "End",
+  slotCount: number
+): number {
+  const lastIndex = Math.max(0, slotCount - 1);
+  const clampedIndex = Math.max(0, Math.min(lastIndex, currentIndex));
+  if (key === "Home") return 0;
+  if (key === "End") return lastIndex;
+  if (key === "ArrowLeft") return Math.max(0, clampedIndex - 1);
+  return Math.min(lastIndex, clampedIndex + 1);
+}
+
+export function historyHourDetailLabel(
+  slot: Pick<HistoryHourSlot, "label" | "activeMs" | "afkMs" | "longestActiveMs">
+): string {
+  const activeLabel =
+    slot.activeMs === 0 ? "0m" : formatActivityDuration(slot.activeMs / 1_000);
+  const afkLabel = slot.afkMs === 0 ? "0m" : formatActivityDuration(slot.afkMs / 1_000);
+  const longestLabel =
+    slot.longestActiveMs === 0
+      ? "0m"
+      : formatActivityDuration(slot.longestActiveMs / 1_000);
+  return `${slot.label}: ${activeLabel} active, ${afkLabel} away, ${longestLabel} longest stretch`;
 }
 
 export function moveHistoryGridFocus(

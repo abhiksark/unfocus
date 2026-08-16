@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  historyActivationUsesKeyboard,
   historyActivityLevel,
+  historyEscapeAction,
+  historyHourDetailLabel,
   initialHistoryDateKey,
   moveHistoryGridFocus,
+  moveHistoryHourFocus,
   type HistoryCalendarDay
 } from "./history";
 
@@ -713,23 +717,49 @@ console.log(JSON.stringify(mod.historyMonthMarkers(calendar).map((marker) => ({
     ]);
   });
 
-  test("selects today when recorded and otherwise falls back to the latest recorded day", () => {
+  test("selects today even when it has no recorded activity", () => {
     const days = [
       calendarDay("2026-08-14", 60_000, 0),
       calendarDay("2026-08-15", 0, 120_000),
       calendarDay("2026-08-16", 0, 0)
     ];
 
-    expect(initialHistoryDateKey(days)).toBe("2026-08-15");
-    expect(
-      initialHistoryDateKey([
-        ...days.slice(0, 2),
-        calendarDay("2026-08-16", 1_000, 0)
-      ])
-    ).toBe("2026-08-16");
+    expect(initialHistoryDateKey(days)).toBe("2026-08-16");
     expect(initialHistoryDateKey(days.map((day) => calendarDay(day.dateKey, 0, 0)))).toBe(
       "2026-08-16"
     );
+  });
+
+  test("maps pointer, keyboard, Escape, and hourly focus interactions", () => {
+    expect(historyActivationUsesKeyboard(0)).toBe(true);
+    expect(historyActivationUsesKeyboard(1)).toBe(false);
+    expect(historyEscapeAction(9)).toBe("close-break-popover");
+    expect(historyEscapeAction(null)).toBe("return-dashboard");
+    expect(moveHistoryHourFocus(8, "ArrowLeft", 24)).toBe(7);
+    expect(moveHistoryHourFocus(8, "ArrowRight", 24)).toBe(9);
+    expect(moveHistoryHourFocus(8, "Home", 24)).toBe(0);
+    expect(moveHistoryHourFocus(8, "End", 24)).toBe(23);
+    expect(moveHistoryHourFocus(0, "ArrowLeft", 24)).toBe(0);
+    expect(moveHistoryHourFocus(23, "ArrowRight", 24)).toBe(23);
+  });
+
+  test("describes exact hourly activity durations", () => {
+    expect(
+      historyHourDetailLabel({
+        label: "9 AM",
+        activeMs: 25 * 60_000,
+        afkMs: 10 * 60_000,
+        longestActiveMs: 12 * 60_000
+      })
+    ).toBe("9 AM: 25m active, 10m away, 12m longest stretch");
+    expect(
+      historyHourDetailLabel({
+        label: "10 AM",
+        activeMs: 0,
+        afkMs: 0,
+        longestActiveMs: 0
+      })
+    ).toBe("10 AM: 0m active, 0m away, 0m longest stretch");
   });
 
   test("moves focus by day or week and clamps at the retained range", () => {
