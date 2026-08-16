@@ -1,11 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
-  HISTORY_PAGE_DAYS,
-  buildHistoryPageRequest,
+  buildHistoryCalendarRequest,
+  buildHistoryDayDetailRequest,
   type ActivityRangeBucket,
-  type BreakHistoryEvent
+  type BreakHistoryEvent,
+  type HistoryCalendar,
+  type HistoryDay
 } from "./history";
-import { createHistoryPageLoader } from "./history-loader";
+import {
+  createHistoryCalendarLoader,
+  createHistoryDayLoader
+} from "./history-loader";
 
 type Deferred<Value> = {
   promise: Promise<Value>;
@@ -23,85 +28,114 @@ function deferred<Value>(): Deferred<Value> {
   return { promise, resolve, reject };
 }
 
-function buckets(count: number): ActivityRangeBucket[] {
+function buckets(count: number, activeMs = 0): ActivityRangeBucket[] {
   return Array.from({ length: count }, () => ({
-    activeMs: 0,
+    activeMs,
     afkMs: 0,
-    longestActiveMs: 0
+    longestActiveMs: activeMs
   }));
 }
 
-describe("history page loading", () => {
-  test("ignores a slower older page after a newer page is requested", async () => {
-    const nowMs = Date.parse("2026-08-15T10:30:00Z");
-    const older = buildHistoryPageRequest(1, nowMs, 0);
-    const newer = buildHistoryPageRequest(0, nowMs, 0);
-    const daily = new Map<number, Deferred<ActivityRangeBucket[]>>();
-    const hourly = new Map<number, Deferred<ActivityRangeBucket[]>>();
-    const breaks = new Map<number, Deferred<BreakHistoryEvent[]>>();
-    const applied: number[] = [];
-    const loadPage = createHistoryPageLoader(
+describe("history calendar loading", () => {
+  test("loads the 90-day grid with three daily activity requests", async () => {
+    const request = buildHistoryCalendarRequest(Date.parse("2026-08-16T10:30:00Z"), 0);
+    const starts = request.pages.map((page) => page.startMs);
+    const calls: number[][] = [];
+    const applied: HistoryCalendar[] = [];
+    const load = createHistoryCalendarLoader(
       {
-        getActivityRange: ({ boundaries }) => {
-          const store = boundaries.length === HISTORY_PAGE_DAYS + 1 ? daily : hourly;
-          const pending = store.get(boundaries[0]);
-          if (!pending) throw new Error("unexpected activity request");
-          return pending.promise;
-        },
-        getBreakRange: ({ startMs }) => {
-          const pending = breaks.get(startMs);
-          if (!pending) throw new Error("unexpected break request");
-          return pending.promise;
+        getActivityRange: async ({ boundaries }) => {
+          calls.push(boundaries);
+          const pageIndex = starts.indexOf(boundaries[0]);
+          if (pageIndex < 0) throw new Error("unexpected page");
+          return buckets(boundaries.length - 1, (pageIndex + 1) * 1_000);
         }
       },
-      (page) => {
-        applied.push(page.pageIndex);
+      (calendar) => {
+        applied.push(calendar);
       },
       () => {
-        throw new Error("no load should fail");
+        throw new Error("calendar load must not fail");
       }
     );
 
-    for (const request of [older, newer]) {
-      daily.set(request.startMs, deferred());
-      hourly.set(request.startMs, deferred());
-      breaks.set(request.startMs, deferred());
-    }
-
-    const olderLoad = loadPage(older);
-    const newerLoad = loadPage(newer);
-
-    daily.get(newer.startMs)?.resolve(buckets(newer.days.length));
-    hourly
-      .get(newer.startMs)
-      ?.resolve(buckets(newer.hourBoundariesMs.length - 1));
-    breaks.get(newer.startMs)?.resolve([]);
-    await expect(newerLoad).resolves.toBe("applied");
-
-    daily.get(older.startMs)?.resolve(buckets(older.days.length));
-    hourly
-      .get(older.startMs)
-      ?.resolve(buckets(older.hourBoundariesMs.length - 1));
-    breaks.get(older.startMs)?.resolve([]);
-    await expect(olderLoad).resolves.toBe("stale");
-
-    expect(applied).toEqual([0]);
+    await expect(load(request)).resolves.toBe("applied");
+    expect(calls).toHaveLength(3);
+    expect(calls.every((boundaries) => boundaries.length === 31)).toBe(true);
+    expect(applied[0].days).toHaveLength(90);
+    expect(applied[0].days[0].totals.activeMs).toBe(3_000);
+    expect(applied[0].days[89].totals.activeMs).toBe(1_000);
   });
 
-  test("ignores a slower older failure after a newer page is applied", async () => {
-    const nowMs = Date.parse("2026-08-15T10:30:00Z");
-    const older = buildHistoryPageRequest(1, nowMs, 0);
-    const newer = buildHistoryPageRequest(0, nowMs, 0);
-    const daily = new Map<number, Deferred<ActivityRangeBucket[]>>();
-    const hourly = new Map<number, Deferred<ActivityRangeBucket[]>>();
+  test("reports a failure without applying a partial calendar", async () => {
+    const request = buildHistoryCalendarRequest(Date.parse("2026-08-16T10:30:00Z"), 0);
+    const failure = new Error("archive unavailable");
+    const failures: unknown[] = [];
+    const load = createHistoryCalendarLoader(
+      {
+        getActivityRange: async ({ boundaries }) => {
+          if (boundaries[0] === request.pages[1].startMs) throw failure;
+          return buckets(boundaries.length - 1);
+        }
+      },
+      () => {
+        throw new Error("a partial calendar must not apply");
+      },
+      (error) => failures.push(error)
+    );
+
+    await expect(load(request)).resolves.toBe("failed");
+    expect(failures).toEqual([failure]);
+  });
+});
+
+describe("selected history day loading", () => {
+  test("requests only the selected day's hours and break outcomes", async () => {
+    const calendar = buildHistoryCalendarRequest(Date.parse("2026-08-16T10:30:00Z"), 0);
+    const request = buildHistoryDayDetailRequest(calendar, "2026-08-15");
+    const daily = { activeMs: 3_600_000, afkMs: 600_000, longestActiveMs: 1_800_000 };
+    const activityCalls: number[][] = [];
+    const breakCalls: Array<{ startMs: number; endMs: number }> = [];
+    const applied: HistoryDay[] = [];
+    const load = createHistoryDayLoader(
+      {
+        getActivityRange: async ({ boundaries }) => {
+          activityCalls.push(boundaries);
+          return buckets(boundaries.length - 1, 60_000);
+        },
+        getBreakRange: async (range) => {
+          breakCalls.push(range);
+          return [{ atMs: range.startMs + 5 * 60_000, kind: "scheduledShown" }];
+        }
+      },
+      (day) => {
+        applied.push(day);
+      },
+      () => {
+        throw new Error("day load must not fail");
+      }
+    );
+
+    await expect(load(request, daily)).resolves.toBe("applied");
+    expect(activityCalls).toEqual([request.hourBoundariesMs]);
+    expect(breakCalls).toEqual([{ startMs: request.startMs, endMs: request.endMs }]);
+    expect(applied[0].dateKey).toBe("2026-08-15");
+    expect(applied[0].totals.activeMs).toBe(daily.activeMs);
+    expect(applied[0].breakCounts.find((count) => count.kind === "scheduledShown")?.count).toBe(1);
+  });
+
+  test("ignores a slower day after a newer selection is requested", async () => {
+    const calendar = buildHistoryCalendarRequest(Date.parse("2026-08-16T10:30:00Z"), 0);
+    const older = buildHistoryDayDetailRequest(calendar, "2026-08-14");
+    const newer = buildHistoryDayDetailRequest(calendar, "2026-08-15");
+    const activity = new Map<number, Deferred<ActivityRangeBucket[]>>();
     const breaks = new Map<number, Deferred<BreakHistoryEvent[]>>();
-    const applied: number[] = [];
+    const applied: string[] = [];
     const failures: string[] = [];
-    const loadPage = createHistoryPageLoader(
+    const load = createHistoryDayLoader(
       {
         getActivityRange: ({ boundaries }) => {
-          const store = boundaries.length === HISTORY_PAGE_DAYS + 1 ? daily : hourly;
-          const pending = store.get(boundaries[0]);
+          const pending = activity.get(boundaries[0]);
           if (!pending) throw new Error("unexpected activity request");
           return pending.promise;
         },
@@ -111,42 +145,33 @@ describe("history page loading", () => {
           return pending.promise;
         }
       },
-      (page) => {
-        applied.push(page.pageIndex);
-      },
-      (error) => {
-        failures.push(error instanceof Error ? error.message : String(error));
-      }
+      (day) => applied.push(day.dateKey),
+      (error) => failures.push(error instanceof Error ? error.message : String(error))
     );
 
     for (const request of [older, newer]) {
-      daily.set(request.startMs, deferred());
-      hourly.set(request.startMs, deferred());
+      activity.set(request.startMs, deferred());
       breaks.set(request.startMs, deferred());
     }
 
-    const olderLoad = loadPage(older);
-    const newerLoad = loadPage(newer);
-
-    daily.get(newer.startMs)?.resolve(buckets(newer.days.length));
-    hourly
-      .get(newer.startMs)
-      ?.resolve(buckets(newer.hourBoundariesMs.length - 1));
+    const olderLoad = load(older, buckets(1)[0]);
+    const newerLoad = load(newer, buckets(1)[0]);
+    activity.get(newer.startMs)?.resolve(buckets(newer.hourBoundariesMs.length - 1));
     breaks.get(newer.startMs)?.resolve([]);
     await expect(newerLoad).resolves.toBe("applied");
 
-    daily.get(older.startMs)?.reject(new Error("native path /too/long"));
+    activity.get(older.startMs)?.reject(new Error("stale native failure"));
     await expect(olderLoad).resolves.toBe("stale");
-
-    expect(applied).toEqual([0]);
+    expect(applied).toEqual(["2026-08-15"]);
     expect(failures).toEqual([]);
   });
 
-  test("reports a failure from the current request", async () => {
-    const request = buildHistoryPageRequest(0, Date.parse("2026-08-15T10:30:00Z"), 0);
-    const failure = new Error("current request failed");
-    const failures: string[] = [];
-    const loadPage = createHistoryPageLoader(
+  test("reports a failure from the currently selected day", async () => {
+    const calendar = buildHistoryCalendarRequest(Date.parse("2026-08-16T10:30:00Z"), 0);
+    const request = buildHistoryDayDetailRequest(calendar, "2026-08-15");
+    const failure = new Error("selected day unavailable");
+    const failures: unknown[] = [];
+    const load = createHistoryDayLoader(
       {
         getActivityRange: async () => {
           throw failure;
@@ -154,14 +179,12 @@ describe("history page loading", () => {
         getBreakRange: async () => []
       },
       () => {
-        throw new Error("a failed load must not apply");
+        throw new Error("a failed day must not apply");
       },
-      (error) => {
-        failures.push(error instanceof Error ? error.message : String(error));
-      }
+      (error) => failures.push(error)
     );
 
-    await expect(loadPage(request)).resolves.toBe("failed");
-    expect(failures).toEqual([failure.message]);
+    await expect(load(request, buckets(1)[0])).resolves.toBe("failed");
+    expect(failures).toEqual([failure]);
   });
 });

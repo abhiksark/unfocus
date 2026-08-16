@@ -25,6 +25,20 @@ export type BreakHistoryEvent = {
 };
 
 export type HistoryActivityKind = "blank" | "active" | "afk" | "mixed";
+export type HistoryActivityLevel = "no-data" | 0 | 1 | 2 | 3 | 4;
+
+export function historyActivityLevel(totals: {
+  activeMs: number;
+  afkMs: number;
+}): HistoryActivityLevel {
+  const activeMs = sanitizeMs(totals.activeMs);
+  if (activeMs === 0 && sanitizeMs(totals.afkMs) === 0) return "no-data";
+  if (activeMs === 0) return 0;
+  if (activeMs < MILLIS_PER_HOUR) return 1;
+  if (activeMs < 3 * MILLIS_PER_HOUR) return 2;
+  if (activeMs < 5 * MILLIS_PER_HOUR) return 3;
+  return 4;
+}
 
 export type HistoryBreakCount = {
   kind: BreakOutcomeKind;
@@ -88,6 +102,69 @@ export type HistoryPage = Omit<HistoryPageRequest, "days"> & {
   breakCounts: HistoryBreakCount[];
   days: HistoryDay[];
 };
+
+export type HistoryCalendarRequest = {
+  dayStartHour: number;
+  pages: HistoryPageRequest[];
+};
+
+export type HistoryCalendarDay = Omit<HistoryDayRequest, "hourSlots"> & {
+  pageIndex: number;
+  totals: HistoryTotals;
+  activityLevel: HistoryActivityLevel;
+};
+
+export type HistoryCalendar = {
+  days: HistoryCalendarDay[];
+  leadingEmptyCells: number;
+  trailingEmptyCells: number;
+  weekColumnCount: number;
+};
+
+export type HistoryMonthMarker = {
+  startMs: number;
+  column: number;
+};
+
+export function historyMonthMarkers(calendar: HistoryCalendar): HistoryMonthMarker[] {
+  return calendar.days.flatMap((day, index, days) => {
+    const at = new Date(day.startMs);
+    const previous = index > 0 ? new Date(days[index - 1].startMs) : null;
+    if (
+      previous &&
+      previous.getFullYear() === at.getFullYear() &&
+      previous.getMonth() === at.getMonth()
+    ) {
+      return [];
+    }
+    return [
+      {
+        startMs: day.startMs,
+        column: Math.floor((calendar.leadingEmptyCells + index) / 7) + 1
+      }
+    ];
+  });
+}
+
+export function initialHistoryDateKey(days: HistoryCalendarDay[]): string | null {
+  const latest = days.at(-1);
+  if (!latest) return null;
+  if (!latest.totals.isBlank) return latest.dateKey;
+  return days.findLast((day) => !day.totals.isBlank)?.dateKey ?? latest.dateKey;
+}
+
+export function moveHistoryGridFocus(
+  days: HistoryCalendarDay[],
+  currentDateKey: string,
+  key: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"
+): string | null {
+  if (days.length === 0) return null;
+  const currentIndex = Math.max(0, days.findIndex((day) => day.dateKey === currentDateKey));
+  const offset =
+    key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : key === "ArrowUp" ? -7 : 7;
+  const nextIndex = Math.max(0, Math.min(days.length - 1, currentIndex + offset));
+  return days[nextIndex].dateKey;
+}
 
 const EMPTY_BREAK_SUMMARY: BreakSummary = {
   windowLabel: "",
@@ -331,6 +408,103 @@ export function buildHistoryPages(
   return Array.from({ length: HISTORY_PAGE_COUNT }, (_, pageIndex) =>
     buildHistoryPageRequest(pageIndex, nowMs, dayStartHour)
   );
+}
+
+export function buildHistoryCalendarRequest(
+  nowMs: number,
+  dayStartHour: number = DEFAULT_DAY_START_HOUR
+): HistoryCalendarRequest {
+  const pages = buildHistoryPages(nowMs, dayStartHour);
+  return { dayStartHour: pages[0].dayStartHour, pages };
+}
+
+export function materializeHistoryCalendar(
+  request: HistoryCalendarRequest,
+  dailyBucketsByPage: ActivityRangeBucket[][]
+): HistoryCalendar {
+  if (dailyBucketsByPage.length !== request.pages.length) {
+    throw new RangeError(
+      `daily bucket page count ${dailyBucketsByPage.length} does not match requests ${request.pages.length}`
+    );
+  }
+
+  const days = request.pages
+    .map((page, pageIndex) => {
+      const dailyBuckets = dailyBucketsByPage[pageIndex];
+      if (dailyBuckets.length !== page.days.length) {
+        throw new RangeError(
+          `dailyBuckets length ${dailyBuckets.length} does not match page days ${page.days.length}`
+        );
+      }
+      return page.days.map((day, dayIndex) => {
+        const bucket = sanitizeBucket(dailyBuckets[dayIndex]);
+        return {
+          index: day.index,
+          dateKey: day.dateKey,
+          label: day.label,
+          startMs: day.startMs,
+          endMs: day.endMs,
+          pageIndex: page.pageIndex,
+          totals: totalsFromBuckets([bucket]),
+          activityLevel: historyActivityLevel(bucket)
+        } satisfies HistoryCalendarDay;
+      });
+    })
+    .reverse()
+    .flat();
+
+  if (days.length !== HISTORY_MAX_DAYS) {
+    throw new RangeError(`history calendar requires exactly ${HISTORY_MAX_DAYS} days`);
+  }
+  const mondayIndex = (timestampMs: number) => (new Date(timestampMs).getDay() + 6) % 7;
+  const leadingEmptyCells = mondayIndex(days[0].startMs);
+  const trailingEmptyCells = 6 - mondayIndex(days[days.length - 1].startMs);
+
+  return {
+    days,
+    leadingEmptyCells,
+    trailingEmptyCells,
+    weekColumnCount: (leadingEmptyCells + days.length + trailingEmptyCells) / 7
+  };
+}
+
+export function buildHistoryDayDetailRequest(
+  calendar: HistoryCalendarRequest,
+  dateKey: string
+): HistoryPageRequest {
+  for (const page of calendar.pages) {
+    const day = page.days.find((candidate) => candidate.dateKey === dateKey);
+    if (!day) continue;
+    const firstBucketIndex = page.hourBoundariesMs.indexOf(day.startMs);
+    const endBoundaryIndex = page.hourBoundariesMs.indexOf(day.endMs);
+    if (firstBucketIndex < 0 || endBoundaryIndex <= firstBucketIndex) {
+      throw new RangeError(`hour boundaries are unavailable for ${dateKey}`);
+    }
+    return {
+      pageIndex: page.pageIndex,
+      dayStartHour: page.dayStartHour,
+      isCurrentPage: page.isCurrentPage,
+      startMs: day.startMs,
+      endMs: day.endMs,
+      dayBoundariesMs: [day.startMs, day.endMs],
+      hourBoundariesMs: page.hourBoundariesMs.slice(
+        firstBucketIndex,
+        endBoundaryIndex + 1
+      ),
+      days: [
+        {
+          ...day,
+          hourSlots: day.hourSlots.map((slot) => ({
+            ...slot,
+            bucketIndexes: slot.bucketIndexes.map(
+              (bucketIndex) => bucketIndex - firstBucketIndex
+            )
+          }))
+        }
+      ]
+    };
+  }
+  throw new RangeError(`history day ${dateKey} is outside the retained calendar`);
 }
 
 export function materializeHistoryPage(

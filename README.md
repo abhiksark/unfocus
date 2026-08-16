@@ -127,8 +127,10 @@ time away from the keyboard:
   twenty-five minutes of continuous activity are counted as deep blocks
 - A half-hour strip sketches the day at a glance, with calm empty or
   probe-unavailable states when samples are missing
-- History exposes the newest 90 browser-local days as three newest-first
-  30-day pages aligned to the saved **Day starts** preference
+- History exposes the newest 90 browser-local days as a compact Monday-aligned
+  calendar whose fixed intensity levels represent confirmed active minutes.
+  Selecting a day reveals its hourly activity and break outcomes; boundaries
+  follow the saved **Day starts** preference
 - Local break-outcome counts (shown, natural rest, manual rest, held for
   fullscreen) for the last day, with a quieter seven-day total
 - Local archive chunks retain presence history for at least 90 days. Because

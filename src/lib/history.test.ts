@@ -1,4 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import {
+  historyActivityLevel,
+  initialHistoryDateKey,
+  moveHistoryGridFocus,
+  type HistoryCalendarDay
+} from "./history";
 
 function runInTimezone<Result>(timezone: string, script: string): Result {
   const result = Bun.spawnSync({
@@ -591,3 +597,225 @@ console.log(JSON.stringify({
     });
   });
 });
+
+describe("history activity calendar", () => {
+  test("uses fixed active-minute levels while keeping no data distinct from zero", () => {
+    expect(historyActivityLevel({ activeMs: 0, afkMs: 0 })).toBe("no-data");
+    expect(historyActivityLevel({ activeMs: 0, afkMs: 60_000 })).toBe(0);
+    expect(historyActivityLevel({ activeMs: 59 * 60_000, afkMs: 0 })).toBe(1);
+    expect(historyActivityLevel({ activeMs: 60 * 60_000, afkMs: 0 })).toBe(2);
+    expect(historyActivityLevel({ activeMs: 3 * 60 * 60_000, afkMs: 0 })).toBe(3);
+    expect(historyActivityLevel({ activeMs: 5 * 60 * 60_000, afkMs: 0 })).toBe(4);
+  });
+
+  test("materializes exactly 90 chronological days in Monday-aligned week columns", () => {
+    const result = runInTimezone<{
+      dayCount: number;
+      firstDateKey: string;
+      lastDateKey: string;
+      leadingEmptyCells: number;
+      trailingEmptyCells: number;
+      weekColumnCount: number;
+      firstActiveMs: number;
+      lastActiveMs: number;
+    }>(
+      "UTC",
+      `
+const request = mod.buildHistoryCalendarRequest(Date.parse("2026-08-13T10:30:00Z"), 4);
+const buckets = request.pages.map((page, pageIndex) =>
+  page.days.map((_, dayIndex) => ({
+    activeMs: pageIndex * 100000 + dayIndex * 1000,
+    afkMs: 0,
+    longestActiveMs: 0
+  }))
+);
+const calendar = mod.materializeHistoryCalendar(request, buckets);
+console.log(JSON.stringify({
+  dayCount: calendar.days.length,
+  firstDateKey: calendar.days[0].dateKey,
+  lastDateKey: calendar.days[calendar.days.length - 1].dateKey,
+  leadingEmptyCells: calendar.leadingEmptyCells,
+  trailingEmptyCells: calendar.trailingEmptyCells,
+  weekColumnCount: calendar.weekColumnCount,
+  firstActiveMs: calendar.days[0].totals.activeMs,
+  lastActiveMs: calendar.days[calendar.days.length - 1].totals.activeMs
+}));
+`
+    );
+
+    expect(result).toEqual({
+      dayCount: 90,
+      firstDateKey: "2026-05-16",
+      lastDateKey: "2026-08-13",
+      leadingEmptyCells: 5,
+      trailingEmptyCells: 3,
+      weekColumnCount: 14,
+      firstActiveMs: 200_000,
+      lastActiveMs: 29_000
+    });
+  });
+
+  test("uses thirteen columns when the exact range fits thirteen aligned weeks", () => {
+    const result = runInTimezone<{
+      firstDateKey: string;
+      lastDateKey: string;
+      leadingEmptyCells: number;
+      trailingEmptyCells: number;
+      weekColumnCount: number;
+    }>(
+      "UTC",
+      `
+const request = mod.buildHistoryCalendarRequest(Date.parse("2026-08-16T10:30:00Z"), 4);
+const buckets = request.pages.map((page) =>
+  page.days.map(() => ({ activeMs: 0, afkMs: 0, longestActiveMs: 0 }))
+);
+const calendar = mod.materializeHistoryCalendar(request, buckets);
+console.log(JSON.stringify({
+  firstDateKey: calendar.days[0].dateKey,
+  lastDateKey: calendar.days[calendar.days.length - 1].dateKey,
+  leadingEmptyCells: calendar.leadingEmptyCells,
+  trailingEmptyCells: calendar.trailingEmptyCells,
+  weekColumnCount: calendar.weekColumnCount
+}));
+`
+    );
+
+    expect(result).toEqual({
+      firstDateKey: "2026-05-19",
+      lastDateKey: "2026-08-16",
+      leadingEmptyCells: 1,
+      trailingEmptyCells: 0,
+      weekColumnCount: 13
+    });
+  });
+
+  test("places month labels over the week containing each month's first retained day", () => {
+    const result = runInTimezone<Array<{ month: number; column: number }>>(
+      "UTC",
+      `
+const request = mod.buildHistoryCalendarRequest(Date.parse("2026-08-13T10:30:00Z"), 4);
+const buckets = request.pages.map((page) =>
+  page.days.map(() => ({ activeMs: 0, afkMs: 0, longestActiveMs: 0 }))
+);
+const calendar = mod.materializeHistoryCalendar(request, buckets);
+console.log(JSON.stringify(mod.historyMonthMarkers(calendar).map((marker) => ({
+  month: new Date(marker.startMs).getMonth() + 1,
+  column: marker.column
+}))));
+`
+    );
+
+    expect(result).toEqual([
+      { month: 5, column: 1 },
+      { month: 6, column: 4 },
+      { month: 7, column: 8 },
+      { month: 8, column: 12 }
+    ]);
+  });
+
+  test("selects today when recorded and otherwise falls back to the latest recorded day", () => {
+    const days = [
+      calendarDay("2026-08-14", 60_000, 0),
+      calendarDay("2026-08-15", 0, 120_000),
+      calendarDay("2026-08-16", 0, 0)
+    ];
+
+    expect(initialHistoryDateKey(days)).toBe("2026-08-15");
+    expect(
+      initialHistoryDateKey([
+        ...days.slice(0, 2),
+        calendarDay("2026-08-16", 1_000, 0)
+      ])
+    ).toBe("2026-08-16");
+    expect(initialHistoryDateKey(days.map((day) => calendarDay(day.dateKey, 0, 0)))).toBe(
+      "2026-08-16"
+    );
+  });
+
+  test("moves focus by day or week and clamps at the retained range", () => {
+    const days = Array.from({ length: 10 }, (_, index) =>
+      calendarDay(`day-${index}`, 1_000, 0)
+    );
+
+    expect(moveHistoryGridFocus(days, "day-4", "ArrowLeft")).toBe("day-3");
+    expect(moveHistoryGridFocus(days, "day-4", "ArrowRight")).toBe("day-5");
+    expect(moveHistoryGridFocus(days, "day-4", "ArrowUp")).toBe("day-0");
+    expect(moveHistoryGridFocus(days, "day-4", "ArrowDown")).toBe("day-9");
+    expect(moveHistoryGridFocus(days, "day-0", "ArrowLeft")).toBe("day-0");
+    expect(moveHistoryGridFocus(days, "day-9", "ArrowDown")).toBe("day-9");
+  });
+
+  test("isolates one selected day for hourly and break requests", () => {
+    const result = runInTimezone<{
+      dayCount: number;
+      startIso: string;
+      endIso: string;
+      dayBoundaryCount: number;
+      hourBucketCount: number;
+      slotCount: number;
+      bucketIndexesAreLocal: boolean;
+    }>(
+      "America/New_York",
+      `
+const calendar = mod.buildHistoryCalendarRequest(
+  new Date(2026, 10, 2, 12, 0, 0, 0).getTime(),
+  0
+);
+const selected = mod.buildHistoryDayDetailRequest(calendar, "2026-11-01");
+console.log(JSON.stringify({
+  dayCount: selected.days.length,
+  startIso: new Date(selected.startMs).toISOString(),
+  endIso: new Date(selected.endMs).toISOString(),
+  dayBoundaryCount: selected.dayBoundariesMs.length,
+  hourBucketCount: selected.hourBoundariesMs.length - 1,
+  slotCount: selected.days[0].hourSlots.length,
+  bucketIndexesAreLocal: selected.days[0].hourSlots
+    .flatMap((slot) => slot.bucketIndexes)
+    .every((bucketIndex) => bucketIndex >= 0 && bucketIndex < selected.hourBoundariesMs.length - 1)
+}));
+`
+    );
+
+    expect(result).toEqual({
+      dayCount: 1,
+      startIso: "2026-11-01T04:00:00.000Z",
+      endIso: "2026-11-02T05:00:00.000Z",
+      dayBoundaryCount: 2,
+      hourBucketCount: 25,
+      slotCount: 24,
+      bucketIndexesAreLocal: true
+    });
+  });
+});
+
+function calendarDay(dateKey: string, activeMs: number, afkMs: number): HistoryCalendarDay {
+  return {
+    pageIndex: 0,
+    index: 0,
+    dateKey,
+    label: dateKey,
+    startMs: 0,
+    endMs: 1,
+    totals: {
+      activeMs,
+      afkMs,
+      longestActiveMs: activeMs,
+      activeLabel: "",
+      afkLabel: "",
+      longestLabel: "",
+      isBlank: activeMs === 0 && afkMs === 0
+    },
+    activityLevel:
+      activeMs === 0 && afkMs === 0
+        ? "no-data"
+        : activeMs === 0
+          ? 0
+          : activeMs < 60 * 60_000
+            ? 1
+            : activeMs < 3 * 60 * 60_000
+              ? 2
+              : activeMs < 5 * 60 * 60_000
+                ? 3
+                : 4
+  };
+}
