@@ -81,8 +81,13 @@ plans/            Local working notes only (gitignored; not tracked docs)
   `get_break_summary`,
   `get_reminder_settings`, `get_reminder_status`, `save_reminder_settings`,
   `reset_reminder_settings`, `pause_reminders`, `resume_reminders`,
-  `take_break_now`, `show_overlay_test`, `close_overlay_test`. Overlay windows
-  only get the minimal event/window permissions in `capabilities/overlay.json`.
+  `take_break_now`, `show_overlay_test`, `close_overlay_test`,
+  `open_author_website`. Overlay windows only get the minimal event/window
+  permissions in `capabilities/overlay.json`.
+- `open_author_website` hands a hard-coded address to the desktop's default
+  browser through `xdg-open` / `open` / `cmd /C start`. The address is a
+  constant, never a parameter, so the dashboard cannot ask the host to open
+  anything else. Unfocus still makes no network call of its own.
 
 ## Product invariants
 

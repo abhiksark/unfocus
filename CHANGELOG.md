@@ -7,6 +7,11 @@ released versions link to their GitHub release.
 
 ### Added
 
+- Added an attribution line to the foot of the consumer dashboard, crediting
+  **Abhik Sarkar** and linking the name to `abhik.ai`. The link hands a fixed address to the
+  desktop's default browser rather than navigating the dashboard away, and says
+  so plainly if no browser could be opened. Unfocus itself still makes no
+  network call.
 - Kept raw **Your day** presence history on this device for at least 90 days,
   beyond the 24-hour live window the strip already shows. The existing
   `activity-history.json` file stays hot for the latest day, and segments that

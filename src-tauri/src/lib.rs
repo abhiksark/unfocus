@@ -40,6 +40,59 @@ fn authorize_main_caller(label: &str) -> Result<(), String> {
     }
 }
 
+/// The author's site, shown as attribution on the dashboard.
+const AUTHOR_WEBSITE: &str = "https://abhik.ai";
+
+/// Hands the author's site to the desktop's default browser.
+///
+/// The address is a constant rather than a parameter, so the dashboard cannot
+/// ask the host to open anything else. Unfocus itself still makes no network
+/// call; the browser does, and only when the reader asks for it. A failure is
+/// reported to the caller, never panics, and never touches the reminder timer.
+///
+/// The launcher runs off the async runtime so a cold browser start cannot
+/// block the command handler.
+#[tauri::command]
+async fn open_author_website(window: tauri::WebviewWindow) -> Result<(), String> {
+    authorize_main_caller(window.label())?;
+
+    #[cfg(target_os = "linux")]
+    let mut launcher = {
+        let mut launcher = std::process::Command::new("xdg-open");
+        launcher.arg(AUTHOR_WEBSITE);
+        launcher
+    };
+    #[cfg(target_os = "macos")]
+    let mut launcher = {
+        let mut launcher = std::process::Command::new("open");
+        launcher.arg(AUTHOR_WEBSITE);
+        launcher
+    };
+    // `start` reads its first quoted argument as the window title, so the empty
+    // string is required before the address.
+    #[cfg(target_os = "windows")]
+    let mut launcher = {
+        let mut launcher = std::process::Command::new("cmd");
+        launcher.args(["/C", "start", "", AUTHOR_WEBSITE]);
+        launcher
+    };
+
+    let status = tauri::async_runtime::spawn_blocking(move || launcher.status())
+        .await
+        .map_err(|error| format!("could not open {AUTHOR_WEBSITE}: {error}"))?;
+    browser_launch_result(status)
+}
+
+fn browser_launch_result(status: io::Result<std::process::ExitStatus>) -> Result<(), String> {
+    match status {
+        Ok(status) if status.success() => Ok(()),
+        Ok(status) => Err(format!(
+            "could not open {AUTHOR_WEBSITE}: launcher returned {status}"
+        )),
+        Err(error) => Err(format!("could not open {AUTHOR_WEBSITE}: {error}")),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -147,8 +200,25 @@ pub fn run() {
             resume_reminders,
             take_break_now,
             show_overlay_test,
-            close_overlay_test
+            close_overlay_test,
+            open_author_website
         ])
         .run(tauri::generate_context!())
         .expect("error while running Unfocus");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::browser_launch_result;
+    use std::process::Command;
+
+    #[test]
+    fn browser_launcher_nonzero_exit_is_an_error() {
+        #[cfg(unix)]
+        let status = Command::new("sh").args(["-c", "exit 1"]).status().unwrap();
+        #[cfg(windows)]
+        let status = Command::new("cmd").args(["/C", "exit 1"]).status().unwrap();
+
+        assert!(browser_launch_result(Ok(status)).is_err());
+    }
 }

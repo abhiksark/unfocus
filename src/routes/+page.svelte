@@ -46,6 +46,7 @@
   let diagnosticsError = $state<string | null>(null);
   let overlayError = $state<string | null>(null);
   let invalidOverlayCloseError = $state<string | null>(null);
+  let authorWebsiteError = $state(false);
   let refreshing = $state(false);
   let overlayRunning = $state(false);
   let timingEditorExpanded = $state(false);
@@ -299,6 +300,15 @@
     settingsResult = null;
   }
 
+  async function openAuthorWebsite() {
+    authorWebsiteError = false;
+    try {
+      await invoke("open_author_website");
+    } catch {
+      authorWebsiteError = true;
+    }
+  }
+
   async function closeOverlays() {
     if (!overlayParameters) throw new Error("Overlay parameters are unavailable");
     await invoke("close_overlay_test", { runId: overlayParameters.runId });
@@ -445,6 +455,8 @@
     onSaveSettings={() => void saveReminderSettings()}
     onResetSettings={() => void resetReminderSettings()}
     onOpenDeveloperMode={() => setDashboardMode("developer")}
+    {authorWebsiteError}
+    onOpenAuthorWebsite={() => void openAuthorWebsite()}
     onViewHistory={openHistory}
   />
 {/if}
