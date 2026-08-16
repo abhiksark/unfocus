@@ -2,7 +2,9 @@ blank_issues_enabled: true
 contact_links:
   - name: Platform support matrix
     url: https://github.com/abhiksark/unfocus#platform-status
-    about: Check what is qualified before filing. Windows has no OS probes and Wayland is unsupported, both by design.
+    about: >-
+      Check what is qualified before filing. Windows: probes implemented,
+      interactive qualification pending. Wayland is unsupported.
   - name: Build prerequisites
     url: https://github.com/abhiksark/unfocus#build-from-source
     about: Native prerequisites and the container runner for machines without X11 headers.

@@ -4027,7 +4027,7 @@ dependencies = [
 
 [[package]]
 name = "unfocus"
-version = "0.4.0-alpha.1"
+version = "0.5.0-alpha.1"
 dependencies = [
  "objc2-core-foundation",
  "objc2-core-graphics",

@@ -13,12 +13,11 @@ body:
         | --- | --- | --- |
         | Linux X11 | Qualified | Working — XScreenSaver and EWMH |
         | macOS | Preview — no multi-monitor acceptance run yet | Working — Quartz |
-        | Windows | Packaged, not qualified | **None, by design** — reported as unavailable |
+        | Windows | Packaged, not qualified | Probes implemented, interactive qualification pending |
         | Linux Wayland | **Unsupported** | Reports an error, by design |
 
-        A dash under **Idle time** or **Active fullscreen** on Windows is
-        correct behaviour, not a bug. So is a probe error string on Wayland.
-        Issues about either get closed as `by-design`.
+        A probe error string on Wayland is correct behaviour, not a bug. Windows
+        probe failures may be reported, but the platform remains unqualified.
 
         Unfocus has no telemetry, no account and makes no network calls, so
         nothing reaches a maintainer automatically. What you paste below is the
