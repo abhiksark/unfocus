@@ -8,7 +8,7 @@ use std::{
 use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_nspanel::{
     objc2_app_kit::{NSWindowCollectionBehavior, NSWindowStyleMask},
-    ManagerExt, PanelLevel, WebviewWindowExt,
+    ManagerExt, Panel, PanelLevel, WebviewWindowExt,
 };
 
 const APPKIT_OPERATION_TIMEOUT: Duration = Duration::from_secs(5);
@@ -16,7 +16,6 @@ const APPKIT_OPERATION_TIMEOUT: Duration = Duration::from_secs(5);
 #[derive(Debug, Clone, Copy)]
 struct OverlayPanelPolicy {
     collection_behavior: NSWindowCollectionBehavior,
-    style_mask: NSWindowStyleMask,
     level: i64,
     hides_on_deactivate: bool,
     can_become_key_window: bool,
@@ -29,12 +28,15 @@ fn overlay_panel_policy() -> OverlayPanelPolicy {
             | NSWindowCollectionBehavior::CanJoinAllApplications
             | NSWindowCollectionBehavior::FullScreenAuxiliary
             | NSWindowCollectionBehavior::Stationary,
-        style_mask: NSWindowStyleMask::Borderless | NSWindowStyleMask::NonactivatingPanel,
         level: PanelLevel::ScreenSaver.value(),
         hides_on_deactivate: false,
         can_become_key_window: true,
         can_become_main_window: false,
     }
+}
+
+fn overlay_style_mask(existing: NSWindowStyleMask) -> NSWindowStyleMask {
+    existing | NSWindowStyleMask::NonactivatingPanel
 }
 
 tauri_nspanel::tauri_panel! {
@@ -110,7 +112,7 @@ pub(super) fn configure_overlay_panel(window: &WebviewWindow) -> Result<(), Stri
             .to_panel::<UnfocusOverlayPanel>()
             .map_err(|error| format!("could not convert overlay {label} to an NSPanel: {error}"))?;
         panel.set_released_when_closed(false);
-        panel.set_style_mask(policy.style_mask);
+        panel.set_style_mask(overlay_style_mask(panel.as_panel().styleMask()));
         panel.set_level(policy.level);
         panel.set_hides_on_deactivate(policy.hides_on_deactivate);
         panel.set_collection_behavior(policy.collection_behavior);
@@ -201,10 +203,12 @@ mod tests {
     }
 
     #[test]
-    fn overlay_style_is_borderless_and_nonactivating() {
-        let expected = NSWindowStyleMask::Borderless | NSWindowStyleMask::NonactivatingPanel;
+    fn overlay_style_preserves_builder_bits_and_adds_nonactivating_panel() {
+        let existing =
+            NSWindowStyleMask::Titled | NSWindowStyleMask::Closable | NSWindowStyleMask::Resizable;
+        let expected = existing | NSWindowStyleMask::NonactivatingPanel;
 
-        assert_eq!(overlay_panel_policy().style_mask, expected);
+        assert_eq!(overlay_style_mask(existing), expected);
     }
 
     #[test]
