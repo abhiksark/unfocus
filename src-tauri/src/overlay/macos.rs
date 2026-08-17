@@ -185,7 +185,7 @@ pub(super) fn prepare_unexpected_overlay_teardown(
 
 #[cfg(test)]
 mod tests {
-    use super::{overlay_panel_policy, resolve_then_order};
+    use super::{overlay_panel_policy, overlay_style_mask, resolve_then_order};
     use std::cell::RefCell;
     use tauri_nspanel::{
         objc2_app_kit::{NSWindowCollectionBehavior, NSWindowStyleMask},
