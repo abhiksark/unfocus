@@ -43,7 +43,7 @@ Labels describe tested behavior, not only whether a package exists.
 | Other Linux **X11** | **Qualified** backend | Same probes and overlays as Ubuntu; install via release `.deb` / `.rpm` / AppImage and verify `SHA256SUMS`. |
 | Linux **Wayland** | **Unsupported** | Packages may start, but idle and fullscreen probes are not qualified. Do not treat Wayland as supported. |
 | Windows x64 | Early build | Installers ship; interactive multi-monitor qualification is still pending. Idle and fullscreen probes are implemented in current alphas. Not application code-signed. |
-| macOS (Apple silicon and Intel) | Preview | Multi-monitor acceptance has not completed. Builds are not code-signed or notarized. |
+| macOS (Apple silicon and Intel) | Preview | Intentionally tray/menu-bar-only while running: no Dock icon or application menu. Reopen or focus the dashboard from the tray icon. Physical multi-monitor acceptance is unfinished. Builds are not code-signed or notarized. |
 
 ### Package trust and install sources
 
@@ -349,7 +349,9 @@ The desktop must provide a **StatusNotifier / AppIndicator** host.
 
 ## macOS
 
-Preview platform. Multi-monitor behavior has not completed an acceptance run.
+Preview platform. Physical multi-monitor behavior has not completed an
+acceptance run. While running, macOS intentionally uses Accessory activation:
+Unfocus is tray/menu-bar-only, with no Dock icon or application menu.
 **No Xcode or other developer tools are required** to install a release DMG.
 
 ### Which DMG
@@ -381,6 +383,13 @@ Alternatively: open Unfocus once, then **System Settings → Privacy & Security*
 and choose **Open Anyway** if macOS offers it.
 
 Later launches can use a normal double-click or Spotlight.
+
+### Tray-only operation
+
+On macOS, the running app intentionally has no Dock icon or application menu.
+Use the Unfocus tray/menu-bar icon and choose **Open Unfocus** to reopen or
+focus the dashboard. The tray menu also exposes the reminder controls and quit
+action.
 
 ### Homebrew (alpha cask)
 
