@@ -28,7 +28,10 @@ fn prepare_unexpected_overlay_teardown(
 
 use crate::authorize_main_caller;
 use labels::authorize_overlay_close_caller;
-use lifecycle::{overlay_worker_timeout, OverlayRunLifecycle, OVERLAY_DISMISS_DELAY};
+use lifecycle::{
+    overlay_close_retry_delay, overlay_worker_timeout, OverlayRunLifecycle,
+    OVERLAY_CLOSE_FAILURE_LIMIT, OVERLAY_DISMISS_DELAY,
+};
 use serde::Serialize;
 use std::{
     collections::VecDeque,
@@ -47,6 +50,10 @@ use windows::{
 
 const OVERLAY_COMMAND_CAPACITY: usize = 256;
 const CLOSE_ORIGIN_CAPACITY: usize = 16;
+#[cfg(target_os = "macos")]
+const INTENTIONAL_CLOSE_SUPPRESSION: std::time::Duration =
+    windows::MACOS_INTENTIONAL_CLOSE_SUPPRESSION;
+#[cfg(not(target_os = "macos"))]
 const INTENTIONAL_CLOSE_SUPPRESSION: std::time::Duration = std::time::Duration::from_secs(5);
 const OVERLAY_RETRY_THREAD_NAME: &str = "unfocus-overlay-command-retry";
 
@@ -73,21 +80,14 @@ enum OverlayCommand {
 }
 
 #[derive(Debug)]
-struct PendingUnexpectedCleanup {
+struct PendingCleanup {
     run_id: u64,
-    window_label: String,
+    target: String,
+    attempts: usize,
+    next_attempt_at: Option<Instant>,
 }
 
-#[derive(Debug)]
-struct PendingStartupCleanup {
-    run_id: u64,
-    prefix: String,
-}
-
-fn enqueue_pending_startup_cleanup(
-    pending: &mut Vec<PendingStartupCleanup>,
-    cleanup: PendingStartupCleanup,
-) -> bool {
+fn enqueue_pending_cleanup(pending: &mut Vec<PendingCleanup>, cleanup: PendingCleanup) -> bool {
     if pending.iter().any(|item| item.run_id == cleanup.run_id) {
         false
     } else {
@@ -96,40 +96,37 @@ fn enqueue_pending_startup_cleanup(
     }
 }
 
-fn process_pending_startup_cleanups<Cleanup>(
-    pending: &mut Vec<PendingStartupCleanup>,
+fn process_pending_cleanups<Cleanup>(
+    pending: &mut Vec<PendingCleanup>,
+    now: Instant,
     mut cleanup: Cleanup,
-) -> Vec<u64>
+) -> (Vec<u64>, Vec<u64>)
 where
-    Cleanup: FnMut(&PendingStartupCleanup) -> Result<(), String>,
+    Cleanup: FnMut(&PendingCleanup) -> Result<(), String>,
 {
     let mut completed = Vec::new();
-    pending.retain(|item| match cleanup(item) {
-        Ok(()) => {
-            completed.push(item.run_id);
-            false
+    let mut exhausted = Vec::new();
+    pending.retain_mut(|item| {
+        if item.next_attempt_at.is_some_and(|retry_at| retry_at > now) {
+            return true;
         }
-        Err(_) => true,
-    });
-    completed
-}
-
-fn process_pending_unexpected_cleanups<Cleanup>(
-    pending: &mut Vec<PendingUnexpectedCleanup>,
-    mut cleanup: Cleanup,
-) -> Vec<u64>
-where
-    Cleanup: FnMut(&PendingUnexpectedCleanup) -> Result<(), String>,
-{
-    let mut completed = Vec::new();
-    pending.retain(|item| match cleanup(item) {
-        Ok(()) => {
-            completed.push(item.run_id);
-            false
+        item.attempts += 1;
+        match cleanup(item) {
+            Ok(()) => {
+                completed.push(item.run_id);
+                false
+            }
+            Err(_) if item.attempts >= OVERLAY_CLOSE_FAILURE_LIMIT => {
+                exhausted.push(item.run_id);
+                false
+            }
+            Err(_) => {
+                item.next_attempt_at = Some(now + overlay_close_retry_delay(item.attempts));
+                true
+            }
         }
-        Err(_) => true,
     });
-    completed
+    (completed, exhausted)
 }
 
 #[derive(Debug, Default)]
@@ -203,6 +200,11 @@ impl CloseOriginState {
     fn cancel_unexpected(&mut self, run_id: u64) {
         self.unexpected_pending.retain(|pending| *pending != run_id);
     }
+
+    fn cancel_intentional(&mut self, run_id: u64) {
+        self.intentional
+            .retain(|(intentional, _)| *intentional != run_id);
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -230,6 +232,13 @@ impl OverlayCloseOrigins {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .cancel_unexpected(run_id);
+    }
+
+    fn cancel_intentional(&self, run_id: u64) {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .cancel_intentional(run_id);
     }
 }
 
@@ -399,8 +408,8 @@ where
 fn handle_overlay_command(
     app: &AppHandle,
     runs: &mut Vec<OverlayRunLifecycle>,
-    pending_cleanups: &mut Vec<PendingUnexpectedCleanup>,
-    pending_startup_cleanups: &mut Vec<PendingStartupCleanup>,
+    pending_cleanups: &mut Vec<PendingCleanup>,
+    pending_startup_cleanups: &mut Vec<PendingCleanup>,
     command: OverlayCommand,
 ) {
     match command {
@@ -438,6 +447,7 @@ fn handle_overlay_command(
                         closes_at: dismiss_at,
                         dismiss_at: Some(dismiss_at),
                         next_close_attempt_at: None,
+                        close_failures: 0,
                         completed: true,
                         closing_emitted: true,
                     });
@@ -449,20 +459,25 @@ fn handle_overlay_command(
             run_id,
             window_label,
         } => {
-            if !pending_cleanups
-                .iter()
-                .any(|pending| pending.run_id == run_id)
-            {
-                pending_cleanups.push(PendingUnexpectedCleanup {
+            enqueue_pending_cleanup(
+                pending_cleanups,
+                PendingCleanup {
                     run_id,
-                    window_label,
-                });
-            }
+                    target: window_label,
+                    attempts: 0,
+                    next_attempt_at: None,
+                },
+            );
         }
         OverlayCommand::RetryStartupCleanup { run_id, prefix } => {
-            enqueue_pending_startup_cleanup(
+            enqueue_pending_cleanup(
                 pending_startup_cleanups,
-                PendingStartupCleanup { run_id, prefix },
+                PendingCleanup {
+                    run_id,
+                    target: prefix,
+                    attempts: 0,
+                    next_attempt_at: None,
+                },
             );
         }
     }
@@ -471,55 +486,73 @@ fn handle_overlay_command(
 fn process_startup_overlay_cleanups(
     app: &AppHandle,
     close_origins: &OverlayCloseOrigins,
-    pending_cleanups: &mut Vec<PendingStartupCleanup>,
+    pending_cleanups: &mut Vec<PendingCleanup>,
 ) {
-    let _ = process_pending_startup_cleanups(pending_cleanups, |pending| {
+    let (_, exhausted) = process_pending_cleanups(pending_cleanups, Instant::now(), |pending| {
         let result = close_overlay_windows_confirmed(
             app,
             close_origins,
-            Some(&pending.prefix),
+            Some(&pending.target),
             "retrying failed overlay startup cleanup",
         );
         if let Err(error) = &result {
+            let disposition = if pending.attempts >= OVERLAY_CLOSE_FAILURE_LIMIT {
+                "abandoned"
+            } else {
+                "will be retried"
+            };
             eprintln!(
-                "overlay startup cleanup for run {} will be retried: {error}",
+                "overlay startup cleanup for run {} {disposition}: {error}",
                 pending.run_id
             );
         }
         result
     });
+    for run_id in exhausted {
+        close_origins.cancel_intentional(run_id);
+        eprintln!(
+            "overlay startup cleanup for run {run_id} stopped after {OVERLAY_CLOSE_FAILURE_LIMIT} failed attempts"
+        );
+    }
 }
 
 fn process_unexpected_overlay_cleanups(
     app: &AppHandle,
     close_origins: &OverlayCloseOrigins,
     runs: &mut Vec<OverlayRunLifecycle>,
-    pending_cleanups: &mut Vec<PendingUnexpectedCleanup>,
+    pending_cleanups: &mut Vec<PendingCleanup>,
 ) {
-    let completed = process_pending_unexpected_cleanups(pending_cleanups, |pending| {
-        let prefix = format!("overlay-{}-", pending.run_id);
-        cleanup_before_sibling_close(
-            || prepare_unexpected_overlay_teardown(app, &pending.window_label),
-            |error| {
-                eprintln!(
-                    "overlay cleanup after unexpected close of {} failed: {error}",
-                    pending.window_label
-                );
-            },
-            || {
-                close_overlay_windows_confirmed(
-                    app,
-                    close_origins,
-                    Some(&prefix),
-                    "one overlay in the run was closed",
-                )
-            },
-        )
-    });
+    let (completed, exhausted) =
+        process_pending_cleanups(pending_cleanups, Instant::now(), |pending| {
+            let prefix = format!("overlay-{}-", pending.run_id);
+            cleanup_before_sibling_close(
+                || prepare_unexpected_overlay_teardown(app, &pending.target),
+                |error| {
+                    eprintln!(
+                        "overlay cleanup after unexpected close of {} failed: {error}",
+                        pending.target
+                    );
+                },
+                || {
+                    close_overlay_windows_confirmed(
+                        app,
+                        close_origins,
+                        Some(&prefix),
+                        "one overlay in the run was closed",
+                    )
+                },
+            )
+        });
 
-    for run_id in completed {
+    for run_id in completed.into_iter().chain(exhausted.iter().copied()) {
         close_origins.cancel_unexpected(run_id);
         runs.retain(|run| run.run_id != run_id);
+    }
+    for run_id in exhausted {
+        close_origins.cancel_intentional(run_id);
+        eprintln!(
+            "unexpected overlay cleanup for run {run_id} stopped after {OVERLAY_CLOSE_FAILURE_LIMIT} failed attempts"
+        );
     }
 }
 
@@ -586,11 +619,19 @@ fn process_overlay_runs(
             match close_overlay_windows(app, close_origins, Some(&run.prefix), reason) {
                 Ok(()) => finished.push(run.run_id),
                 Err(error) => {
-                    run.defer_close_retry(Instant::now());
-                    eprintln!(
-                        "overlay run {} teardown will be retried: {error}",
-                        run.run_id
-                    );
+                    if run.defer_close_retry(Instant::now()) {
+                        eprintln!(
+                            "overlay run {} teardown will be retried: {error}",
+                            run.run_id
+                        );
+                    } else {
+                        finished.push(run.run_id);
+                        close_origins.cancel_intentional(run.run_id);
+                        eprintln!(
+                            "overlay run {} teardown stopped after {OVERLAY_CLOSE_FAILURE_LIMIT} failed attempts: {error}",
+                            run.run_id
+                        );
+                    }
                 }
             }
         }
@@ -818,48 +859,99 @@ mod tests {
 
     #[test]
     fn unexpected_cleanup_state_is_retained_until_cleanup_succeeds() {
-        let mut pending = vec![PendingUnexpectedCleanup {
+        let now = Instant::now();
+        let mut pending = vec![PendingCleanup {
             run_id: 7,
-            window_label: "overlay-7-0-1-8-9".to_owned(),
+            target: "overlay-7-0-1-8-9".to_owned(),
+            attempts: 0,
+            next_attempt_at: None,
         }];
 
-        let completed = process_pending_unexpected_cleanups(&mut pending, |_| {
+        let (completed, exhausted) = process_pending_cleanups(&mut pending, now, |_| {
             Err("native teardown timed out".to_owned())
         });
         assert!(completed.is_empty());
+        assert!(exhausted.is_empty());
         assert_eq!(pending.len(), 1);
 
-        let completed = process_pending_unexpected_cleanups(&mut pending, |_| Ok(()));
+        let (completed, exhausted) = process_pending_cleanups(
+            &mut pending,
+            now + overlay_close_retry_delay(1) - std::time::Duration::from_millis(1),
+            |_| panic!("cleanup must wait for its backoff"),
+        );
+        assert!(completed.is_empty());
+        assert!(exhausted.is_empty());
+
+        let (completed, exhausted) =
+            process_pending_cleanups(&mut pending, now + overlay_close_retry_delay(1), |_| Ok(()));
         assert_eq!(completed, [7]);
+        assert!(exhausted.is_empty());
         assert!(pending.is_empty());
     }
 
     #[test]
     fn startup_cleanup_state_is_deduplicated_and_retained_until_absent() {
         let mut pending = Vec::new();
-        assert!(enqueue_pending_startup_cleanup(
+        assert!(enqueue_pending_cleanup(
             &mut pending,
-            PendingStartupCleanup {
+            PendingCleanup {
                 run_id: 17,
-                prefix: "overlay-17-".to_owned(),
+                target: "overlay-17-".to_owned(),
+                attempts: 0,
+                next_attempt_at: None,
             }
         ));
-        assert!(!enqueue_pending_startup_cleanup(
+        assert!(!enqueue_pending_cleanup(
             &mut pending,
-            PendingStartupCleanup {
+            PendingCleanup {
                 run_id: 17,
-                prefix: "overlay-17-duplicate-".to_owned(),
+                target: "overlay-17-duplicate-".to_owned(),
+                attempts: 0,
+                next_attempt_at: None,
             }
         ));
 
-        let completed =
-            process_pending_startup_cleanups(&mut pending, |_| Err("panels remain".to_owned()));
+        let now = Instant::now();
+        let (completed, exhausted) =
+            process_pending_cleanups(&mut pending, now, |_| Err("panels remain".to_owned()));
         assert!(completed.is_empty());
+        assert!(exhausted.is_empty());
         assert_eq!(pending.len(), 1);
-        assert_eq!(pending[0].prefix, "overlay-17-");
+        assert_eq!(pending[0].target, "overlay-17-");
 
-        let completed = process_pending_startup_cleanups(&mut pending, |_| Ok(()));
+        let (completed, exhausted) =
+            process_pending_cleanups(&mut pending, now + overlay_close_retry_delay(1), |_| Ok(()));
         assert_eq!(completed, [17]);
+        assert!(exhausted.is_empty());
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn permanently_failing_cleanup_is_dropped_at_the_shared_limit() {
+        let mut pending = vec![PendingCleanup {
+            run_id: 17,
+            target: "overlay-17-".to_owned(),
+            attempts: 0,
+            next_attempt_at: None,
+        }];
+
+        let started_at = Instant::now();
+        for attempt in 1..OVERLAY_CLOSE_FAILURE_LIMIT {
+            let now = started_at + std::time::Duration::from_secs(attempt as u64);
+            assert_eq!(
+                process_pending_cleanups(&mut pending, now, |_| { Err("still open".to_owned()) }),
+                (Vec::new(), Vec::new())
+            );
+        }
+
+        let final_attempt =
+            started_at + std::time::Duration::from_secs(OVERLAY_CLOSE_FAILURE_LIMIT as u64);
+        assert_eq!(
+            process_pending_cleanups(&mut pending, final_attempt, |_| {
+                Err("still open".to_owned())
+            }),
+            (Vec::new(), vec![17])
+        );
         assert!(pending.is_empty());
     }
 
@@ -883,6 +975,15 @@ mod tests {
             origins.mark_intentional(run_id, now + std::time::Duration::from_secs(10));
         }
         assert_eq!(origins.intentional.len(), CLOSE_ORIGIN_CAPACITY);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn intentional_close_outlives_the_confirmed_macos_close_budget() {
+        assert!(
+            INTENTIONAL_CLOSE_SUPPRESSION
+                > std::time::Duration::from_millis(windows::MACOS_CONFIRMED_CLOSE_BUDGET_MILLIS)
+        );
     }
 
     #[test]
@@ -944,6 +1045,16 @@ mod tests {
         let mut origins = CloseOriginState::default();
         assert!(origins.begin_unexpected(9, now));
         origins.cancel_unexpected(9);
+        assert!(origins.begin_unexpected(9, now));
+    }
+
+    #[test]
+    fn cancelled_intentional_close_can_be_recovered_as_unexpected() {
+        let now = Instant::now();
+        let mut origins = CloseOriginState::default();
+        origins.mark_intentional(9, now);
+        origins.cancel_intentional(9);
+
         assert!(origins.begin_unexpected(9, now));
     }
 }

@@ -1,4 +1,6 @@
 #[cfg(target_os = "macos")]
+use super::labels::MAX_OVERLAY_MONITORS;
+#[cfg(target_os = "macos")]
 use super::macos;
 use super::{
     labels::{
@@ -25,7 +27,23 @@ const OVERLAY_CLEANUP_ATTEMPTS: usize = 2;
 #[cfg(target_os = "macos")]
 const OVERLAY_ABSENCE_POLL_ATTEMPTS: usize = 25;
 #[cfg(target_os = "macos")]
-const OVERLAY_ABSENCE_POLL_INTERVAL: Duration = Duration::from_millis(10);
+const APPKIT_OPERATION_TIMEOUT_MILLIS: u64 = 5_000;
+#[cfg(target_os = "macos")]
+const OVERLAY_ABSENCE_POLL_INTERVAL_MILLIS: u64 = 10;
+#[cfg(target_os = "macos")]
+pub(super) const MACOS_CONFIRMED_CLOSE_BUDGET_MILLIS: u64 = OVERLAY_CLEANUP_ATTEMPTS as u64
+    * (MAX_OVERLAY_MONITORS as u64 * APPKIT_OPERATION_TIMEOUT_MILLIS
+        + OVERLAY_ABSENCE_POLL_ATTEMPTS as u64 * OVERLAY_ABSENCE_POLL_INTERVAL_MILLIS);
+#[cfg(target_os = "macos")]
+pub(super) const MACOS_INTENTIONAL_CLOSE_SUPPRESSION: Duration = Duration::from_millis(
+    MACOS_CONFIRMED_CLOSE_BUDGET_MILLIS + OVERLAY_ABSENCE_POLL_INTERVAL_MILLIS,
+);
+#[cfg(target_os = "macos")]
+pub(super) const APPKIT_OPERATION_TIMEOUT: Duration =
+    Duration::from_millis(APPKIT_OPERATION_TIMEOUT_MILLIS);
+#[cfg(target_os = "macos")]
+const OVERLAY_ABSENCE_POLL_INTERVAL: Duration =
+    Duration::from_millis(OVERLAY_ABSENCE_POLL_INTERVAL_MILLIS);
 
 fn overlay_visible_on_all_workspaces(target_is_macos: bool) -> bool {
     target_is_macos
@@ -454,6 +472,7 @@ fn start_overlay(
         closes_at,
         dismiss_at: None,
         next_close_attempt_at: None,
+        close_failures: 0,
         completed: false,
         closing_emitted: false,
     }) {

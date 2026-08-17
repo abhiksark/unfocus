@@ -1,3 +1,4 @@
+use super::windows::APPKIT_OPERATION_TIMEOUT;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -10,8 +11,6 @@ use tauri_nspanel::{
     objc2_app_kit::{NSWindowCollectionBehavior, NSWindowStyleMask},
     ManagerExt, Panel, PanelLevel, WebviewWindowExt,
 };
-
-const APPKIT_OPERATION_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Copy)]
 struct OverlayPanelPolicy {

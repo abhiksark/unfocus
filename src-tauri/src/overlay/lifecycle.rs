@@ -3,6 +3,11 @@ use std::time::{Duration, Instant};
 pub(super) const OVERLAY_TICK_INTERVAL: Duration = Duration::from_millis(250);
 pub(super) const OVERLAY_DISMISS_DELAY: Duration = Duration::from_millis(500);
 pub(super) const OVERLAY_COMPLETION_GRACE: Duration = Duration::from_millis(1_250);
+pub(super) const OVERLAY_CLOSE_FAILURE_LIMIT: usize = 3;
+
+pub(super) fn overlay_close_retry_delay(failures: usize) -> Duration {
+    OVERLAY_TICK_INTERVAL * failures as u32
+}
 
 #[derive(Debug)]
 pub(super) struct OverlayRunLifecycle {
@@ -12,6 +17,7 @@ pub(super) struct OverlayRunLifecycle {
     pub(super) closes_at: Instant,
     pub(super) dismiss_at: Option<Instant>,
     pub(super) next_close_attempt_at: Option<Instant>,
+    pub(super) close_failures: usize,
     pub(super) completed: bool,
     pub(super) closing_emitted: bool,
 }
@@ -50,8 +56,13 @@ impl OverlayRunLifecycle {
         emit_closing
     }
 
-    pub(super) fn defer_close_retry(&mut self, now: Instant) {
-        self.next_close_attempt_at = Some(now + OVERLAY_TICK_INTERVAL);
+    pub(super) fn defer_close_retry(&mut self, now: Instant) -> bool {
+        self.close_failures += 1;
+        if self.close_failures >= OVERLAY_CLOSE_FAILURE_LIMIT {
+            return false;
+        }
+        self.next_close_attempt_at = Some(now + overlay_close_retry_delay(self.close_failures));
+        true
     }
 
     pub(super) fn advance(&mut self, now: Instant) -> OverlayLifecycleUpdate {
@@ -108,6 +119,7 @@ mod tests {
             closes_at,
             dismiss_at: None,
             next_close_attempt_at: None,
+            close_failures: 0,
             completed: false,
             closing_emitted: false,
         };
@@ -140,6 +152,7 @@ mod tests {
             closes_at,
             dismiss_at: None,
             next_close_attempt_at: None,
+            close_failures: 0,
             completed: true,
             closing_emitted: false,
         };
@@ -175,6 +188,7 @@ mod tests {
             closes_at,
             dismiss_at: None,
             next_close_attempt_at: None,
+            close_failures: 0,
             completed: true,
             closing_emitted: true,
         };
@@ -194,6 +208,7 @@ mod tests {
             closes_at,
             dismiss_at: None,
             next_close_attempt_at: None,
+            close_failures: 0,
             completed: true,
             closing_emitted: true,
         };
@@ -203,5 +218,26 @@ mod tests {
                 .close
         );
         assert!(run.advance(closes_at + OVERLAY_TICK_INTERVAL).close);
+    }
+
+    #[test]
+    fn failed_close_stops_retrying_at_the_shared_limit() {
+        let closes_at = Instant::now();
+        let mut run = OverlayRunLifecycle {
+            run_id: 3,
+            prefix: "overlay-3-".into(),
+            completes_at: closes_at,
+            closes_at,
+            dismiss_at: None,
+            next_close_attempt_at: None,
+            close_failures: 0,
+            completed: true,
+            closing_emitted: true,
+        };
+
+        for _ in 1..OVERLAY_CLOSE_FAILURE_LIMIT {
+            assert!(run.defer_close_retry(closes_at));
+        }
+        assert!(!run.defer_close_retry(closes_at));
     }
 }
