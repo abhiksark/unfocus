@@ -973,7 +973,7 @@ License text IDs: 2efd6a447c8c5d5f27b34282a9b2bfa999b2c56b450cb25e336553da6eb0d1
 Rust: dispatch2@0.3.1
 Declared license: Zlib OR Apache-2.0 OR MIT
 Upstream authors: Mads Marquart <mads@marquart.dk>, Mary <mary@mary.zone>
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: displaydoc@0.2.7
 Declared license: MIT OR Apache-2.0
@@ -1516,7 +1516,7 @@ License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256a
 
 Rust: libappindicator-sys@0.9.0
 Declared license: Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: libappindicator@0.9.0
 Declared license: Apache-2.0 OR MIT
@@ -1603,12 +1603,12 @@ License text IDs: 135bd40d7e81207369801d42a130c337371322df59687bf986fb8216352d71
 Rust: ndk-sys@0.6.0+11769913
 Declared license: MIT OR Apache-2.0
 Upstream authors: The Rust Windowing contributors
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: ndk@0.9.0
 Declared license: MIT OR Apache-2.0
 Upstream authors: The Rust Mobile contributors
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: new_debug_unreachable@1.0.6
 Declared license: MIT
@@ -1637,35 +1637,39 @@ License text IDs: 0be96d891d00e0ae0df75d7f3289b12871c000a1f5ac744f3b570768d4bb27
 
 Rust: objc2-app-kit@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-cloud-kit@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-data@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-foundation@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-graphics@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-image@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-location@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-text@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
+
+Rust: objc2-core-video@0.3.2
+Declared license: Zlib OR Apache-2.0 OR MIT
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-encode@4.1.0
 Declared license: MIT
@@ -1675,7 +1679,7 @@ License text IDs: 2c4b2ae80ced16e0ed3134fb816c34ac4a407051322456dd5daf8ab1ffd9d2
 Rust: objc2-exception-helper@0.1.1
 Declared license: Zlib OR Apache-2.0 OR MIT
 Upstream authors: Mads Marquart <mads@marquart.dk>
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-foundation@0.3.2
 Declared license: MIT
@@ -1683,27 +1687,27 @@ License text IDs: 2c4b2ae80ced16e0ed3134fb816c34ac4a407051322456dd5daf8ab1ffd9d2
 
 Rust: objc2-io-surface@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-metal@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-quartz-core@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-ui-kit@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-user-notifications@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-web-kit@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2@0.6.4
 Declared license: MIT
@@ -1749,6 +1753,11 @@ Rust: parking_lot_core@0.9.12
 Declared license: MIT OR Apache-2.0
 Upstream authors: Amanieu d'Antras <amanieu@gmail.com>
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, c9a75f18b9ab2927829a208fc6aa2cf4e63b8420887ba29cdb265d6619ae82d5
+
+Rust: pastey@0.2.3
+Declared license: MIT OR Apache-2.0
+Upstream authors: Aditya Kumar <git@adityais.dev>, David Tolnay <dtolnay@gmail.com>
+License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e
 
 Rust: percent-encoding@2.3.2
 Declared license: MIT OR Apache-2.0
@@ -1883,11 +1892,11 @@ License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cc
 
 Rust: r-efi@5.3.0
 Declared license: MIT OR Apache-2.0 OR LGPL-2.1-or-later
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: r-efi@6.0.0
 Declared license: MIT OR Apache-2.0 OR LGPL-2.1-or-later
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: raw-window-handle@0.6.2
 Declared license: MIT OR Apache-2.0 OR Zlib
@@ -2199,6 +2208,11 @@ Declared license: Apache-2.0 OR MIT
 Upstream authors: Tauri Programme within The Commons Conservancy
 License text IDs: 9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
+Rust: tauri-nspanel@2.1.0
+Declared license: file: null
+Upstream authors: Victor Aremu <me@victorare.mu>
+License text IDs: 35e740d8a0d71739293b136b9f289c6b05f21ff6b0584b9b691dd5de5233d7e8, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
+
 Rust: tauri-plugin-single-instance@2.4.3
 Declared license: Apache-2.0 OR MIT
 Upstream authors: Tauri Programme within The Commons Conservancy
@@ -2408,27 +2422,27 @@ License text IDs: 09c990d042f0b5c706bfcb87c741ddbf5121a4945fc88858825e3a80cd54b6
 Rust: unic-char-property@0.9.0
 Declared license: MIT/Apache-2.0
 Upstream authors: The UNIC Project Developers
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: unic-char-range@0.9.0
 Declared license: MIT/Apache-2.0
 Upstream authors: The UNIC Project Developers
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: unic-common@0.9.0
 Declared license: MIT/Apache-2.0
 Upstream authors: The UNIC Project Developers
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: unic-ucd-ident@0.9.0
 Declared license: MIT/Apache-2.0
 Upstream authors: The UNIC Project Developers
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: unic-ucd-version@0.9.0
 Declared license: MIT/Apache-2.0
 Upstream authors: The UNIC Project Developers
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: unicode-ident@1.0.24
 Declared license: (MIT OR Apache-2.0) AND Unicode-3.0
@@ -6175,6 +6189,7 @@ Used by:
   - Rust: once_cell@1.21.4
   - Rust: ordered-stream@0.2.0
   - Rust: parking@2.2.1
+  - Rust: pastey@0.2.3
   - Rust: pin-project-lite@0.2.17
   - Rust: piper@0.2.5
   - Rust: polling@3.11.0
@@ -7467,6 +7482,33 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+===============================================================================
+License text ID: 35e740d8a0d71739293b136b9f289c6b05f21ff6b0584b9b691dd5de5233d7e8
+Used by:
+  - Rust: tauri-nspanel@2.1.0
+-------------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2023 - Present Victor Aremu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ===============================================================================
 License text ID: 36bb253818ac13761081556ff5c457d626da9df1eb4f56194d9ad3926c418a68
@@ -11167,35 +11209,9 @@ License text ID: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b3
 Used by:
   - Rust: adler2@2.0.1
   - Rust: cargo-platform@0.1.9
-  - Rust: dispatch2@0.3.1
-  - Rust: libappindicator-sys@0.9.0
-  - Rust: ndk-sys@0.6.0+11769913
-  - Rust: ndk@0.9.0
-  - Rust: objc2-app-kit@0.3.2
-  - Rust: objc2-cloud-kit@0.3.2
-  - Rust: objc2-core-data@0.3.2
-  - Rust: objc2-core-foundation@0.3.2
-  - Rust: objc2-core-graphics@0.3.2
-  - Rust: objc2-core-image@0.3.2
-  - Rust: objc2-core-location@0.3.2
-  - Rust: objc2-core-text@0.3.2
-  - Rust: objc2-exception-helper@0.1.1
-  - Rust: objc2-io-surface@0.3.2
-  - Rust: objc2-metal@0.3.2
-  - Rust: objc2-quartz-core@0.3.2
-  - Rust: objc2-ui-kit@0.3.2
-  - Rust: objc2-user-notifications@0.3.2
-  - Rust: objc2-web-kit@0.3.2
   - Rust: proc-macro-crate@1.3.1
   - Rust: proc-macro-crate@2.0.2
   - Rust: proc-macro-crate@3.5.0
-  - Rust: r-efi@5.3.0
-  - Rust: r-efi@6.0.0
-  - Rust: unic-char-property@0.9.0
-  - Rust: unic-char-range@0.9.0
-  - Rust: unic-common@0.9.0
-  - Rust: unic-ucd-ident@0.9.0
-  - Rust: unic-ucd-version@0.9.0
 -------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -18150,6 +18166,7 @@ Used by:
   - Rust: libc@0.2.189
   - Rust: num_enum@0.7.6
   - Rust: num_enum_derive@0.7.6
+  - Rust: pastey@0.2.3
   - Rust: proc-macro2@1.0.107
   - Rust: quote@1.0.47
   - Rust: ref-cast-impl@1.0.26
@@ -18513,19 +18530,42 @@ Used by:
   - JavaScript: @tauri-apps/cli-win32-ia32-msvc@2.11.4
   - JavaScript: @tauri-apps/cli-win32-x64-msvc@2.11.4
   - JavaScript: @tauri-apps/cli@2.11.4
+  - Rust: dispatch2@0.3.1
   - Rust: fdeflate@0.3.7
   - Rust: field-offset@0.3.6
   - Rust: image@0.25.10
+  - Rust: libappindicator-sys@0.9.0
   - Rust: miniz_oxide@0.8.9
+  - Rust: ndk-sys@0.6.0+11769913
+  - Rust: ndk@0.9.0
   - Rust: num-conv@0.2.2
+  - Rust: objc2-app-kit@0.3.2
+  - Rust: objc2-cloud-kit@0.3.2
+  - Rust: objc2-core-data@0.3.2
+  - Rust: objc2-core-foundation@0.3.2
+  - Rust: objc2-core-graphics@0.3.2
+  - Rust: objc2-core-image@0.3.2
+  - Rust: objc2-core-location@0.3.2
+  - Rust: objc2-core-text@0.3.2
+  - Rust: objc2-core-video@0.3.2
+  - Rust: objc2-exception-helper@0.1.1
+  - Rust: objc2-io-surface@0.3.2
+  - Rust: objc2-metal@0.3.2
+  - Rust: objc2-quartz-core@0.3.2
+  - Rust: objc2-ui-kit@0.3.2
+  - Rust: objc2-user-notifications@0.3.2
+  - Rust: objc2-web-kit@0.3.2
   - Rust: pin-project-lite@0.2.17
   - Rust: portable-atomic-util@0.2.7
   - Rust: portable-atomic@1.15.0
+  - Rust: r-efi@5.3.0
+  - Rust: r-efi@6.0.0
   - Rust: raw-window-handle@0.6.2
   - Rust: sync_wrapper@1.0.2
   - Rust: tauri-build@2.6.3
   - Rust: tauri-codegen@2.6.3
   - Rust: tauri-macros@2.6.3
+  - Rust: tauri-nspanel@2.1.0
   - Rust: tauri-plugin-single-instance@2.4.3
   - Rust: tauri-runtime-wry@2.11.4
   - Rust: tauri-runtime@2.11.3
@@ -18534,6 +18574,11 @@ Used by:
   - Rust: time-core@0.1.9
   - Rust: time-macros@0.2.32
   - Rust: time@0.3.55
+  - Rust: unic-char-property@0.9.0
+  - Rust: unic-char-range@0.9.0
+  - Rust: unic-common@0.9.0
+  - Rust: unic-ucd-ident@0.9.0
+  - Rust: unic-ucd-version@0.9.0
 -------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004

@@ -1,5 +1,7 @@
 mod labels;
 mod lifecycle;
+#[cfg(target_os = "macos")]
+mod macos;
 mod windows;
 
 pub(crate) use labels::{
@@ -8,6 +10,21 @@ pub(crate) use labels::{
 #[cfg(debug_assertions)]
 pub(crate) use windows::schedule_automatic_overlay_test;
 pub(crate) use windows::{show_overlay, show_overlay_if_idle};
+
+fn prepare_unexpected_overlay_teardown(
+    app: &tauri::AppHandle,
+    window_label: &str,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::prepare_unexpected_overlay_teardown(app, window_label)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, window_label);
+        Ok(())
+    }
+}
 
 use crate::authorize_main_caller;
 use labels::authorize_overlay_close_caller;
@@ -24,11 +41,14 @@ use std::{
     time::Instant,
 };
 use tauri::{AppHandle, Manager, State, WebviewWindow};
-use windows::{close_overlay_windows, emit_overlay_event, overlay_run_exists};
+use windows::{
+    close_overlay_windows, close_overlay_windows_confirmed, emit_overlay_event, overlay_run_exists,
+};
 
 const OVERLAY_COMMAND_CAPACITY: usize = 256;
 const CLOSE_ORIGIN_CAPACITY: usize = 16;
 const INTENTIONAL_CLOSE_SUPPRESSION: std::time::Duration = std::time::Duration::from_secs(5);
+const OVERLAY_RETRY_THREAD_NAME: &str = "unfocus-overlay-command-retry";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,7 +68,68 @@ enum OverlayCommand {
     Register(OverlayRunLifecycle),
     Dismiss(u64),
     CancelAll,
-    SiblingClosed(u64),
+    SiblingClosed { run_id: u64, window_label: String },
+    RetryStartupCleanup { run_id: u64, prefix: String },
+}
+
+#[derive(Debug)]
+struct PendingUnexpectedCleanup {
+    run_id: u64,
+    window_label: String,
+}
+
+#[derive(Debug)]
+struct PendingStartupCleanup {
+    run_id: u64,
+    prefix: String,
+}
+
+fn enqueue_pending_startup_cleanup(
+    pending: &mut Vec<PendingStartupCleanup>,
+    cleanup: PendingStartupCleanup,
+) -> bool {
+    if pending.iter().any(|item| item.run_id == cleanup.run_id) {
+        false
+    } else {
+        pending.push(cleanup);
+        true
+    }
+}
+
+fn process_pending_startup_cleanups<Cleanup>(
+    pending: &mut Vec<PendingStartupCleanup>,
+    mut cleanup: Cleanup,
+) -> Vec<u64>
+where
+    Cleanup: FnMut(&PendingStartupCleanup) -> Result<(), String>,
+{
+    let mut completed = Vec::new();
+    pending.retain(|item| match cleanup(item) {
+        Ok(()) => {
+            completed.push(item.run_id);
+            false
+        }
+        Err(_) => true,
+    });
+    completed
+}
+
+fn process_pending_unexpected_cleanups<Cleanup>(
+    pending: &mut Vec<PendingUnexpectedCleanup>,
+    mut cleanup: Cleanup,
+) -> Vec<u64>
+where
+    Cleanup: FnMut(&PendingUnexpectedCleanup) -> Result<(), String>,
+{
+    let mut completed = Vec::new();
+    pending.retain(|item| match cleanup(item) {
+        Ok(()) => {
+            completed.push(item.run_id);
+            false
+        }
+        Err(_) => true,
+    });
+    completed
 }
 
 #[derive(Debug, Default)]
@@ -125,6 +206,47 @@ impl OverlayCloseOrigins {
     }
 }
 
+fn send_without_blocking<T, ReportFailure>(
+    sender: &SyncSender<T>,
+    command: T,
+    retry_thread_name: &str,
+    report_failure: ReportFailure,
+) -> Result<(), String>
+where
+    T: Send + 'static,
+    ReportFailure: Fn(String) + Send + Sync + 'static,
+{
+    match sender.try_send(command) {
+        Ok(()) => Ok(()),
+        Err(TrySendError::Disconnected(_)) => {
+            let error = "overlay lifecycle worker has stopped".to_owned();
+            report_failure(error.clone());
+            Err(error)
+        }
+        Err(TrySendError::Full(command)) => {
+            let retry_sender = sender.clone();
+            let report_failure = Arc::new(report_failure);
+            let worker_report_failure = Arc::clone(&report_failure);
+            std::thread::Builder::new()
+                .name(retry_thread_name.to_owned())
+                .spawn(move || {
+                    if retry_sender.send(command).is_err() {
+                        worker_report_failure(
+                            "overlay lifecycle worker stopped before deferred command delivery"
+                                .to_owned(),
+                        );
+                    }
+                })
+                .map(|_| ())
+                .map_err(|error| {
+                    let error = format!("could not start overlay lifecycle retry sender: {error}");
+                    report_failure(error.clone());
+                    error
+                })
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct OverlayController {
     sender: SyncSender<OverlayCommand>,
@@ -174,31 +296,77 @@ impl OverlayController {
         self.send(OverlayCommand::CancelAll)
     }
 
-    pub(crate) fn sibling_closed(&self, run_id: u64) {
+    pub(super) fn retain_startup_cleanup(&self, run_id: u64, prefix: String) -> Result<(), String> {
+        send_without_blocking(
+            &self.sender,
+            OverlayCommand::RetryStartupCleanup { run_id, prefix },
+            OVERLAY_RETRY_THREAD_NAME,
+            move |error| {
+                eprintln!("could not retain startup cleanup for overlay run {run_id}: {error}");
+            },
+        )
+    }
+
+    pub(crate) fn sibling_closed(&self, run_id: u64, window_label: String) {
+        // Window events run on the application thread. Only decide whether the
+        // event is intentional here; native cleanup belongs to the worker.
         if !self.close_origins.begin_unexpected(run_id) {
             return;
         }
-        match self.sender.try_send(OverlayCommand::SiblingClosed(run_id)) {
-            Ok(()) => {}
-            Err(TrySendError::Full(_)) => {
-                self.close_origins.cancel_unexpected(run_id);
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                self.close_origins.cancel_unexpected(run_id);
-                eprintln!("overlay lifecycle worker stopped before sibling cleanup");
-            }
-        }
+        let failed_close_origins = self.close_origins.clone();
+        let _ = send_without_blocking(
+            &self.sender,
+            OverlayCommand::SiblingClosed {
+                run_id,
+                window_label,
+            },
+            OVERLAY_RETRY_THREAD_NAME,
+            move |error| {
+                failed_close_origins.cancel_unexpected(run_id);
+                eprintln!("{error}");
+            },
+        );
     }
 
-    fn close_windows(&self, app: &AppHandle, prefix: Option<&str>, reason: &str) {
-        close_overlay_windows(app, &self.close_origins, prefix, reason);
+    fn close_windows(
+        &self,
+        app: &AppHandle,
+        prefix: Option<&str>,
+        reason: &str,
+    ) -> Result<(), String> {
+        close_overlay_windows_confirmed(app, &self.close_origins, prefix, reason)
+    }
+}
+
+fn cleanup_before_sibling_close<Cleanup, ReportFailure, CloseSiblings>(
+    cleanup: Cleanup,
+    mut report_failure: ReportFailure,
+    close_siblings: CloseSiblings,
+) -> Result<(), String>
+where
+    Cleanup: FnOnce() -> Result<(), String>,
+    ReportFailure: FnMut(&str),
+    CloseSiblings: FnOnce() -> Result<(), String>,
+{
+    if let Err(error) = cleanup() {
+        report_failure(&error);
+        return Err(error);
+    }
+
+    match close_siblings() {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            report_failure(&error);
+            Err(format!("sibling cleanup failed: {error}"))
+        }
     }
 }
 
 fn handle_overlay_command(
     app: &AppHandle,
-    close_origins: &OverlayCloseOrigins,
     runs: &mut Vec<OverlayRunLifecycle>,
+    pending_cleanups: &mut Vec<PendingUnexpectedCleanup>,
+    pending_startup_cleanups: &mut Vec<PendingStartupCleanup>,
     command: OverlayCommand,
 ) {
     match command {
@@ -235,6 +403,7 @@ fn handle_overlay_command(
                         completes_at: Instant::now(),
                         closes_at: dismiss_at,
                         dismiss_at: Some(dismiss_at),
+                        next_close_attempt_at: None,
                         completed: true,
                         closing_emitted: true,
                     });
@@ -242,16 +411,81 @@ fn handle_overlay_command(
             }
         }
         OverlayCommand::CancelAll => runs.clear(),
-        OverlayCommand::SiblingClosed(run_id) => {
-            let prefix = format!("overlay-{run_id}-");
-            close_overlay_windows(
-                app,
-                close_origins,
-                Some(&prefix),
-                "one overlay in the run was closed",
-            );
-            runs.retain(|run| run.run_id != run_id);
+        OverlayCommand::SiblingClosed {
+            run_id,
+            window_label,
+        } => {
+            if !pending_cleanups
+                .iter()
+                .any(|pending| pending.run_id == run_id)
+            {
+                pending_cleanups.push(PendingUnexpectedCleanup {
+                    run_id,
+                    window_label,
+                });
+            }
         }
+        OverlayCommand::RetryStartupCleanup { run_id, prefix } => {
+            enqueue_pending_startup_cleanup(
+                pending_startup_cleanups,
+                PendingStartupCleanup { run_id, prefix },
+            );
+        }
+    }
+}
+
+fn process_startup_overlay_cleanups(
+    app: &AppHandle,
+    close_origins: &OverlayCloseOrigins,
+    pending_cleanups: &mut Vec<PendingStartupCleanup>,
+) {
+    let _ = process_pending_startup_cleanups(pending_cleanups, |pending| {
+        let result = close_overlay_windows_confirmed(
+            app,
+            close_origins,
+            Some(&pending.prefix),
+            "retrying failed overlay startup cleanup",
+        );
+        if let Err(error) = &result {
+            eprintln!(
+                "overlay startup cleanup for run {} will be retried: {error}",
+                pending.run_id
+            );
+        }
+        result
+    });
+}
+
+fn process_unexpected_overlay_cleanups(
+    app: &AppHandle,
+    close_origins: &OverlayCloseOrigins,
+    runs: &mut Vec<OverlayRunLifecycle>,
+    pending_cleanups: &mut Vec<PendingUnexpectedCleanup>,
+) {
+    let completed = process_pending_unexpected_cleanups(pending_cleanups, |pending| {
+        let prefix = format!("overlay-{}-", pending.run_id);
+        cleanup_before_sibling_close(
+            || prepare_unexpected_overlay_teardown(app, &pending.window_label),
+            |error| {
+                eprintln!(
+                    "overlay cleanup after unexpected close of {} failed: {error}",
+                    pending.window_label
+                );
+            },
+            || {
+                close_overlay_windows_confirmed(
+                    app,
+                    close_origins,
+                    Some(&prefix),
+                    "one overlay in the run was closed",
+                )
+            },
+        )
+    });
+
+    for run_id in completed {
+        close_origins.cancel_unexpected(run_id);
+        runs.retain(|run| run.run_id != run_id);
     }
 }
 
@@ -315,8 +549,16 @@ fn process_overlay_runs(
             } else {
                 "overlay duration elapsed"
             };
-            close_overlay_windows(app, close_origins, Some(&run.prefix), reason);
-            finished.push(run.run_id);
+            match close_overlay_windows(app, close_origins, Some(&run.prefix), reason) {
+                Ok(()) => finished.push(run.run_id),
+                Err(error) => {
+                    run.defer_close_retry(Instant::now());
+                    eprintln!(
+                        "overlay run {} teardown will be retried: {error}",
+                        run.run_id
+                    );
+                }
+            }
         }
     }
 
@@ -330,14 +572,28 @@ fn run_overlay_worker(
     active_runs: Arc<AtomicUsize>,
 ) {
     let mut runs = Vec::new();
+    let mut pending_cleanups = Vec::new();
+    let mut pending_startup_cleanups = Vec::new();
 
     loop {
         let timeout = overlay_worker_timeout(&runs, Instant::now());
         match receiver.recv_timeout(timeout) {
             Ok(command) => {
-                handle_overlay_command(&app, &close_origins, &mut runs, command);
+                handle_overlay_command(
+                    &app,
+                    &mut runs,
+                    &mut pending_cleanups,
+                    &mut pending_startup_cleanups,
+                    command,
+                );
                 for command in receiver.try_iter() {
-                    handle_overlay_command(&app, &close_origins, &mut runs, command);
+                    handle_overlay_command(
+                        &app,
+                        &mut runs,
+                        &mut pending_cleanups,
+                        &mut pending_startup_cleanups,
+                        command,
+                    );
                 }
             }
             Err(RecvTimeoutError::Timeout) => {}
@@ -347,8 +603,17 @@ fn run_overlay_worker(
             }
         }
 
+        active_runs.store(
+            runs.len() + pending_cleanups.len() + pending_startup_cleanups.len(),
+            Ordering::Release,
+        );
+        process_startup_overlay_cleanups(&app, &close_origins, &mut pending_startup_cleanups);
+        process_unexpected_overlay_cleanups(&app, &close_origins, &mut runs, &mut pending_cleanups);
         process_overlay_runs(&app, &close_origins, &mut runs, Instant::now());
-        active_runs.store(runs.len(), Ordering::Release);
+        active_runs.store(
+            runs.len() + pending_cleanups.len() + pending_startup_cleanups.len(),
+            Ordering::Release,
+        );
     }
 }
 
@@ -394,6 +659,175 @@ pub(crate) fn close_overlay_test(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{
+        cell::RefCell,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
+
+    #[test]
+    fn a_full_lifecycle_queue_delivers_the_command_from_a_background_sender() {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        sender.send("already queued").unwrap();
+        let failures = Arc::new(Mutex::new(Vec::new()));
+        let reported_failures = Arc::clone(&failures);
+
+        send_without_blocking(
+            &sender,
+            "sibling closed",
+            "unfocus-overlay-command-retry",
+            move |error| {
+                reported_failures
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(error);
+            },
+        )
+        .unwrap();
+
+        assert_eq!(receiver.recv().unwrap(), "already queued");
+        assert_eq!(
+            receiver.recv_timeout(Duration::from_secs(1)).unwrap(),
+            "sibling closed"
+        );
+        assert!(failures
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty());
+    }
+
+    #[test]
+    fn a_disconnected_lifecycle_queue_reports_terminal_delivery_failure() {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        drop(receiver);
+        let failures = Arc::new(Mutex::new(Vec::new()));
+        let reported_failures = Arc::clone(&failures);
+
+        let result = send_without_blocking(
+            &sender,
+            "sibling closed",
+            "unfocus-overlay-command-retry",
+            move |error| {
+                reported_failures
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(error);
+            },
+        );
+
+        assert_eq!(result.unwrap_err(), "overlay lifecycle worker has stopped");
+        assert_eq!(
+            failures
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_slice(),
+            ["overlay lifecycle worker has stopped"]
+        );
+    }
+
+    #[test]
+    fn unexpected_native_cleanup_precedes_sibling_close() {
+        let events = RefCell::new(Vec::new());
+
+        cleanup_before_sibling_close(
+            || {
+                events.borrow_mut().push("cleanup");
+                Ok(())
+            },
+            |_| panic!("successful cleanup must not be reported as an error"),
+            || {
+                events.borrow_mut().push("close-siblings");
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(events.into_inner(), ["cleanup", "close-siblings"]);
+    }
+
+    #[test]
+    fn native_cleanup_failure_defers_sibling_close() {
+        let events = RefCell::new(Vec::new());
+
+        let result = cleanup_before_sibling_close(
+            || {
+                events.borrow_mut().push("cleanup-failed".to_owned());
+                Err("cleanup timeout".to_owned())
+            },
+            |error| events.borrow_mut().push(error.to_owned()),
+            || {
+                events.borrow_mut().push("close-siblings".to_owned());
+                Ok(())
+            },
+        );
+
+        assert_eq!(result.unwrap_err(), "cleanup timeout");
+        assert_eq!(events.into_inner(), ["cleanup-failed", "cleanup timeout"]);
+    }
+
+    #[test]
+    fn sibling_cleanup_failure_is_reported_after_native_cleanup_succeeds() {
+        let reported = RefCell::new(Vec::new());
+
+        let result = cleanup_before_sibling_close(
+            || Ok(()),
+            |error| reported.borrow_mut().push(error.to_owned()),
+            || Err("sibling close failed".to_owned()),
+        );
+
+        assert_eq!(
+            result.unwrap_err(),
+            "sibling cleanup failed: sibling close failed"
+        );
+        assert_eq!(reported.into_inner(), ["sibling close failed"]);
+    }
+
+    #[test]
+    fn unexpected_cleanup_state_is_retained_until_cleanup_succeeds() {
+        let mut pending = vec![PendingUnexpectedCleanup {
+            run_id: 7,
+            window_label: "overlay-7-0-1-8-9".to_owned(),
+        }];
+
+        let completed = process_pending_unexpected_cleanups(&mut pending, |_| {
+            Err("native teardown timed out".to_owned())
+        });
+        assert!(completed.is_empty());
+        assert_eq!(pending.len(), 1);
+
+        let completed = process_pending_unexpected_cleanups(&mut pending, |_| Ok(()));
+        assert_eq!(completed, [7]);
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn startup_cleanup_state_is_deduplicated_and_retained_until_absent() {
+        let mut pending = Vec::new();
+        assert!(enqueue_pending_startup_cleanup(
+            &mut pending,
+            PendingStartupCleanup {
+                run_id: 17,
+                prefix: "overlay-17-".to_owned(),
+            }
+        ));
+        assert!(!enqueue_pending_startup_cleanup(
+            &mut pending,
+            PendingStartupCleanup {
+                run_id: 17,
+                prefix: "overlay-17-duplicate-".to_owned(),
+            }
+        ));
+
+        let completed =
+            process_pending_startup_cleanups(&mut pending, |_| Err("panels remain".to_owned()));
+        assert!(completed.is_empty());
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].prefix, "overlay-17-");
+
+        let completed = process_pending_startup_cleanups(&mut pending, |_| Ok(()));
+        assert_eq!(completed, [17]);
+        assert!(pending.is_empty());
+    }
 
     #[test]
     fn close_origins_deduplicate_expected_and_unexpected_teardown() {

@@ -111,9 +111,14 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_single_instance::init(
         |app, _arguments, _working_directory| handle_secondary_launch(app),
     ));
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_nspanel::init());
 
     builder
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let config_dir = app.path().app_config_dir()?;
             let settings_manager = ReminderSettingsManager::load(&config_dir)?;
             let probe_cache = ProbeCache::start()?;
@@ -191,7 +196,7 @@ pub fn run() {
                     window
                         .app_handle()
                         .state::<OverlayController>()
-                        .sibling_closed(run_id);
+                        .sibling_closed(run_id, window.label().to_owned());
                 }
             }
         })
