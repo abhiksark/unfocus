@@ -73,9 +73,11 @@ plans/            Local working notes only (gitignored; not tracked docs)
 - Dashboard has consumer mode (default) and developer mode (platform signals,
   monitors, raw probe errors). Mode is remembered on device.
 - Consumer mode also has a transient History view in the main window. It shows
-  three local 30-day pages aligned to the saved Day starts preference, requests
-  longer history only when opened, and never changes the reminder timer,
-  probes, or overlays.
+  the newest 90 local days in a compact Monday-aligned active-minutes calendar
+  following the saved Day starts preference. Selecting one day loads its
+  hourly activity and break outcomes. History requests data only when opened
+  or a day is selected, and never changes the reminder timer, probes, or
+  overlays.
 - Tauri commands registered on the main window: `get_diagnostics`,
   `get_today_activity`, `get_activity_range`, `get_break_range`,
   `get_break_summary`,

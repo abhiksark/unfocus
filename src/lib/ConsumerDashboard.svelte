@@ -78,7 +78,7 @@
     onDayStartChange: (hour: number) => void;
     authorWebsiteError: boolean;
     onOpenAuthorWebsite: () => void;
-    onViewHistory: () => void;
+    onViewHistory: (event: MouseEvent) => void;
   };
 
   let {

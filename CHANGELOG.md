@@ -3,6 +3,16 @@
 Notable changes to Unfocus are recorded here. Dates use `YYYY-MM-DD`, and
 released versions link to their GitHub release.
 
+## [Unreleased]
+
+### Changed
+
+- Reworked History into a compact Monday-aligned calendar covering the newest
+  90 local days. Fixed intensity levels represent confirmed active
+  minutes, while zero activity and unavailable data remain distinct. Selecting
+  a day reveals only that day's totals, hourly activity, and grouped break
+  outcomes without streaks, scores, or timer controls.
+
 ## [0.5.0-alpha.1] - 2026-08-16
 
 ### Added
@@ -218,6 +228,7 @@ changes are included in and superseded by [0.4.0-alpha.1].
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.5.0-alpha.1...HEAD
 [0.5.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.4.0-alpha.1...v0.5.0-alpha.1
 [0.4.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.4.0-alpha.1
 [0.3.1-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.3.1-alpha.1
