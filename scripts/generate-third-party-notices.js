@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolveCargoPackageMetadata } from "./cargo-package-metadata.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputPath = resolve(root, "THIRD_PARTY_NOTICES.txt");
@@ -84,6 +85,7 @@ const repositoryMitFallbacks = new Map([
 
 for (const record of cargoPackages) {
   const { pkg } = record;
+  const metadata = resolveCargoPackageMetadata(pkg);
   let { files } = record;
   if (files.length === 0 && pkg.repository) {
     const sibling = cargoPackages
@@ -108,7 +110,8 @@ for (const record of cargoPackages) {
     ecosystem: "Rust",
     name: pkg.name,
     version: pkg.version,
-    declared: pkg.license ?? `file: ${pkg.license_file}`,
+    declared: metadata.declaredLicense,
+    source: metadata.lockedSource,
     authors: pkg.authors,
     files
   });
@@ -284,6 +287,7 @@ PACKAGE INVENTORY
 for (const component of components) {
   output += `${component.ecosystem}: ${component.name}@${component.version}\n`;
   output += `Declared license: ${component.declared}\n`;
+  if (component.source?.startsWith("git+")) output += `Locked source: ${component.source}\n`;
   if (component.authors?.length) output += `Upstream authors: ${component.authors.join(", ")}\n`;
   output += `License text IDs: ${component.hashes.join(", ")}\n\n`;
 }

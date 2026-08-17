@@ -2209,7 +2209,8 @@ Upstream authors: Tauri Programme within The Commons Conservancy
 License text IDs: 9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: tauri-nspanel@2.1.0
-Declared license: file: null
+Declared license: MIT OR Apache-2.0
+Locked source: git+https://github.com/ahkohd/tauri-nspanel.git?rev=a3122e894383aa068ec5365a42994e3ac94ba1b6#a3122e894383aa068ec5365a42994e3ac94ba1b6
 Upstream authors: Victor Aremu <me@victorare.mu>
 License text IDs: 35e740d8a0d71739293b136b9f289c6b05f21ff6b0584b9b691dd5de5233d7e8, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 

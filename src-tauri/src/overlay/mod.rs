@@ -138,6 +138,18 @@ struct CloseOriginState {
     unexpected_pending: VecDeque<u64>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum OverlayCloseEvent {
+    Requested,
+    Destroyed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct OverlayCloseDecision {
+    prevent_close: bool,
+    queue_cleanup: bool,
+}
+
 impl CloseOriginState {
     fn prune_intentional(&mut self, now: Instant) {
         self.intentional.retain(|(_, marked_at)| {
@@ -173,6 +185,21 @@ impl CloseOriginState {
         true
     }
 
+    fn decide_close(
+        &mut self,
+        run_id: u64,
+        event: OverlayCloseEvent,
+        now: Instant,
+    ) -> OverlayCloseDecision {
+        let queue_cleanup = self.begin_unexpected(run_id, now);
+        OverlayCloseDecision {
+            prevent_close: cfg!(target_os = "macos")
+                && matches!(event, OverlayCloseEvent::Requested)
+                && (queue_cleanup || self.unexpected_pending.contains(&run_id)),
+            queue_cleanup,
+        }
+    }
+
     fn cancel_unexpected(&mut self, run_id: u64) {
         self.unexpected_pending.retain(|pending| *pending != run_id);
     }
@@ -191,11 +218,11 @@ impl OverlayCloseOrigins {
             .mark_intentional(run_id, Instant::now());
     }
 
-    fn begin_unexpected(&self, run_id: u64) -> bool {
+    fn decide_close(&self, run_id: u64, event: OverlayCloseEvent) -> OverlayCloseDecision {
         self.inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .begin_unexpected(run_id, Instant::now())
+            .decide_close(run_id, event, Instant::now())
     }
 
     fn cancel_unexpected(&self, run_id: u64) {
@@ -307,11 +334,17 @@ impl OverlayController {
         )
     }
 
-    pub(crate) fn sibling_closed(&self, run_id: u64, window_label: String) {
-        // Window events run on the application thread. Only decide whether the
-        // event is intentional here; native cleanup belongs to the worker.
-        if !self.close_origins.begin_unexpected(run_id) {
-            return;
+    pub(crate) fn sibling_closed(
+        &self,
+        run_id: u64,
+        window_label: String,
+        event: OverlayCloseEvent,
+    ) -> bool {
+        // Window events run on the application thread. Decide the close origin
+        // and interception here; native cleanup belongs to the worker.
+        let decision = self.close_origins.decide_close(run_id, event);
+        if !decision.queue_cleanup {
+            return decision.prevent_close;
         }
         let failed_close_origins = self.close_origins.clone();
         let _ = send_without_blocking(
@@ -326,6 +359,7 @@ impl OverlayController {
                 eprintln!("{error}");
             },
         );
+        decision.prevent_close
     }
 
     fn close_windows(
@@ -849,6 +883,46 @@ mod tests {
             origins.mark_intentional(run_id, now + std::time::Duration::from_secs(10));
         }
         assert_eq!(origins.intentional.len(), CLOSE_ORIGIN_CAPACITY);
+    }
+
+    #[test]
+    fn close_origin_decision_intercepts_requests_without_duplicate_cleanup() {
+        let now = Instant::now();
+        let mut origins = CloseOriginState::default();
+
+        let first = origins.decide_close(7, OverlayCloseEvent::Requested, now);
+        let repeated = origins.decide_close(7, OverlayCloseEvent::Requested, now);
+        assert!(first.queue_cleanup);
+        assert!(!repeated.queue_cleanup);
+        assert_eq!(first.prevent_close, cfg!(target_os = "macos"));
+        assert_eq!(repeated.prevent_close, cfg!(target_os = "macos"));
+
+        origins.mark_intentional(7, now);
+        let intentional = origins.decide_close(7, OverlayCloseEvent::Requested, now);
+        assert!(!intentional.queue_cleanup);
+        assert!(!intentional.prevent_close);
+
+        let destroyed = origins.decide_close(8, OverlayCloseEvent::Destroyed, now);
+        assert!(destroyed.queue_cleanup);
+        assert!(!destroyed.prevent_close);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_unexpected_close_requests_remain_intercepted_while_cleanup_is_pending() {
+        let now = Instant::now();
+        let mut origins = CloseOriginState::default();
+
+        assert!(
+            origins
+                .decide_close(11, OverlayCloseEvent::Requested, now)
+                .prevent_close
+        );
+        assert!(
+            origins
+                .decide_close(11, OverlayCloseEvent::Requested, now)
+                .prevent_close
+        );
     }
 
     #[test]

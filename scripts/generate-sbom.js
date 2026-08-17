@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolveCargoPackageMetadata } from "./cargo-package-metadata.js";
 import { resolveBunDependency } from "./sbom-dependencies.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -61,7 +62,13 @@ const components = [];
 const cargoRefsById = new Map([[application.id, rootRef]]);
 for (const pkg of cargoMetadata.packages) {
   if (pkg.id === application.id) continue;
-  const purl = `pkg:cargo/${encodeURIComponent(pkg.name)}@${encodeURIComponent(pkg.version)}`;
+  const metadata = resolveCargoPackageMetadata(pkg);
+  const sourceQualifier = metadata.lockedSource?.startsWith("git+")
+    ? `?vcs_url=${encodeURIComponent(metadata.lockedSource)}`
+    : "";
+  const purl =
+    `pkg:cargo/${encodeURIComponent(pkg.name)}@${encodeURIComponent(pkg.version)}` +
+    sourceQualifier;
   cargoRefsById.set(pkg.id, purl);
   components.push({
     type: "library",
@@ -69,11 +76,16 @@ for (const pkg of cargoMetadata.packages) {
     name: pkg.name,
     version: pkg.version,
     purl,
-    licenses: licenseEntry(pkg.license ?? (pkg.license_file ? `file: ${pkg.license_file}` : null)),
-    externalReferences: pkg.repository
-      ? [{ type: "vcs", url: pkg.repository }]
+    licenses: licenseEntry(metadata.declaredLicense),
+    externalReferences: metadata.repository
+      ? [{ type: "vcs", url: metadata.repository }]
       : undefined,
-    properties: [{ name: "unfocus:lockfile", value: "src-tauri/Cargo.lock" }]
+    properties: [
+      { name: "unfocus:lockfile", value: "src-tauri/Cargo.lock" },
+      ...(metadata.lockedSource
+        ? [{ name: "unfocus:cargo-source", value: metadata.lockedSource }]
+        : [])
+    ]
   });
 }
 

@@ -20,7 +20,7 @@ use tauri::{
 static OVERLAY_START_LOCK: Mutex<()> = Mutex::new(());
 const MONITOR_ENUMERATION_TIMEOUT: Duration = Duration::from_secs(5);
 const OVERLAY_WINDOW_READY_TIMEOUT: Duration = Duration::from_secs(5);
-#[cfg(any(target_os = "macos", test))]
+#[cfg(target_os = "macos")]
 const OVERLAY_CLEANUP_ATTEMPTS: usize = 2;
 #[cfg(target_os = "macos")]
 const OVERLAY_ABSENCE_POLL_ATTEMPTS: usize = 25;
