@@ -165,7 +165,7 @@ not just whether a package can be produced.
 | Platform | Status | Current behavior |
 | --- | --- | --- |
 | Linux X11 (Ubuntu primary) | Qualified | Preferred install on Ubuntu/Debian via signed APT at [apt.abhik.ai](https://apt.abhik.ai). AppIndicator tray where the desktop provides a host, synchronized multi-monitor overlays, XScreenSaver idle detection, and EWMH fullscreen detection |
-| macOS | Preview | Quartz idle and fullscreen probes work interactively; multi-monitor behavior has not completed an acceptance run |
+| macOS | Preview | Quartz idle and fullscreen probes work interactively. While running, Unfocus is intentionally tray/menu-bar-only (no Dock icon or application menu); reopen or focus the dashboard from its tray icon. Physical multi-monitor acceptance has not completed. |
 | Windows | Early build | Packages are produced; `GetLastInputInfo` idle and foreground-monitor fullscreen probes are implemented. Interactive multi-monitor qualification is still pending |
 | Linux Wayland | Unsupported | Default packages have no Wayland probes. An opt-in `wayland-sway` developer feature scaffolds a Sway 1.11+ candidate only; it is not qualified and must not be described as supported |
 
@@ -176,6 +176,11 @@ a break without changing the timer, reopen the dashboard, or quit the app.
 Starting Unfocus again reveals that same dashboard instead of creating another
 tray or reminder timer. Where probes are supported, a due break stays hidden
 when you are already idle or the active window is fullscreen.
+
+On macOS, Unfocus intentionally uses Accessory activation while it runs: it is
+available from the tray/menu-bar icon, without a Dock icon or application menu.
+Use that tray icon to reopen or focus the dashboard. macOS remains Preview;
+physical multi-monitor acceptance is still unfinished.
 
 On Linux, the desktop must provide a StatusNotifier/AppIndicator host; Ubuntu
 GNOME normally does this through its Ubuntu AppIndicators extension. The locked

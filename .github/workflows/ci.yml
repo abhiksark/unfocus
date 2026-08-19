@@ -132,6 +132,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked
+      - if: matrix.platform == 'macos-15'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked
 
   release-rehearsal:
     name: Release rehearsal

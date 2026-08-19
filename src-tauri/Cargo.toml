@@ -52,6 +52,7 @@ objc2-core-foundation = { version = "0.3", features = [
   "CFNumber",
   "CFString",
 ] }
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel.git", rev = "a3122e894383aa068ec5365a42994e3ac94ba1b6" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61", features = [

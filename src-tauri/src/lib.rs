@@ -20,7 +20,8 @@ use instance::handle_secondary_launch;
 #[cfg(debug_assertions)]
 use overlay::schedule_automatic_overlay_test;
 use overlay::{
-    close_overlay_test, overlay_run_id_from_label, show_overlay_test, OverlayController,
+    close_overlay_test, overlay_run_id_from_label, show_overlay_test, OverlayCloseEvent,
+    OverlayController,
 };
 use probes::ProbeCache;
 use reminder::{
@@ -111,9 +112,14 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_single_instance::init(
         |app, _arguments, _working_directory| handle_secondary_launch(app),
     ));
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_nspanel::init());
 
     builder
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let config_dir = app.path().app_config_dir()?;
             let settings_manager = ReminderSettingsManager::load(&config_dir)?;
             let probe_cache = ProbeCache::start()?;
@@ -183,15 +189,22 @@ pub fn run() {
                         DashboardCloseAction::Exit => window.app_handle().exit(0),
                     }
                 }
-            } else if matches!(
-                event,
-                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
-            ) {
-                if let Some(run_id) = overlay_run_id_from_label(window.label()) {
-                    window
+            } else if let Some(run_id) = overlay_run_id_from_label(window.label()) {
+                let close_event = match event {
+                    tauri::WindowEvent::CloseRequested { .. } => Some(OverlayCloseEvent::Requested),
+                    tauri::WindowEvent::Destroyed => Some(OverlayCloseEvent::Destroyed),
+                    _ => None,
+                };
+                if let Some(close_event) = close_event {
+                    let prevent_close = window
                         .app_handle()
                         .state::<OverlayController>()
-                        .sibling_closed(run_id);
+                        .sibling_closed(run_id, window.label().to_owned(), close_event);
+                    if prevent_close {
+                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                            api.prevent_close();
+                        }
+                    }
                 }
             }
         })
