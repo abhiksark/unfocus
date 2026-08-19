@@ -7,11 +7,40 @@ released versions link to their GitHub release.
 
 ### Changed
 
+- While it runs on macOS, Unfocus is intentionally tray and menu-bar only,
+  with no Dock icon and no application menu. Reopen or focus the dashboard
+  from the tray icon, which also carries the reminder controls and the quit
+  action.
+- Hardened the shared overlay lifecycle on every platform. A break now builds
+  every monitor's window before showing any of them, so a late failure cannot
+  leave one display covered while the others are still loading. A failed
+  overlay close is retried up to three times with a bounded backoff instead of
+  being logged and abandoned, a sibling-close command that cannot be delivered
+  immediately is retried rather than dropped, and a new break is refused while
+  a previous run's cleanup is still outstanding.
+- Added `tauri-nspanel` as a macOS-only dependency, pinned to an immutable Git
+  revision because no released crate provides the necessary Tauri 2 panel
+  behavior. `THIRD_PARTY_NOTICES.txt` and the generated SBOM now record the
+  complete locked Git identity and declared license of Git-sourced packages,
+  which crates.io metadata does not supply.
+- Continuous integration now runs the locked Rust test suite on macOS instead
+  of only a compile check.
 - Reworked History into a compact Monday-aligned calendar covering the newest
   90 local days. Fixed intensity levels represent confirmed active
   minutes, while zero activity and unavailable data remain distinct. Selecting
   a day reveals only that day's totals, hourly activity, and grouped break
   outcomes without streaks, scores, or timer controls.
+
+### Fixed
+
+- Break overlays on macOS did not reach other Spaces or cover full-screen
+  applications. Each overlay is now a non-activating native panel at
+  screen-saver level that joins every Space and acts as a full-screen
+  auxiliary, so a break can cover each connected display without taking
+  activation away from the app you were using. The panels stay above the layer
+  the Quartz full-screen probe reads, so an overlay never classifies itself as
+  the active full-screen window. macOS remains preview; this establishes no
+  physical multi-monitor qualification.
 
 ## [0.5.0-alpha.1] - 2026-08-16
 
