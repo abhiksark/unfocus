@@ -2540,9 +2540,11 @@ mod tests {
         // The regression guard for the promise that sync changes nothing by default.
         let mut timer = ReminderTimer::new(Duration::ZERO, ReminderSettings::default(), ist(10, 1));
         let before = timer.phase_started_at;
+        let revision_before = timer.state_revision;
         timer.rebase_work_deadline(ist(12, 1));
         assert_eq!(timer.work_deadline, WorkDeadline::Relative);
         assert_eq!(timer.phase_started_at, before);
+        assert_eq!(timer.state_revision, revision_before);
     }
 
     #[test]
