@@ -46,6 +46,7 @@ export function formatGridOffset(minutes: number): string {
 
 export type GridPreview =
   | { kind: "hourly"; minutes: number[] }
+  | { kind: "everyMinute" }
   | { kind: "upcoming"; atMs: number[] };
 
 /**
@@ -55,6 +56,10 @@ export type GridPreview =
  * past the hour — stable whenever each device is looked at, which is what makes
  * two devices comparable by eye. Anything else has no hourly repeat, so the
  * next few absolute times are shown instead of implying a pattern.
+ *
+ * A 1-minute interval also divides the hour, but listing all sixty of its
+ * minutes past the hour would wreck the layout, so it gets its own
+ * description instead of joining the "hourly" list.
  */
 export function gridPreview(
   nowMs: number,
@@ -62,6 +67,10 @@ export function gridPreview(
   gridOffsetMinutes: number
 ): GridPreview {
   const intervalSecs = workMinutes * 60;
+
+  if (workMinutes === 1) {
+    return { kind: "everyMinute" };
+  }
 
   if (MINUTES_PER_HOUR % workMinutes === 0) {
     // An interval dividing an hour always lands on local minutes that are

@@ -3,6 +3,7 @@
     describeRhythm,
     focusProgress,
     formatSyncPreview,
+    syncPreviewWorkMinutes,
     type ConsumerReminderPresentation,
     type ConsumerWarning
   } from "$lib/consumer-dashboard";
@@ -150,9 +151,30 @@
   );
   const rhythm = $derived(savedSettings ? describeRhythm(savedSettings) : "Reading saved rhythm…");
   const timeFormat = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" });
+
+  // The "upcoming" branch of the sync preview renders absolute times, so it
+  // goes stale the instant it is computed unless something re-triggers the
+  // derivation as the clock moves. Date.now() alone carries no reactivity —
+  // $derived.by only reruns when a tracked value it reads changes — so this
+  // state exists purely to give the derivation a value to track. The
+  // interval only runs while the preview is actually on screen.
+  let previewNowMs = $state(Date.now());
+
+  $effect(() => {
+    if (!(timingEditorExpanded && syncAcrossDevices)) return;
+    const interval = window.setInterval(() => {
+      previewNowMs = Date.now();
+    }, 2_000);
+    return () => window.clearInterval(interval);
+  });
+
   const syncPreview = $derived.by(() => {
     if (!savedSettings) return "";
-    const preview = gridPreview(Date.now(), savedSettings.workMinutes, gridOffsetMinutes);
+    const workMinutes = syncPreviewWorkMinutes(
+      settingsValidation.settings?.workMinutes,
+      savedSettings.workMinutes
+    );
+    const preview = gridPreview(previewNowMs, workMinutes, gridOffsetMinutes);
     return formatSyncPreview(preview, gridOffsetMinutes, timeFormat);
   });
   const settingsConfirmation = $derived(

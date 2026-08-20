@@ -6,6 +6,7 @@ import {
   focusProgress,
   formatMinuteDuration,
   formatSyncPreview,
+  syncPreviewWorkMinutes,
   type ConsumerWarningInput
 } from "./consumer-dashboard";
 import type { GridPreview } from "./break-grid";
@@ -298,6 +299,18 @@ describe("describeRhythm", () => {
   });
 });
 
+describe("syncPreviewWorkMinutes", () => {
+  // The preview must describe the setting the user is about to save, not a
+  // stale mix of the last-saved work minutes and the still-typed offset.
+  test("prefers the draft value once it validates", () => {
+    expect(syncPreviewWorkMinutes(25, 20)).toBe(25);
+  });
+
+  test("falls back to the saved value while the draft does not validate", () => {
+    expect(syncPreviewWorkMinutes(undefined, 20)).toBe(20);
+  });
+});
+
 describe("formatSyncPreview", () => {
   const timeFormat = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" });
 
@@ -313,6 +326,13 @@ describe("formatSyncPreview", () => {
     const listed = timeFormat.format(new Date(0));
     expect(formatSyncPreview(preview, 0, timeFormat)).toBe(
       `Next breaks at ${listed}, UTC.`
+    );
+  });
+
+  test("describes a 1-minute interval without listing all sixty minutes", () => {
+    const preview: GridPreview = { kind: "everyMinute" };
+    expect(formatSyncPreview(preview, 330, timeFormat)).toBe(
+      "Breaks every minute, UTC+05:30."
     );
   });
 });

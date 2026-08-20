@@ -10,6 +10,20 @@ export function describeRhythm(settings: ReminderSettings): string {
 }
 
 /**
+ * Which work-minutes value drives the sync preview: the draft the user is
+ * currently typing, once it validates, falling back to the last saved
+ * value. Pairing this with an offset sourced from draft state too keeps the
+ * preview describing the setting the user is about to save rather than a
+ * stale mix of saved and draft values.
+ */
+export function syncPreviewWorkMinutes(
+  draftWorkMinutes: number | undefined,
+  savedWorkMinutes: number
+): number {
+  return draftWorkMinutes ?? savedWorkMinutes;
+}
+
+/**
  * The dashboard's cross-device verification line. Nothing else can detect a
  * settings mismatch between devices, so this string is the whole surface —
  * it must read cleanly and always carry the offset.
@@ -27,6 +41,9 @@ export function formatSyncPreview(
     // The offset must appear: the hourly pattern alone is identical in every
     // zone, so without it two devices could read the same and still differ.
     return `Breaks at ${listed} past the hour, ${formatGridOffset(gridOffsetMinutes)}.`;
+  }
+  if (preview.kind === "everyMinute") {
+    return `Breaks every minute, ${formatGridOffset(gridOffsetMinutes)}.`;
   }
   const listed = preview.atMs.map((atMs) => timeFormat.format(new Date(atMs))).join(", ");
   return `Next breaks at ${listed}, ${formatGridOffset(gridOffsetMinutes)}.`;

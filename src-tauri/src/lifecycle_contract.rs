@@ -66,7 +66,7 @@ pub(crate) fn discontinuity_observation(
     mono_delta_ms: i64,
     tolerance_ms: i64,
 ) -> DiscontinuityObservation {
-    if wall_delta_ms.saturating_sub(mono_delta_ms).abs() > tolerance_ms {
+    if wall_delta_ms.abs_diff(mono_delta_ms) > tolerance_ms.unsigned_abs() {
         DiscontinuityObservation::Rebased
     } else {
         DiscontinuityObservation::Continuous

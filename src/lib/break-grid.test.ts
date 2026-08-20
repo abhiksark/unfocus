@@ -89,6 +89,18 @@ describe("gridPreview", () => {
     }
   });
 
+  test("describes a 1-minute interval as every minute instead of listing all sixty", () => {
+    // 1 divides an hour, so this would otherwise fall into the "hourly"
+    // branch and list all sixty minutes past the hour, wrecking the layout.
+    expect(gridPreview(BASE * 1000, 1, 330)).toEqual({ kind: "everyMinute" });
+  });
+
+  test("every-minute description is the same whatever the offset", () => {
+    for (const offset of [0, 330, 345, 765, -300, -720, 840]) {
+      expect(gridPreview(BASE * 1000, 1, offset)).toEqual({ kind: "everyMinute" });
+    }
+  });
+
   test("falls back to upcoming times when there is no hourly repeat", () => {
     const preview = gridPreview(BASE * 1000, 25, 330);
     expect(preview.kind).toBe("upcoming");

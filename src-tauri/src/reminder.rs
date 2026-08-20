@@ -1375,7 +1375,7 @@ pub(crate) fn start_scheduler(
                         i64::try_from(now.saturating_sub(prev_mono).as_millis()).unwrap_or(i64::MAX);
                     let tolerance_ms =
                         i64::try_from(CLOCK_DIVERGENCE_TOLERANCE.as_millis()).unwrap_or(i64::MAX);
-                    if wall_delta_ms.saturating_sub(mono_delta_ms).abs() > tolerance_ms {
+                    if wall_delta_ms.abs_diff(mono_delta_ms) > tolerance_ms.unsigned_abs() {
                         timer.rebase_work_deadline(wall_now);
                     }
                 }
@@ -2590,7 +2590,7 @@ mod tests {
     }
 
     #[test]
-    fn a_clock_jump_across_many_grid_points_yields_one_break() {
+    fn a_clock_jump_re_arms_on_the_next_grid_point_without_a_backlog() {
         let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
         // Two hours pass on the wall clock. Rebase first, then evaluate.
         timer.rebase_work_deadline(ist(12, 1));

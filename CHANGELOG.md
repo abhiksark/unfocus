@@ -16,9 +16,11 @@ released versions link to their GitHub release.
   break duration are ordinary settings fields and must be entered the same
   on every device; grid offset has no field of its own and is instead filled
   in automatically from each device's own clock the moment sync is turned
-  on, so it only lines up between devices that share a time zone. Nothing
-  detects a mismatch in any of the three, so compare the dashboard's "Breaks
-  at" line on two devices to confirm they actually agree.
+  on, so it only lines up between devices whose clocks were on the same UTC
+  offset when sync was switched on; turn sync off and on again after a time
+  change or a trip to re-derive it. Nothing detects a mismatch in any of the
+  three, so compare the dashboard's "Breaks at" (or "Next breaks at") line on
+  two devices to confirm they actually agree.
 
 ### Changed
 
