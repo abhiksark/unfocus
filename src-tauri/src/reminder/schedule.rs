@@ -1,10 +1,13 @@
 //! Pure wall-clock break-grid scheduling for sync mode.
 //!
-//! Rust has no calendar and must not gain one (`src-tauri/AGENTS.md`). Aligning
-//! breaks to local midnight needs only a UTC offset in minutes, so everything
-//! here is integer arithmetic over Unix seconds. `rem_euclid` keeps negative
-//! offsets correct, and because only `offset % interval` can affect the result,
-//! callers may store the raw offset without normalising it.
+//! Rust has no calendar and must not gain one (`src-tauri/AGENTS.md`), so
+//! everything here is integer arithmetic over Unix seconds. The grid is
+//! anchored to the local-time epoch (`unix_secs + offset_minutes * 60`), not
+//! to local midnight; the two coincide only when `interval_secs` divides
+//! 86400 (true for the default 20-minute work interval, false for e.g. 25
+//! minutes, where the grid slides 900s per day). `rem_euclid` keeps negative
+//! offsets correct, and because only `offset % interval` can affect the
+//! result, callers may store the raw offset without normalising it.
 
 /// The next grid point strictly after `unix_secs`.
 ///
@@ -37,8 +40,15 @@ mod tests {
     const BASE: i64 = 1_787_220_420; // 2026-08-20T10:07:00Z
 
     #[test]
-    fn grid_points_align_to_local_midnight_across_offset_zones() {
+    fn grid_points_match_the_shared_contract_table_across_offset_zones() {
         // (offset_minutes, interval_secs, expected)
+        //
+        // Mirrored byte-for-byte in `src/lib/break-grid.test.ts`. The grid is
+        // anchored to the local-time epoch, not local midnight; rows
+        // (-720, 1500) and (840, 1500) are the ones here where a
+        // local-midnight anchor would produce a different answer, so they are
+        // what actually pins the local-epoch behavior. Do not remove or
+        // "simplify" them.
         let cases: &[(i16, i64, i64)] = &[
             (0, 1200, 1_787_221_200),
             (0, 1500, 1_787_221_500),
@@ -51,9 +61,9 @@ mod tests {
             (-300, 1200, 1_787_221_200),
             (-300, 1500, 1_787_221_500),
             (-720, 1200, 1_787_221_200),
-            (-720, 1500, 1_787_221_200),
+            (-720, 1500, 1_787_221_200), // discriminates local-epoch from local-midnight
             (840, 1200, 1_787_221_200),
-            (840, 1500, 1_787_220_600),
+            (840, 1500, 1_787_220_600), // discriminates local-epoch from local-midnight
         ];
         for &(offset, interval, expected) in cases {
             assert_eq!(
