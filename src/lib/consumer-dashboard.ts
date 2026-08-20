@@ -1,11 +1,35 @@
 import type { DiagnosticsReport } from "./diagnostics";
 import type { ReminderStatus } from "./reminder-status";
 import type { ReminderSettings } from "./reminder-settings";
+import { formatGridOffset, type GridPreview } from "./break-grid";
 
 /** The saved rhythm line, noting sync only when it is on. */
 export function describeRhythm(settings: ReminderSettings): string {
   const base = `${settings.workMinutes} min focus → ${settings.breakSeconds} sec rest`;
   return settings.syncAcrossDevices ? `${base} · synced across devices` : base;
+}
+
+/**
+ * The dashboard's cross-device verification line. Nothing else can detect a
+ * settings mismatch between devices, so this string is the whole surface —
+ * it must read cleanly and always carry the offset.
+ */
+export function formatSyncPreview(
+  preview: GridPreview,
+  gridOffsetMinutes: number,
+  timeFormat: Intl.DateTimeFormat
+): string {
+  if (preview.kind === "hourly") {
+    // Minutes past the hour carry no 12-/24-hour choice, so they are padded
+    // directly rather than through Intl — a lone `minute: "2-digit"` request
+    // is allowed to fall back to unpadded numeric in some engines.
+    const listed = preview.minutes.map((minute) => `:${String(minute).padStart(2, "0")}`).join(", ");
+    // The offset must appear: the hourly pattern alone is identical in every
+    // zone, so without it two devices could read the same and still differ.
+    return `Breaks at ${listed} past the hour, ${formatGridOffset(gridOffsetMinutes)}.`;
+  }
+  const listed = preview.atMs.map((atMs) => timeFormat.format(new Date(atMs))).join(", ");
+  return `Next breaks at ${listed}, ${formatGridOffset(gridOffsetMinutes)}.`;
 }
 
 export type ConsumerReminderKind =

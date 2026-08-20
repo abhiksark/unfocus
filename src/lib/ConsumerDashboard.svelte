@@ -2,10 +2,11 @@
   import {
     describeRhythm,
     focusProgress,
+    formatSyncPreview,
     type ConsumerReminderPresentation,
     type ConsumerWarning
   } from "$lib/consumer-dashboard";
-  import { formatGridOffset, gridPreview } from "$lib/break-grid";
+  import { gridPreview } from "$lib/break-grid";
   import { DASHBOARD_REMINDER_ACTIONS_LABEL } from "$lib/dashboard-a11y";
   import {
     MAX_BREAK_SECONDS,
@@ -148,21 +149,11 @@
         : "Preview break screen"
   );
   const rhythm = $derived(savedSettings ? describeRhythm(savedSettings) : "Reading saved rhythm…");
-  const minuteFormat = new Intl.DateTimeFormat([], { minute: "2-digit" });
   const timeFormat = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" });
   const syncPreview = $derived.by(() => {
     if (!savedSettings) return "";
     const preview = gridPreview(Date.now(), savedSettings.workMinutes, gridOffsetMinutes);
-    if (preview.kind === "hourly") {
-      const listed = preview.minutes
-        .map((minute) => `:${minuteFormat.format(new Date(2026, 0, 15, 0, minute))}`)
-        .join(", ");
-      // The offset must appear: the hourly pattern alone is identical in every
-      // zone, so without it two devices could read the same and still differ.
-      return `Breaks at ${listed} past the hour, ${formatGridOffset(gridOffsetMinutes)}.`;
-    }
-    const listed = preview.atMs.map((atMs) => timeFormat.format(new Date(atMs))).join(", ");
-    return `Next breaks at ${listed}, ${formatGridOffset(gridOffsetMinutes)}.`;
+    return formatSyncPreview(preview, gridOffsetMinutes, timeFormat);
   });
   const settingsConfirmation = $derived(
     settingsResult === "saved"

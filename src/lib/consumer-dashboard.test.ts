@@ -5,8 +5,10 @@ import {
   describeRhythm,
   focusProgress,
   formatMinuteDuration,
+  formatSyncPreview,
   type ConsumerWarningInput
 } from "./consumer-dashboard";
+import type { GridPreview } from "./break-grid";
 import type { DiagnosticsReport } from "./diagnostics";
 import type { ReminderPhase, ReminderStatus } from "./reminder-status";
 import type { ReminderSettings } from "./reminder-settings";
@@ -293,5 +295,24 @@ describe("describeRhythm", () => {
         gridOffsetMinutes: 330
       })
     ).toBe("20 min focus → 20 sec rest · synced across devices");
+  });
+});
+
+describe("formatSyncPreview", () => {
+  const timeFormat = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" });
+
+  test("pads minutes past the hour with a leading zero", () => {
+    const preview: GridPreview = { kind: "hourly", minutes: [0, 20, 40] };
+    expect(formatSyncPreview(preview, 330, timeFormat)).toBe(
+      "Breaks at :00, :20, :40 past the hour, UTC+05:30."
+    );
+  });
+
+  test("formats upcoming absolute times with the offset", () => {
+    const preview: GridPreview = { kind: "upcoming", atMs: [0] };
+    const listed = timeFormat.format(new Date(0));
+    expect(formatSyncPreview(preview, 0, timeFormat)).toBe(
+      `Next breaks at ${listed}, UTC.`
+    );
   });
 });
