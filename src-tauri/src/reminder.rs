@@ -1,3 +1,5 @@
+mod schedule;
+
 use crate::{
     activity::{
         epoch_ms, ActivityPresentationContext, ActivityTrackerHandle, LONG_ACTIVE_SECONDS,
