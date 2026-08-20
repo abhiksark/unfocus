@@ -78,7 +78,10 @@
   }
 
   const settingsValidation = $derived(
-    validateReminderSettings(workMinutesInput, breakSecondsInput)
+    validateReminderSettings(workMinutesInput, breakSecondsInput, {
+      syncAcrossDevices: false,
+      gridOffsetMinutes: 0
+    })
   );
   const workMinutesError = $derived(
     settingsLoading ? null : settingsValidation.workMinutesError

@@ -209,7 +209,12 @@ describe("consumer warnings", () => {
   });
 });
 
-const settings: ReminderSettings = { workMinutes: 20, breakSeconds: 20 };
+const settings: ReminderSettings = {
+  workMinutes: 20,
+  breakSeconds: 20,
+  syncAcrossDevices: false,
+  gridOffsetMinutes: 0
+};
 
 describe("focusProgress", () => {
   test("returns null without a status", () => {
@@ -257,6 +262,13 @@ describe("focusProgress", () => {
   });
 
   test("returns null for a non-positive work interval", () => {
-    expect(focusProgress(status("working"), { workMinutes: 0, breakSeconds: 20 })).toBeNull();
+    expect(
+      focusProgress(status("working"), {
+        workMinutes: 0,
+        breakSeconds: 20,
+        syncAcrossDevices: false,
+        gridOffsetMinutes: 0
+      })
+    ).toBeNull();
   });
 });
