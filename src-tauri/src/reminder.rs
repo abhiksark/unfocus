@@ -872,9 +872,12 @@ impl ReminderTimer {
         Self::new(now, ReminderSettings::default(), UNIX_EPOCH)
     }
 
-    /// The single entry point onto the Working phase. Computes and stores the
-    /// deadline for this cycle (relative or wall-clock grid) and bumps
-    /// `state_revision` once; callers that delegate here must not bump again.
+    /// The single entry point for *transitions* onto the Working phase.
+    /// Computes and stores the deadline for this cycle (relative or
+    /// wall-clock grid) and bumps `state_revision` once; callers that
+    /// delegate here must not bump again. `new` and `new_paused` bypass this
+    /// and compute the deadline directly so construction keeps
+    /// `state_revision` at 0.
     fn enter_working(&mut self, now: Duration, wall_now: SystemTime) {
         self.phase = ReminderPhase::Working;
         self.phase_started_at = now;
@@ -1012,20 +1015,33 @@ impl ReminderTimer {
     fn tray_snapshot(
         &self,
         now: Duration,
+        wall_now: SystemTime,
         settings_revision: u64,
         overlay_active: bool,
     ) -> TraySnapshot {
         match self.phase {
             ReminderPhase::Working | ReminderPhase::Break => {
-                let (phase, phase_duration) = match self.phase {
-                    ReminderPhase::Working => (TrayPhase::Working, self.settings.work_interval()),
-                    ReminderPhase::Break => (TrayPhase::Break, self.settings.break_duration()),
-                    ReminderPhase::Paused => {
-                        unreachable!("paused phases use the paused snapshot")
-                    }
+                let (phase, remaining) = match self.phase {
+                    ReminderPhase::Working => (
+                        TrayPhase::Working,
+                        match self.work_deadline {
+                            WorkDeadline::Relative => self
+                                .settings
+                                .work_interval()
+                                .saturating_sub(now.saturating_sub(self.phase_started_at)),
+                            WorkDeadline::Wall(due) => {
+                                due.duration_since(wall_now).unwrap_or(Duration::ZERO)
+                            }
+                        },
+                    ),
+                    ReminderPhase::Break => (
+                        TrayPhase::Break,
+                        self.settings
+                            .break_duration()
+                            .saturating_sub(now.saturating_sub(self.phase_started_at)),
+                    ),
+                    ReminderPhase::Paused => unreachable!("paused phases use the paused snapshot"),
                 };
-                let remaining =
-                    phase_duration.saturating_sub(now.saturating_sub(self.phase_started_at));
                 TraySnapshot::timer(
                     phase,
                     remaining,
@@ -1255,21 +1271,24 @@ pub(crate) fn start_scheduler(
             let initial = settings_manager.snapshot();
             let started_at = initial.changed_at;
             let mut settings_revision = initial.revision;
+            // Sampled once and reused for the pause check, timer construction,
+            // and the initial snapshot so they all observe the same instant.
+            let wall_now = SystemTime::now();
             let pause_remaining = initial
                 .pause_until
-                .and_then(|pause_until| pause_until.duration_since(SystemTime::now()).ok());
+                .and_then(|pause_until| pause_until.duration_since(wall_now).ok());
             let mut timer = pause_remaining.map_or_else(
-                || ReminderTimer::new(Duration::ZERO, initial.settings, SystemTime::now()),
+                || ReminderTimer::new(Duration::ZERO, initial.settings, wall_now),
                 |remaining| {
-                    ReminderTimer::new_paused(
-                        Duration::ZERO,
-                        initial.settings,
-                        remaining,
-                        SystemTime::now(),
-                    )
+                    ReminderTimer::new_paused(Duration::ZERO, initial.settings, remaining, wall_now)
                 },
             );
-            tray_status.publish(timer.tray_snapshot(Duration::ZERO, settings_revision, false));
+            tray_status.publish(timer.tray_snapshot(
+                Duration::ZERO,
+                wall_now,
+                settings_revision,
+                false,
+            ));
             let mut control_connected = true;
 
             loop {
@@ -1371,6 +1390,7 @@ pub(crate) fn start_scheduler(
                 let snapshot = timer
                     .tray_snapshot(
                         now,
+                        wall_now,
                         settings_revision,
                         overlay_controller.has_active_run(),
                     )
@@ -1783,7 +1803,7 @@ mod tests {
 
         assert_eq!(timer.tick(Duration::from_secs(10 * 60), UNIX_EPOCH), None);
         timer.apply_settings(settings(1, 8), Duration::from_secs(10 * 60), UNIX_EPOCH);
-        let snapshot = timer.tray_snapshot(Duration::from_secs(10 * 60), 1, false);
+        let snapshot = timer.tray_snapshot(Duration::from_secs(10 * 60), UNIX_EPOCH, 1, false);
         assert_eq!(snapshot.settings_revision, 1);
         assert_eq!(snapshot.state_revision, 1);
         assert_eq!(snapshot.presentation().status, "Working · break in 1 min");
@@ -1808,7 +1828,7 @@ mod tests {
         );
         timer.apply_settings(settings(2, 30), Duration::from_secs(61), UNIX_EPOCH);
         assert_eq!(timer.break_duration(), Duration::from_secs(3));
-        let break_snapshot = timer.tray_snapshot(Duration::from_secs(61), 1, true);
+        let break_snapshot = timer.tray_snapshot(Duration::from_secs(61), UNIX_EPOCH, 1, true);
         assert_eq!(break_snapshot.phase, TrayPhase::Break);
         assert_eq!(break_snapshot.settings_revision, 1);
         assert_eq!(break_snapshot.state_revision, 2);
@@ -1820,7 +1840,7 @@ mod tests {
         );
         assert_eq!(
             timer
-                .tray_snapshot(Duration::from_secs(63), 1, false)
+                .tray_snapshot(Duration::from_secs(63), UNIX_EPOCH, 1, false)
                 .presentation()
                 .status,
             "Working · break in 2 min"
@@ -1844,7 +1864,7 @@ mod tests {
         assert_eq!(timer.paused_until, paused_until);
         assert_eq!(timer.state_revision, 1);
 
-        let snapshot = timer.tray_snapshot(paused_at, 4, false);
+        let snapshot = timer.tray_snapshot(paused_at, UNIX_EPOCH, 4, false);
         assert_eq!(snapshot.phase, TrayPhase::Paused);
         assert_eq!(snapshot.remaining_milliseconds, None);
         assert_eq!(
@@ -1890,7 +1910,8 @@ mod tests {
     #[test]
     fn visible_overlays_disable_actions_that_would_create_another_run() {
         let timer = ReminderTimer::new(Duration::ZERO, settings(20, 20), UNIX_EPOCH);
-        let status = ReminderStatus::from_snapshot(timer.tray_snapshot(Duration::ZERO, 0, true));
+        let status =
+            ReminderStatus::from_snapshot(timer.tray_snapshot(Duration::ZERO, UNIX_EPOCH, 0, true));
 
         assert!(!status.take_break_enabled);
         assert!(!status.preview_enabled);
@@ -1963,7 +1984,7 @@ mod tests {
         assert_eq!(timer.state_revision, 1);
         assert_eq!(
             timer
-                .tray_snapshot(requested_at, 0, true)
+                .tray_snapshot(requested_at, UNIX_EPOCH, 0, true)
                 .presentation()
                 .status,
             "Break in progress"
@@ -1986,7 +2007,7 @@ mod tests {
     #[test]
     fn a_manual_overlay_failure_leaves_the_timer_unchanged() {
         let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 8), UNIX_EPOCH);
-        let before = timer.tray_snapshot(Duration::from_secs(5 * 60), 0, false);
+        let before = timer.tray_snapshot(Duration::from_secs(5 * 60), UNIX_EPOCH, 0, false);
 
         let result = start_manual_break(&mut timer, Duration::from_secs(5 * 60), |duration| {
             assert_eq!(duration, Duration::from_secs(8));
@@ -1997,7 +2018,7 @@ mod tests {
         assert_eq!(timer.phase, ReminderPhase::Working);
         assert_eq!(timer.state_revision, 0);
         assert_eq!(
-            timer.tray_snapshot(Duration::from_secs(5 * 60), 0, false),
+            timer.tray_snapshot(Duration::from_secs(5 * 60), UNIX_EPOCH, 0, false),
             before
         );
     }
@@ -2006,7 +2027,7 @@ mod tests {
     fn a_repeated_manual_break_does_not_present_or_extend_the_active_break() {
         let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 8), UNIX_EPOCH);
         assert!(timer.take_break_now(Duration::from_secs(60)));
-        let before = timer.tray_snapshot(Duration::from_secs(61), 0, true);
+        let before = timer.tray_snapshot(Duration::from_secs(61), UNIX_EPOCH, 0, true);
 
         start_manual_break(&mut timer, Duration::from_secs(62), |_| {
             panic!("an active break must not create another overlay run")
@@ -2016,7 +2037,7 @@ mod tests {
         assert_eq!(timer.phase, ReminderPhase::Break);
         assert_eq!(timer.state_revision, 1);
         assert_eq!(
-            timer.tray_snapshot(Duration::from_secs(61), 0, true),
+            timer.tray_snapshot(Duration::from_secs(61), UNIX_EPOCH, 0, true),
             before
         );
     }
@@ -2104,21 +2125,21 @@ mod tests {
     fn tray_snapshot_comes_from_the_timer_and_never_goes_negative() {
         let mut timer = ReminderTimer::new(Duration::from_secs(100), settings(1, 5), UNIX_EPOCH);
 
-        let regressed = timer.tray_snapshot(Duration::from_secs(90), 4, false);
+        let regressed = timer.tray_snapshot(Duration::from_secs(90), UNIX_EPOCH, 4, false);
         assert_eq!(regressed.phase, TrayPhase::Working);
         assert_eq!(regressed.remaining_milliseconds, Some(60_000));
         assert_eq!(regressed.settings_revision, 4);
         assert_eq!(regressed.state_revision, 0);
         assert!(!regressed.overlay_active);
 
-        let almost_due = timer.tray_snapshot(Duration::from_millis(159_999), 4, false);
+        let almost_due = timer.tray_snapshot(Duration::from_millis(159_999), UNIX_EPOCH, 4, false);
         assert_eq!(almost_due.remaining_milliseconds, Some(1));
 
         assert_eq!(
             timer.tick(Duration::from_secs(600), UNIX_EPOCH),
             Some(ReminderTransition::StartBreak)
         );
-        let break_snapshot = timer.tray_snapshot(Duration::from_secs(600), 4, true);
+        let break_snapshot = timer.tray_snapshot(Duration::from_secs(600), UNIX_EPOCH, 4, true);
         assert_eq!(break_snapshot.phase, TrayPhase::Break);
         assert_eq!(break_snapshot.remaining_milliseconds, Some(5_000));
         assert_eq!(break_snapshot.state_revision, 1);
@@ -2128,7 +2149,7 @@ mod tests {
             timer.tick(Duration::from_secs(605), UNIX_EPOCH),
             Some(ReminderTransition::EndBreak)
         );
-        let resumed = timer.tray_snapshot(Duration::from_secs(605), 4, false);
+        let resumed = timer.tray_snapshot(Duration::from_secs(605), UNIX_EPOCH, 4, false);
         assert_eq!(resumed.phase, TrayPhase::Working);
         assert_eq!(resumed.remaining_milliseconds, Some(60_000));
         assert_eq!(resumed.state_revision, 2);
@@ -2307,7 +2328,7 @@ mod tests {
 
         assert!(timer.credit_natural_break(Duration::from_secs(60), UNIX_EPOCH));
         assert_eq!(timer.phase, ReminderPhase::Working);
-        let snapshot = timer.tray_snapshot(Duration::from_secs(60), 0, false);
+        let snapshot = timer.tray_snapshot(Duration::from_secs(60), UNIX_EPOCH, 0, false);
         assert_eq!(snapshot.phase, TrayPhase::Working);
         assert_eq!(snapshot.remaining_milliseconds, Some(60_000));
         assert_eq!(snapshot.state_revision, 2);
@@ -2326,7 +2347,7 @@ mod tests {
         assert!(timer.credit_natural_break(Duration::from_secs(62), UNIX_EPOCH));
         assert_eq!(timer.phase, ReminderPhase::Working);
         assert_eq!(timer.settings, settings(2, 10));
-        let snapshot = timer.tray_snapshot(Duration::from_secs(62), 1, false);
+        let snapshot = timer.tray_snapshot(Duration::from_secs(62), UNIX_EPOCH, 1, false);
         assert_eq!(snapshot.remaining_milliseconds, Some(120_000));
     }
 
@@ -2379,8 +2400,9 @@ mod tests {
     fn a_break_ending_off_grid_re_grids_to_the_next_whole_point() {
         let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
         timer.tick(Duration::from_secs(1140), ist(10, 20)).unwrap(); // StartBreak
-                                                                     // The twenty-second break ends at 10:20:20; the next break is 10:40:00,
-                                                                     // not 10:40:20.
+
+        // The twenty-second break ends at 10:20:20; the next break is 10:40:00,
+        // not 10:40:20.
         assert_eq!(
             timer.tick(
                 Duration::from_secs(1160),
@@ -2395,7 +2417,8 @@ mod tests {
     fn settings_changed_during_a_break_apply_before_the_next_deadline_is_computed() {
         let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
         timer.tick(Duration::from_secs(1140), ist(10, 20)).unwrap(); // StartBreak
-                                                                     // Switch to a ten-minute rhythm mid-break.
+
+        // Switch to a ten-minute rhythm mid-break.
         timer.apply_settings(sync_settings(10), Duration::from_secs(1145), ist(10, 20));
         timer
             .tick(
@@ -2433,5 +2456,16 @@ mod tests {
             timer.tick(Duration::from_secs(1200), ist(10, 21)),
             Some(ReminderTransition::StartBreak)
         );
+    }
+
+    #[test]
+    fn the_countdown_targets_the_grid_deadline_not_the_interval() {
+        // Entering Working at 10:39 skips the 10:40 grid point (1 min away, under
+        // half an interval) and lands on 11:00. A countdown reading the interval
+        // would hit zero at 10:59 and sit there for a minute.
+        let timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 39));
+        assert_eq!(timer.work_deadline, WorkDeadline::Wall(ist(11, 0)));
+        let snapshot = timer.tray_snapshot(Duration::from_secs(1200), ist(10, 59), 0, false);
+        assert_eq!(snapshot.remaining_milliseconds, Some(60_000));
     }
 }
