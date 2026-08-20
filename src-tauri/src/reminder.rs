@@ -1641,7 +1641,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unsupported_future_version_is_rejected() {
+    fn an_unsupported_future_version_fails_to_parse_into_state() {
         let body = br#"{"version":4,"workMinutes":20,"breakSeconds":20}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         assert!(persisted.into_state(SystemTime::now()).is_err());
@@ -1676,18 +1676,27 @@ mod tests {
     fn saved_settings_survive_a_manager_restart_and_reset_to_defaults() {
         let directory = TestDirectory::new();
         let manager = ReminderSettingsManager::load(&directory.path).unwrap();
-        manager.save(settings(45, 12)).unwrap();
+        // Sync-on settings here (not the sync-off `settings(45, 12)` helper):
+        // starting from defaults on sync_across_devices/grid_offset_minutes
+        // would let a reset that never touches those two fields pass by
+        // coincidence.
+        let sync_on = ReminderSettings::try_new(45, 12, true, 330).unwrap();
+        manager.save(sync_on).unwrap();
         drop(manager);
 
         let reloaded = ReminderSettingsManager::load(&directory.path).unwrap();
-        assert_eq!(reloaded.current(), settings(45, 12));
+        assert_eq!(reloaded.current(), sync_on);
         assert_eq!(reloaded.reset().unwrap(), ReminderSettings::default());
         drop(reloaded);
+
+        let after_reset = ReminderSettingsManager::load(&directory.path)
+            .unwrap()
+            .current();
+        assert_eq!(after_reset, ReminderSettings::default());
+        assert!(!after_reset.sync_across_devices, "reset must clear sync");
         assert_eq!(
-            ReminderSettingsManager::load(&directory.path)
-                .unwrap()
-                .current(),
-            ReminderSettings::default()
+            after_reset.grid_offset_minutes, 0,
+            "reset must zero the grid offset"
         );
     }
 
@@ -1839,6 +1848,11 @@ mod tests {
             r#"{"version":1,"workMinutes":20,"breakSeconds":31}"#,
             r#"{"version":99,"workMinutes":20,"breakSeconds":20}"#,
             r#"{"version":1,"workMinutes":20,"breakSeconds":20,"extra":true}"#,
+            // An out-of-range grid offset (841 > MAX_GRID_OFFSET_MINUTES) fits
+            // in i16, so it reaches `ReminderSettings::try_new` rather than
+            // failing inside serde -- pinning that it takes the same
+            // whole-file repair path as an out-of-range `workMinutes`.
+            r#"{"version":3,"workMinutes":45,"breakSeconds":12,"syncAcrossDevices":true,"gridOffsetMinutes":841}"#,
         ] {
             fs::write(&path, invalid).unwrap();
             let manager = ReminderSettingsManager::load(&directory.path).unwrap();
@@ -2488,19 +2502,68 @@ mod tests {
     }
 
     #[test]
+    fn toggling_sync_on_then_off_mid_working_flips_the_deadline_kind() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, ReminderSettings::default(), ist(10, 1));
+        assert_eq!(timer.work_deadline, WorkDeadline::Relative);
+
+        // Turning sync on while Working must compute and store a grid
+        // deadline immediately, not just take effect on the next natural
+        // Working entry.
+        timer.apply_settings(sync_settings(20), Duration::from_secs(60), ist(10, 1));
+        assert_eq!(timer.work_deadline, WorkDeadline::Wall(ist(10, 20)));
+
+        // Turning sync back off must drop the grid deadline just as
+        // immediately.
+        timer.apply_settings(
+            ReminderSettings::default(),
+            Duration::from_secs(120),
+            ist(10, 1),
+        );
+        assert_eq!(timer.work_deadline, WorkDeadline::Relative);
+    }
+
+    #[test]
     fn a_manual_break_does_not_push_the_shared_grid() {
         let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
         // `take_break_now` enters Break, never Working, so it never touches the
         // shared grid deadline and takes no wall clock.
         timer.take_break_now(Duration::from_secs(240));
-        timer
-            .tick(
+        assert_eq!(
+            timer.tick(
                 Duration::from_secs(260),
                 ist(10, 5) + Duration::from_secs(20),
-            )
-            .unwrap();
+            ),
+            Some(ReminderTransition::EndBreak)
+        );
         // Intended: the 10:20 grid break still fires after a 10:05 manual break.
         assert_eq!(timer.work_deadline, WorkDeadline::Wall(ist(10, 20)));
+        // The stored field alone would still read Wall(10:20) even if the
+        // EndBreak re-grid were deleted, because the constructor already set
+        // that value at ist(10, 1). Driving the timer to the deadline proves
+        // the re-grid actually ran and left Working armed to fire there.
+        assert_eq!(
+            timer.tick(Duration::from_secs(1200), ist(10, 20)),
+            Some(ReminderTransition::StartBreak)
+        );
+    }
+
+    #[test]
+    fn a_manual_break_inside_grace_still_skips_to_the_next_grid_point() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
+        // A manual break at 10:15; the 20s break ends at 10:15:20, only 280s
+        // before the 10:20 grid point -- inside the 600s grace threshold, so
+        // grace must skip it in favour of 10:40. (The companion 10:05 case
+        // above is 880s away, clear of the threshold either way, so it can't
+        // by itself prove grace ran.)
+        timer.take_break_now(Duration::from_secs(14 * 60));
+        assert_eq!(
+            timer.tick(
+                Duration::from_secs(14 * 60 + 20),
+                ist(10, 15) + Duration::from_secs(20),
+            ),
+            Some(ReminderTransition::EndBreak)
+        );
+        assert_eq!(timer.work_deadline, WorkDeadline::Wall(ist(10, 40)));
     }
 
     #[test]

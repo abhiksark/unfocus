@@ -132,4 +132,35 @@ mod tests {
         let half_away = next_grid(BASE, 1200, 0) - 600;
         assert_eq!(deadline_with_grace(half_away, 1200, 0) - half_away, 600);
     }
+
+    #[test]
+    fn grace_takes_the_grid_point_at_the_zero_margin_boundary_for_a_one_minute_interval() {
+        // Exactly one configuration inside the validated ranges (work
+        // 1..=120 min, break 3..=30 s) sits on the grace boundary: work 1 min
+        // (a 60s interval) with a 30s break, where 60 - 30 == 30 == 60 / 2.
+        // The comparison in `deadline_with_grace` is `<`, so the margin is
+        // zero seconds and the grid point is taken, not skipped. Pinned here
+        // so a later change from `<` to `<=` cannot silently invert it.
+        let offset = 330i16;
+        let grid = next_grid(BASE, 60, offset); // a genuine grid point for interval 60
+        assert_eq!(deadline_with_grace(grid + 30, 60, offset), grid + 60);
+    }
+
+    #[test]
+    fn grid_points_land_on_a_local_minute_that_is_a_multiple_of_the_interval() {
+        // Design Section 5's tidy-times guarantee: for intervals dividing 60
+        // minutes, the grid point's local minute is a multiple of the
+        // interval.
+        for interval in [60i64, 120, 300, 600, 900, 1200, 1800, 3600] {
+            for offset in [0i16, 330, 345, 765, -300, -720, 840] {
+                let next = next_grid(BASE, interval, offset);
+                let local = next + i64::from(offset) * 60;
+                assert_eq!(
+                    local.rem_euclid(3600) % interval,
+                    0,
+                    "interval {interval} offset {offset}"
+                );
+            }
+        }
+    }
 }
