@@ -36,6 +36,10 @@ const MAX_WORK_MINUTES: u64 = 120;
 pub(crate) const PAUSE_DURATION_MINUTES: u64 = 30;
 const PAUSE_DURATION: Duration = Duration::from_secs(PAUSE_DURATION_MINUTES * 60);
 const REMINDER_POLL_INTERVAL: Duration = Duration::from_millis(250);
+/// How far the wall clock and the injected monotonic clock may drift between
+/// scheduler iterations before it counts as a discontinuity rather than
+/// ordinary polling jitter. Mirrors `lifecycle_contract::discontinuity_observation`.
+const CLOCK_DIVERGENCE_TOLERANCE: Duration = Duration::from_secs(5);
 const REMINDER_CONTROL_CAPACITY: usize = 16;
 const REMINDER_CONTROL_TIMEOUT: Duration = Duration::from_secs(10);
 const SETTINGS_FILE_NAME: &str = "reminder-settings.json";
@@ -886,6 +890,25 @@ impl ReminderTimer {
         self.state_revision = self.state_revision.wrapping_add(1);
     }
 
+    /// Re-derive the grid deadline after a clock discontinuity (a step, or a
+    /// suspend on platforms where `Instant` observes it — see
+    /// `lifecycle_contract::DiscontinuityObservation`).
+    ///
+    /// Deliberately narrower than `enter_working`: a clock jump is not a phase
+    /// entry, so `phase`, `phase_started_at`, and `paused_until` are untouched.
+    /// Only Working in sync mode has a wall-clock deadline to rebase; a
+    /// relative-mode Working phase, and Break and Paused, are left completely
+    /// alone so suspend-and-wake resumes rather than restarting them.
+    fn rebase_work_deadline(&mut self, wall_now: SystemTime) {
+        if self.phase != ReminderPhase::Working {
+            return;
+        }
+        if let WorkDeadline::Wall(_) = self.work_deadline {
+            self.work_deadline = compute_work_deadline(self.settings, wall_now);
+            self.state_revision = self.state_revision.wrapping_add(1);
+        }
+    }
+
     fn apply_settings(
         &mut self,
         settings: ReminderSettings,
@@ -1290,6 +1313,10 @@ pub(crate) fn start_scheduler(
                 false,
             ));
             let mut control_connected = true;
+            // Loop-local, not on `ReminderTimer`: the timer stays pure and
+            // clock-injected. `None` on the first iteration, so it never
+            // rebases before there is a prior sample to diverge from.
+            let mut last_sample: Option<(SystemTime, Duration)> = None;
 
             loop {
                 let request = if control_connected {
@@ -1326,6 +1353,36 @@ pub(crate) fn start_scheduler(
                 activity_tracker.observe(epoch_ms(SystemTime::now()), probes.idle_seconds.ok());
 
                 let now = started_at.elapsed();
+
+                // Detect a clock discontinuity (an NTP or manual step; a
+                // suspend on platforms where `Instant` observes it — `std`
+                // does not specify that it must) and rebase before evaluating
+                // `now`/`wall_now` below, so a jump never lets a stale wall
+                // deadline fire a surprise break and never strands Working for
+                // the size of a backward step. This mirrors
+                // `lifecycle_contract::discontinuity_observation`, a pinned
+                // test-only contract with no production callers, rather than
+                // calling it — the same relationship `tick` already has with
+                // `stall_observation` below.
+                if let Some((prev_wall, prev_mono)) = last_sample {
+                    let wall_delta_ms = match wall_now.duration_since(prev_wall) {
+                        Ok(forward) => i64::try_from(forward.as_millis()).unwrap_or(i64::MAX),
+                        Err(backward) => {
+                            -i64::try_from(backward.duration().as_millis()).unwrap_or(i64::MAX)
+                        }
+                    };
+                    let mono_delta_ms =
+                        i64::try_from(now.saturating_sub(prev_mono).as_millis()).unwrap_or(i64::MAX);
+                    let tolerance_ms =
+                        i64::try_from(CLOCK_DIVERGENCE_TOLERANCE.as_millis()).unwrap_or(i64::MAX);
+                    if wall_delta_ms.saturating_sub(mono_delta_ms).abs() > tolerance_ms {
+                        timer.rebase_work_deadline(wall_now);
+                    }
+                }
+                // Updated every iteration, rebase or not, so a single jump
+                // cannot trigger repeated rebases on the next few polls.
+                last_sample = Some((wall_now, now));
+
                 let action_result = request.as_ref().map(|request| {
                     execute_reminder_action(
                         request.action,
@@ -2467,5 +2524,56 @@ mod tests {
         assert_eq!(timer.work_deadline, WorkDeadline::Wall(ist(11, 0)));
         let snapshot = timer.tray_snapshot(Duration::from_secs(1200), ist(10, 59), 0, false);
         assert_eq!(snapshot.remaining_milliseconds, Some(60_000));
+    }
+
+    #[test]
+    fn a_clock_jump_across_many_grid_points_yields_one_break() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
+        // Two hours pass on the wall clock. Rebase first, then evaluate.
+        timer.rebase_work_deadline(ist(12, 1));
+        assert_eq!(timer.tick(Duration::from_secs(60), ist(12, 1)), None);
+        assert_eq!(timer.work_deadline, WorkDeadline::Wall(ist(12, 20)));
+    }
+
+    #[test]
+    fn a_clock_jump_leaves_a_relative_timer_completely_unchanged() {
+        // The regression guard for the promise that sync changes nothing by default.
+        let mut timer = ReminderTimer::new(Duration::ZERO, ReminderSettings::default(), ist(10, 1));
+        let before = timer.phase_started_at;
+        timer.rebase_work_deadline(ist(12, 1));
+        assert_eq!(timer.work_deadline, WorkDeadline::Relative);
+        assert_eq!(timer.phase_started_at, before);
+    }
+
+    #[test]
+    fn resuming_from_pause_in_sync_mode_rejoins_the_shared_grid_with_grace() {
+        // m3: the tracked-doc claim ("with cross-device sync enabled it
+        // instead rejoins the shared grid, skipping a grid point less than
+        // half an interval away") had no test until now.
+        let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
+        assert!(timer.pause(Duration::from_secs(60)));
+        // 10:31 is nine minutes from the 10:40 grid point, under half the
+        // twenty-minute interval, so resume skips it and rejoins at 11:00.
+        assert!(timer.resume(Duration::from_secs(120), ist(10, 31)));
+        assert_eq!(timer.work_deadline, WorkDeadline::Wall(ist(11, 0)));
+    }
+
+    #[test]
+    fn natural_break_credit_applies_pending_settings_before_the_grid_deadline() {
+        // m4: `settings_changed_during_a_break_apply_before_the_next_deadline_is_computed`
+        // covers this ordering on the EndBreak path; `credit_natural_break` has
+        // the same ordering comment but was untested until now.
+        let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
+        timer.tick(Duration::from_secs(1140), ist(10, 20)).unwrap(); // StartBreak
+
+        // Switch to a ten-minute rhythm mid-break, then credit a natural break
+        // instead of waiting for the break timer to expire.
+        timer.apply_settings(sync_settings(10), Duration::from_secs(1145), ist(10, 20));
+        assert!(timer.credit_natural_break(
+            Duration::from_secs(1146),
+            ist(10, 20) + Duration::from_secs(20)
+        ));
+        // A ten-minute grid puts the next break at 10:30, not 10:40.
+        assert_eq!(timer.work_deadline, WorkDeadline::Wall(ist(10, 30)));
     }
 }

@@ -9,8 +9,10 @@ use std::time::Duration;
 /// How the pure reminder clock treats a long gap between polls (suspend,
 /// freeze, debugger pause, or a stalled scheduler thread).
 ///
-/// Product rule: phase duration is measured in the injected monotonic clock.
-/// When that clock jumps past one or more phase deadlines, the scheduler may
+/// Product rule: Break and Pause durations, and Working in relative mode, are
+/// measured in the injected monotonic clock. Working in sync mode uses a
+/// stored wall-clock deadline; see `discontinuity_observation`. When the
+/// monotonic clock jumps past one or more phase deadlines, the scheduler may
 /// perform **at most one** phase transition for that observation. It never
 /// replays a backlog of work/break cycles or presents multiple overlays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +45,32 @@ pub(crate) fn stall_observation(
 /// one `tick(now)` call. Always 0 or 1; never a backlog size.
 pub(crate) fn max_transitions_per_tick() -> usize {
     1
+}
+
+/// Whether the wall and monotonic clocks stayed consistent between two polls.
+///
+/// A stall advances both clocks together and is handled by
+/// `stall_observation`. A discontinuity — a clock step, or a suspend on
+/// platforms where it is observable — moves them apart. `std` does not specify
+/// whether suspends count as elapsed monotonic time, so the design must not
+/// depend on suspend being detected here; an undetected wake degrades into the
+/// stall case and is then absorbed by the idle-probe presentation veto.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DiscontinuityObservation {
+    Continuous,
+    Rebased,
+}
+
+pub(crate) fn discontinuity_observation(
+    wall_delta_ms: i64,
+    mono_delta_ms: i64,
+    tolerance_ms: i64,
+) -> DiscontinuityObservation {
+    if wall_delta_ms.saturating_sub(mono_delta_ms).abs() > tolerance_ms {
+        DiscontinuityObservation::Rebased
+    } else {
+        DiscontinuityObservation::Continuous
+    }
 }
 
 /// Product policy for display topology changes relative to an overlay run.
@@ -209,6 +237,40 @@ mod tests {
         assert!(contract.countdown_must_not_live_region_every_second);
         assert!(contract.reduced_motion_stops_loops);
         assert!(contract.state_also_in_text);
+    }
+
+    #[test]
+    fn clocks_advancing_together_are_continuous_however_long_the_stall() {
+        // A starved thread advances both clocks equally; that is a stall, not a
+        // discontinuity, and the existing stall rule handles it.
+        assert_eq!(
+            discontinuity_observation(600_000, 600_000, 5_000),
+            DiscontinuityObservation::Continuous
+        );
+    }
+
+    #[test]
+    fn a_forward_clock_step_is_a_discontinuity() {
+        assert_eq!(
+            discontinuity_observation(3_600_000, 250, 5_000),
+            DiscontinuityObservation::Rebased
+        );
+    }
+
+    #[test]
+    fn a_backward_clock_step_is_a_discontinuity() {
+        assert_eq!(
+            discontinuity_observation(-3_600_000, 250, 5_000),
+            DiscontinuityObservation::Rebased
+        );
+    }
+
+    #[test]
+    fn divergence_exactly_at_tolerance_is_still_continuous() {
+        assert_eq!(
+            discontinuity_observation(5_250, 250, 5_000),
+            DiscontinuityObservation::Continuous
+        );
     }
 
     #[test]
