@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   consumerReminderPresentation,
   consumerWarning,
+  describeRhythm,
   focusProgress,
   formatMinuteDuration,
   type ConsumerWarningInput
@@ -270,5 +271,27 @@ describe("focusProgress", () => {
         gridOffsetMinutes: 0
       })
     ).toBeNull();
+  });
+});
+
+describe("describeRhythm", () => {
+  test("describes the rhythm with its sync state", () => {
+    expect(
+      describeRhythm({
+        workMinutes: 20,
+        breakSeconds: 20,
+        syncAcrossDevices: false,
+        gridOffsetMinutes: 0
+      })
+    ).toBe("20 min focus → 20 sec rest");
+
+    expect(
+      describeRhythm({
+        workMinutes: 20,
+        breakSeconds: 20,
+        syncAcrossDevices: true,
+        gridOffsetMinutes: 330
+      })
+    ).toBe("20 min focus → 20 sec rest · synced across devices");
   });
 });

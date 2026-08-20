@@ -2,6 +2,12 @@ import type { DiagnosticsReport } from "./diagnostics";
 import type { ReminderStatus } from "./reminder-status";
 import type { ReminderSettings } from "./reminder-settings";
 
+/** The saved rhythm line, noting sync only when it is on. */
+export function describeRhythm(settings: ReminderSettings): string {
+  const base = `${settings.workMinutes} min focus → ${settings.breakSeconds} sec rest`;
+  return settings.syncAcrossDevices ? `${base} · synced across devices` : base;
+}
+
 export type ConsumerReminderKind =
   | "loading"
   | "working"

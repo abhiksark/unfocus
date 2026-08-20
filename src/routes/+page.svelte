@@ -3,6 +3,7 @@
   import ConsumerDashboard from "$lib/ConsumerDashboard.svelte";
   import DeveloperDashboard from "$lib/DeveloperDashboard.svelte";
   import HistoryView from "$lib/HistoryView.svelte";
+  import { deviceGridOffsetMinutes } from "$lib/break-grid";
   import {
     consumerReminderPresentation,
     consumerWarning
@@ -57,6 +58,8 @@
   let savedSettings = $state<ReminderSettings | null>(null);
   let workMinutesInput = $state("");
   let breakSecondsInput = $state("");
+  let syncAcrossDevices = $state(false);
+  let gridOffsetMinutes = $state(0);
   let settingsLoading = $state(true);
   let settingsSaving = $state(false);
   let settingsError = $state<string | null>(null);
@@ -79,8 +82,8 @@
 
   const settingsValidation = $derived(
     validateReminderSettings(workMinutesInput, breakSecondsInput, {
-      syncAcrossDevices: false,
-      gridOffsetMinutes: 0
+      syncAcrossDevices,
+      gridOffsetMinutes
     })
   );
   const workMinutesError = $derived(
@@ -247,6 +250,15 @@
     savedSettings = settings;
     workMinutesInput = String(settings.workMinutes);
     breakSecondsInput = String(settings.breakSeconds);
+    syncAcrossDevices = settings.syncAcrossDevices;
+    gridOffsetMinutes = settings.gridOffsetMinutes;
+  }
+
+  function toggleSyncAcrossDevices(enabled: boolean) {
+    syncAcrossDevices = enabled;
+    if (enabled) {
+      gridOffsetMinutes = deviceGridOffsetMinutes(new Date());
+    }
   }
 
   async function loadReminderSettings() {
@@ -456,6 +468,8 @@
       {timingEditorExpanded}
       {workMinutesInput}
       {breakSecondsInput}
+      {syncAcrossDevices}
+      {gridOffsetMinutes}
       {settingsLoading}
       {settingsSaving}
       {settingsValidation}
@@ -470,6 +484,7 @@
       onToggleTimingEditor={() => (timingEditorExpanded = !timingEditorExpanded)}
       onWorkMinutesInput={updateWorkMinutes}
       onBreakSecondsInput={updateBreakSeconds}
+      onToggleSync={toggleSyncAcrossDevices}
       onSaveSettings={() => void saveReminderSettings()}
       onResetSettings={() => void resetReminderSettings()}
       onOpenDeveloperMode={() => setDashboardMode("developer")}
