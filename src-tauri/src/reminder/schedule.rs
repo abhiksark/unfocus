@@ -10,7 +10,6 @@
 ///
 /// Never returns `unix_secs` itself: a break must not re-fire on the grid point
 /// that just triggered it.
-#[allow(dead_code)]
 pub(crate) fn next_grid(unix_secs: i64, interval_secs: i64, offset_minutes: i16) -> i64 {
     let local_seconds = unix_secs + i64::from(offset_minutes) * 60;
     let phase = local_seconds.rem_euclid(interval_secs);
@@ -22,7 +21,6 @@ pub(crate) fn next_grid(unix_secs: i64, interval_secs: i64, offset_minutes: i16)
 /// Applied once on Working entry and then stored, so it never re-runs in steady
 /// state. `interval_secs` is always a whole number of minutes and therefore
 /// even, so the halving cannot truncate.
-#[allow(dead_code)]
 pub(crate) fn deadline_with_grace(unix_secs: i64, interval_secs: i64, offset_minutes: i16) -> i64 {
     let next = next_grid(unix_secs, interval_secs, offset_minutes);
     if next - unix_secs < interval_secs / 2 {

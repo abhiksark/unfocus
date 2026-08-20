@@ -67,7 +67,9 @@ plans/            Local working notes only (gitignored; not tracked docs)
   Retention is at least 90 days going forward because whole archive chunks age
   out together. Existing installs cannot backfill activity from before this
   retention feature.
-- Pause is a fixed 30-minute local pause. Resume starts a fresh work interval.
+- Pause is a fixed 30-minute local pause. Resume starts a fresh work interval;
+  with cross-device sync enabled it instead rejoins the shared grid, skipping a
+  grid point less than half an interval away.
 - Closing the dashboard hides into the tray when the tray is available; if tray
   setup failed, closing the dashboard exits so a silent unreachable process
   cannot keep running.

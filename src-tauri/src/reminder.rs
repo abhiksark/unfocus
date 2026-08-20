@@ -94,7 +94,6 @@ impl ReminderSettings {
     }
 
     /// The grid offset when sync is on. The timer's only view of sync state.
-    #[allow(dead_code)]
     fn sync_offset(self) -> Option<i16> {
         self.sync_across_devices.then_some(self.grid_offset_minutes)
     }
@@ -783,8 +782,50 @@ enum ReminderTransition {
     ResumeWorking,
 }
 
-/// The recurring reminder clock. Its only input is monotonic elapsed time;
-/// probe results deliberately do not participate in phase advancement.
+fn unix_seconds(at: SystemTime) -> i64 {
+    match at.duration_since(UNIX_EPOCH) {
+        Ok(since) => i64::try_from(since.as_secs()).unwrap_or(i64::MAX),
+        Err(before) => -i64::try_from(before.duration().as_secs()).unwrap_or(i64::MAX),
+    }
+}
+
+fn system_time_from_unix_seconds(secs: i64) -> SystemTime {
+    if secs >= 0 {
+        UNIX_EPOCH + Duration::from_secs(secs.unsigned_abs())
+    } else {
+        UNIX_EPOCH - Duration::from_secs(secs.unsigned_abs())
+    }
+}
+
+/// When the current Working phase ends.
+///
+/// `Relative` is the default path and reproduces the pre-sync behaviour
+/// exactly. `Wall` is computed once on Working entry and stored, so the grace
+/// rule never re-runs in steady state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkDeadline {
+    Relative,
+    Wall(SystemTime),
+}
+
+/// The grid deadline for a Working phase starting under `settings`, observed
+/// at `wall_now`. Pure and clock-injected: the caller supplies the wall clock.
+fn compute_work_deadline(settings: ReminderSettings, wall_now: SystemTime) -> WorkDeadline {
+    match settings.sync_offset() {
+        None => WorkDeadline::Relative,
+        Some(offset) => {
+            let interval = settings.work_interval().as_secs() as i64;
+            WorkDeadline::Wall(system_time_from_unix_seconds(
+                schedule::deadline_with_grace(unix_seconds(wall_now), interval, offset),
+            ))
+        }
+    }
+}
+
+/// The recurring reminder clock. Break and Pause advance on injected monotonic
+/// time only. Working advances on monotonic time in relative mode (the
+/// default) and on a stored wall-clock grid deadline in sync mode. Probe
+/// results deliberately do not participate in phase advancement in either mode.
 #[derive(Debug)]
 struct ReminderTimer {
     phase: ReminderPhase,
@@ -793,25 +834,33 @@ struct ReminderTimer {
     settings: ReminderSettings,
     pending_settings: Option<ReminderSettings>,
     state_revision: u64,
+    work_deadline: WorkDeadline,
 }
 
 impl ReminderTimer {
-    fn new(now: Duration, settings: ReminderSettings) -> Self {
+    fn new(now: Duration, settings: ReminderSettings, wall_now: SystemTime) -> Self {
         Self {
             phase: ReminderPhase::Working,
             phase_started_at: now,
             paused_until: None,
+            work_deadline: compute_work_deadline(settings, wall_now),
             settings,
             pending_settings: None,
             state_revision: 0,
         }
     }
 
-    fn new_paused(now: Duration, settings: ReminderSettings, remaining: Duration) -> Self {
+    fn new_paused(
+        now: Duration,
+        settings: ReminderSettings,
+        remaining: Duration,
+        wall_now: SystemTime,
+    ) -> Self {
         Self {
             phase: ReminderPhase::Paused,
             phase_started_at: now,
             paused_until: Some(now.saturating_add(remaining.min(PAUSE_DURATION))),
+            work_deadline: compute_work_deadline(settings, wall_now),
             settings,
             pending_settings: None,
             state_revision: 0,
@@ -820,23 +869,42 @@ impl ReminderTimer {
 
     #[cfg(test)]
     fn with_defaults(now: Duration) -> Self {
-        Self::new(now, ReminderSettings::default())
+        Self::new(now, ReminderSettings::default(), UNIX_EPOCH)
     }
 
-    fn apply_settings(&mut self, settings: ReminderSettings, changed_at: Duration) {
+    /// The single entry point onto the Working phase. Computes and stores the
+    /// deadline for this cycle (relative or wall-clock grid) and bumps
+    /// `state_revision` once; callers that delegate here must not bump again.
+    fn enter_working(&mut self, now: Duration, wall_now: SystemTime) {
+        self.phase = ReminderPhase::Working;
+        self.phase_started_at = now;
+        self.paused_until = None;
+        self.work_deadline = compute_work_deadline(self.settings, wall_now);
+        self.state_revision = self.state_revision.wrapping_add(1);
+    }
+
+    fn apply_settings(
+        &mut self,
+        settings: ReminderSettings,
+        changed_at: Duration,
+        wall_now: SystemTime,
+    ) {
         match self.phase {
             ReminderPhase::Working => {
                 self.settings = settings;
                 self.pending_settings = None;
-                self.phase_started_at = changed_at;
+                self.enter_working(changed_at, wall_now);
             }
-            ReminderPhase::Break => self.pending_settings = Some(settings),
+            ReminderPhase::Break => {
+                self.pending_settings = Some(settings);
+                self.state_revision = self.state_revision.wrapping_add(1);
+            }
             ReminderPhase::Paused => {
                 self.settings = settings;
                 self.pending_settings = None;
+                self.state_revision = self.state_revision.wrapping_add(1);
             }
         }
-        self.state_revision = self.state_revision.wrapping_add(1);
     }
 
     fn break_duration(&self) -> Duration {
@@ -854,14 +922,11 @@ impl ReminderTimer {
         true
     }
 
-    fn resume(&mut self, now: Duration) -> bool {
+    fn resume(&mut self, now: Duration, wall_now: SystemTime) -> bool {
         if self.phase != ReminderPhase::Paused {
             return false;
         }
-        self.phase = ReminderPhase::Working;
-        self.phase_started_at = now;
-        self.paused_until = None;
-        self.state_revision = self.state_revision.wrapping_add(1);
+        self.enter_working(now, wall_now);
         true
     }
 
@@ -880,58 +945,64 @@ impl ReminderTimer {
     /// Used when idle probes show the user already rested long enough that
     /// showing a multi-monitor overlay would be wrong — and sitting in a
     /// silent break phase would feel broken.
-    fn credit_natural_break(&mut self, now: Duration) -> bool {
+    fn credit_natural_break(&mut self, now: Duration, wall_now: SystemTime) -> bool {
         if self.phase != ReminderPhase::Break {
             return false;
         }
-        self.phase = ReminderPhase::Working;
-        self.phase_started_at = now;
-        self.paused_until = None;
+        // Pending settings must be applied before the deadline is computed:
+        // the deadline depends on the interval and offset, both of which can
+        // change with pending settings.
         if let Some(settings) = self.pending_settings.take() {
             self.settings = settings;
         }
-        self.state_revision = self.state_revision.wrapping_add(1);
+        self.enter_working(now, wall_now);
         true
     }
 
-    fn tick(&mut self, now: Duration) -> Option<ReminderTransition> {
+    fn tick(&mut self, now: Duration, wall_now: SystemTime) -> Option<ReminderTransition> {
         if self.phase == ReminderPhase::Paused {
             let paused_until = self.paused_until.unwrap_or(self.phase_started_at);
             if now < paused_until {
                 return None;
             }
-            self.phase = ReminderPhase::Working;
-            self.phase_started_at = now;
-            self.paused_until = None;
-            self.state_revision = self.state_revision.wrapping_add(1);
+            self.enter_working(now, wall_now);
             return Some(ReminderTransition::ResumeWorking);
         }
 
-        let elapsed = now.saturating_sub(self.phase_started_at);
-        let phase_duration = match self.phase {
-            ReminderPhase::Working => self.settings.work_interval(),
-            ReminderPhase::Break => self.settings.break_duration(),
+        let due = match self.phase {
+            ReminderPhase::Working => match self.work_deadline {
+                WorkDeadline::Relative => {
+                    now.saturating_sub(self.phase_started_at) >= self.settings.work_interval()
+                }
+                WorkDeadline::Wall(due) => wall_now >= due,
+            },
+            ReminderPhase::Break => {
+                now.saturating_sub(self.phase_started_at) >= self.settings.break_duration()
+            }
             ReminderPhase::Paused => unreachable!("paused phases return before duration lookup"),
         };
 
-        if elapsed < phase_duration {
+        if !due {
             return None;
         }
 
         // Anchor the next phase at this observation rather than replaying every
         // missed cycle after a long scheduler stall.
-        self.phase_started_at = now;
-        self.state_revision = self.state_revision.wrapping_add(1);
         Some(match self.phase {
             ReminderPhase::Working => {
                 self.phase = ReminderPhase::Break;
+                self.phase_started_at = now;
+                self.state_revision = self.state_revision.wrapping_add(1);
                 ReminderTransition::StartBreak
             }
             ReminderPhase::Break => {
-                self.phase = ReminderPhase::Working;
+                // Pending settings must be applied before the deadline is
+                // computed: applying afterwards would compute against the
+                // stale interval and silently desync for one cycle.
                 if let Some(settings) = self.pending_settings.take() {
                     self.settings = settings;
                 }
+                self.enter_working(now, wall_now);
                 ReminderTransition::EndBreak
             }
             ReminderPhase::Paused => unreachable!("paused phases return before transition"),
@@ -1041,9 +1112,14 @@ fn break_presentation(
     BreakPresentation::Show
 }
 
+// The wall clock is injected once per scheduler iteration and reused across
+// every call in that pass (see `start_scheduler`), rather than sampled
+// locally, which pushed this seam past clippy's default argument threshold.
+#[allow(clippy::too_many_arguments)]
 fn execute_reminder_action(
     action: ReminderAction,
     now: Duration,
+    wall_now: SystemTime,
     timer: &mut ReminderTimer,
     settings_manager: &ReminderSettingsManager,
     app: &AppHandle,
@@ -1055,7 +1131,7 @@ fn execute_reminder_action(
             start_bounded_pause(timer, now, || settings_manager.pause_for(PAUSE_DURATION))?;
         }
         ReminderAction::Resume if timer.phase == ReminderPhase::Paused => {
-            resume_from_pause(timer, now, || settings_manager.clear_pause())?;
+            resume_from_pause(timer, now, wall_now, || settings_manager.clear_pause())?;
         }
         ReminderAction::TakeBreakNow if timer.phase == ReminderPhase::Working => {
             let settings = timer.settings;
@@ -1096,13 +1172,14 @@ fn start_bounded_pause(
 fn resume_from_pause(
     timer: &mut ReminderTimer,
     now: Duration,
+    wall_now: SystemTime,
     persist: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     if timer.phase != ReminderPhase::Paused {
         return Ok(());
     }
     persist()?;
-    let resumed = timer.resume(now);
+    let resumed = timer.resume(now, wall_now);
     debug_assert!(resumed);
     Ok(())
 }
@@ -1182,8 +1259,15 @@ pub(crate) fn start_scheduler(
                 .pause_until
                 .and_then(|pause_until| pause_until.duration_since(SystemTime::now()).ok());
             let mut timer = pause_remaining.map_or_else(
-                || ReminderTimer::new(Duration::ZERO, initial.settings),
-                |remaining| ReminderTimer::new_paused(Duration::ZERO, initial.settings, remaining),
+                || ReminderTimer::new(Duration::ZERO, initial.settings, SystemTime::now()),
+                |remaining| {
+                    ReminderTimer::new_paused(
+                        Duration::ZERO,
+                        initial.settings,
+                        remaining,
+                        SystemTime::now(),
+                    )
+                },
             );
             tray_status.publish(timer.tray_snapshot(Duration::ZERO, settings_revision, false));
             let mut control_connected = true;
@@ -1203,11 +1287,16 @@ pub(crate) fn start_scheduler(
                     None
                 };
 
+                // Sampled once per iteration and reused everywhere below so
+                // every timer call in this pass observes the same instant.
+                let wall_now = SystemTime::now();
+
                 let latest = settings_manager.snapshot();
                 if latest.revision != settings_revision {
                     timer.apply_settings(
                         latest.settings,
                         latest.changed_at.saturating_duration_since(started_at),
+                        wall_now,
                     );
                     settings_revision = latest.revision;
                 }
@@ -1222,6 +1311,7 @@ pub(crate) fn start_scheduler(
                     execute_reminder_action(
                         request.action,
                         now,
+                        wall_now,
                         &mut timer,
                         &settings_manager,
                         &app,
@@ -1237,7 +1327,7 @@ pub(crate) fn start_scheduler(
                         }
                     }
                 }
-                let transition = timer.tick(now);
+                let transition = timer.tick(now, wall_now);
                 if transition == Some(ReminderTransition::ResumeWorking) {
                     if let Err(error) = settings_manager.clear_pause() {
                         let error = format!(
@@ -1272,7 +1362,7 @@ pub(crate) fn start_scheduler(
                             epoch_ms(SystemTime::now()),
                         );
                         if presentation == BreakPresentation::NaturalIdle {
-                            let credited = timer.credit_natural_break(now);
+                            let credited = timer.credit_natural_break(now, wall_now);
                             debug_assert!(credited);
                         }
                     }
@@ -1363,20 +1453,27 @@ mod tests {
 
         assert_eq!(defaults, settings(20, 20));
         assert_eq!(
-            timer.tick(defaults.work_interval() - Duration::from_millis(1)),
+            timer.tick(
+                defaults.work_interval() - Duration::from_millis(1),
+                UNIX_EPOCH
+            ),
             None
         );
         assert_eq!(
-            timer.tick(defaults.work_interval()),
+            timer.tick(defaults.work_interval(), UNIX_EPOCH),
             Some(ReminderTransition::StartBreak)
         );
         assert_eq!(
-            timer.tick(defaults.work_interval() + defaults.break_duration()),
+            timer.tick(
+                defaults.work_interval() + defaults.break_duration(),
+                UNIX_EPOCH
+            ),
             Some(ReminderTransition::EndBreak)
         );
         assert_eq!(
             timer.tick(
-                defaults.work_interval() + defaults.break_duration() + defaults.work_interval()
+                defaults.work_interval() + defaults.break_duration() + defaults.work_interval(),
+                UNIX_EPOCH
             ),
             Some(ReminderTransition::StartBreak)
         );
@@ -1682,17 +1779,20 @@ mod tests {
 
     #[test]
     fn saving_during_work_restarts_the_countdown_at_the_save_time() {
-        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20), UNIX_EPOCH);
 
-        assert_eq!(timer.tick(Duration::from_secs(10 * 60)), None);
-        timer.apply_settings(settings(1, 8), Duration::from_secs(10 * 60));
+        assert_eq!(timer.tick(Duration::from_secs(10 * 60), UNIX_EPOCH), None);
+        timer.apply_settings(settings(1, 8), Duration::from_secs(10 * 60), UNIX_EPOCH);
         let snapshot = timer.tray_snapshot(Duration::from_secs(10 * 60), 1, false);
         assert_eq!(snapshot.settings_revision, 1);
         assert_eq!(snapshot.state_revision, 1);
         assert_eq!(snapshot.presentation().status, "Working · break in 1 min");
-        assert_eq!(timer.tick(Duration::from_secs(10 * 60 + 59)), None);
         assert_eq!(
-            timer.tick(Duration::from_secs(11 * 60)),
+            timer.tick(Duration::from_secs(10 * 60 + 59), UNIX_EPOCH),
+            None
+        );
+        assert_eq!(
+            timer.tick(Duration::from_secs(11 * 60), UNIX_EPOCH),
             Some(ReminderTransition::StartBreak)
         );
         assert_eq!(timer.break_duration(), Duration::from_secs(8));
@@ -1700,22 +1800,22 @@ mod tests {
 
     #[test]
     fn saving_during_a_break_preserves_that_break_and_updates_the_next_work_phase() {
-        let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 3));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 3), UNIX_EPOCH);
 
         assert_eq!(
-            timer.tick(Duration::from_secs(60)),
+            timer.tick(Duration::from_secs(60), UNIX_EPOCH),
             Some(ReminderTransition::StartBreak)
         );
-        timer.apply_settings(settings(2, 30), Duration::from_secs(61));
+        timer.apply_settings(settings(2, 30), Duration::from_secs(61), UNIX_EPOCH);
         assert_eq!(timer.break_duration(), Duration::from_secs(3));
         let break_snapshot = timer.tray_snapshot(Duration::from_secs(61), 1, true);
         assert_eq!(break_snapshot.phase, TrayPhase::Break);
         assert_eq!(break_snapshot.settings_revision, 1);
         assert_eq!(break_snapshot.state_revision, 2);
         assert_eq!(break_snapshot.presentation().status, "Break in progress");
-        assert_eq!(timer.tick(Duration::from_secs(62)), None);
+        assert_eq!(timer.tick(Duration::from_secs(62), UNIX_EPOCH), None);
         assert_eq!(
-            timer.tick(Duration::from_secs(63)),
+            timer.tick(Duration::from_secs(63), UNIX_EPOCH),
             Some(ReminderTransition::EndBreak)
         );
         assert_eq!(
@@ -1725,9 +1825,9 @@ mod tests {
                 .status,
             "Working · break in 2 min"
         );
-        assert_eq!(timer.tick(Duration::from_secs(182)), None);
+        assert_eq!(timer.tick(Duration::from_secs(182), UNIX_EPOCH), None);
         assert_eq!(
-            timer.tick(Duration::from_secs(183)),
+            timer.tick(Duration::from_secs(183), UNIX_EPOCH),
             Some(ReminderTransition::StartBreak)
         );
         assert_eq!(timer.break_duration(), Duration::from_secs(30));
@@ -1735,7 +1835,7 @@ mod tests {
 
     #[test]
     fn pause_is_bounded_idempotent_and_resumes_with_a_fresh_work_interval() {
-        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20), UNIX_EPOCH);
         let paused_at = Duration::from_secs(10 * 60);
 
         assert!(timer.pause(paused_at));
@@ -1759,28 +1859,37 @@ mod tests {
         assert!(status.preview_enabled);
 
         assert_eq!(
-            timer.tick(paused_at + PAUSE_DURATION - Duration::from_millis(1)),
+            timer.tick(
+                paused_at + PAUSE_DURATION - Duration::from_millis(1),
+                UNIX_EPOCH
+            ),
             None
         );
         assert_eq!(
-            timer.tick(paused_at + PAUSE_DURATION),
+            timer.tick(paused_at + PAUSE_DURATION, UNIX_EPOCH),
             Some(ReminderTransition::ResumeWorking)
         );
         assert_eq!(timer.phase, ReminderPhase::Working);
         assert_eq!(timer.state_revision, 2);
         assert_eq!(
-            timer.tick(paused_at + PAUSE_DURATION + Duration::from_secs(20 * 60 - 1)),
+            timer.tick(
+                paused_at + PAUSE_DURATION + Duration::from_secs(20 * 60 - 1),
+                UNIX_EPOCH
+            ),
             None
         );
         assert_eq!(
-            timer.tick(paused_at + PAUSE_DURATION + Duration::from_secs(20 * 60)),
+            timer.tick(
+                paused_at + PAUSE_DURATION + Duration::from_secs(20 * 60),
+                UNIX_EPOCH
+            ),
             Some(ReminderTransition::StartBreak)
         );
     }
 
     #[test]
     fn visible_overlays_disable_actions_that_would_create_another_run() {
-        let timer = ReminderTimer::new(Duration::ZERO, settings(20, 20));
+        let timer = ReminderTimer::new(Duration::ZERO, settings(20, 20), UNIX_EPOCH);
         let status = ReminderStatus::from_snapshot(timer.tray_snapshot(Duration::ZERO, 0, true));
 
         assert!(!status.take_break_enabled);
@@ -1790,18 +1899,18 @@ mod tests {
 
     #[test]
     fn manual_resume_is_idempotent_and_settings_saved_while_paused_apply_afterward() {
-        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20), UNIX_EPOCH);
         assert!(timer.pause(Duration::from_secs(60)));
-        timer.apply_settings(settings(1, 8), Duration::from_secs(90));
+        timer.apply_settings(settings(1, 8), Duration::from_secs(90), UNIX_EPOCH);
         assert_eq!(timer.phase, ReminderPhase::Paused);
         assert_eq!(timer.state_revision, 2);
 
-        assert!(timer.resume(Duration::from_secs(120)));
-        assert!(!timer.resume(Duration::from_secs(121)));
+        assert!(timer.resume(Duration::from_secs(120), UNIX_EPOCH));
+        assert!(!timer.resume(Duration::from_secs(121), UNIX_EPOCH));
         assert_eq!(timer.state_revision, 3);
-        assert_eq!(timer.tick(Duration::from_secs(179)), None);
+        assert_eq!(timer.tick(Duration::from_secs(179), UNIX_EPOCH), None);
         assert_eq!(
-            timer.tick(Duration::from_secs(180)),
+            timer.tick(Duration::from_secs(180), UNIX_EPOCH),
             Some(ReminderTransition::StartBreak)
         );
         assert_eq!(timer.break_duration(), Duration::from_secs(8));
@@ -1809,7 +1918,7 @@ mod tests {
 
     #[test]
     fn pause_persistence_failures_leave_the_timer_state_unchanged() {
-        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20), UNIX_EPOCH);
         let result = start_bounded_pause(&mut timer, Duration::from_secs(60), || {
             Err("settings write failed".into())
         });
@@ -1819,7 +1928,7 @@ mod tests {
 
         assert!(timer.pause(Duration::from_secs(60)));
         let paused_until = timer.paused_until;
-        let result = resume_from_pause(&mut timer, Duration::from_secs(120), || {
+        let result = resume_from_pause(&mut timer, Duration::from_secs(120), UNIX_EPOCH, || {
             Err("settings write failed".into())
         });
         assert_eq!(result, Err("settings write failed".into()));
@@ -1830,12 +1939,12 @@ mod tests {
 
     #[test]
     fn successful_control_helpers_apply_every_transition_in_release_builds() {
-        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 8));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 8), UNIX_EPOCH);
 
         start_bounded_pause(&mut timer, Duration::from_secs(60), || Ok(())).unwrap();
         assert_eq!(timer.phase, ReminderPhase::Paused);
 
-        resume_from_pause(&mut timer, Duration::from_secs(120), || Ok(())).unwrap();
+        resume_from_pause(&mut timer, Duration::from_secs(120), UNIX_EPOCH, || Ok(())).unwrap();
         assert_eq!(timer.phase, ReminderPhase::Working);
 
         start_manual_break(&mut timer, Duration::from_secs(180), |_| Ok(())).unwrap();
@@ -1845,7 +1954,7 @@ mod tests {
 
     #[test]
     fn take_break_now_is_a_single_authoritative_transition() {
-        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 8));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 8), UNIX_EPOCH);
         let requested_at = Duration::from_secs(5 * 60);
 
         assert!(timer.take_break_now(requested_at));
@@ -1859,9 +1968,12 @@ mod tests {
                 .status,
             "Break in progress"
         );
-        assert_eq!(timer.tick(requested_at + Duration::from_secs(7)), None);
         assert_eq!(
-            timer.tick(requested_at + Duration::from_secs(8)),
+            timer.tick(requested_at + Duration::from_secs(7), UNIX_EPOCH),
+            None
+        );
+        assert_eq!(
+            timer.tick(requested_at + Duration::from_secs(8), UNIX_EPOCH),
             Some(ReminderTransition::EndBreak)
         );
         assert_eq!(timer.phase, ReminderPhase::Working);
@@ -1873,7 +1985,7 @@ mod tests {
 
     #[test]
     fn a_manual_overlay_failure_leaves_the_timer_unchanged() {
-        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 8));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 8), UNIX_EPOCH);
         let before = timer.tray_snapshot(Duration::from_secs(5 * 60), 0, false);
 
         let result = start_manual_break(&mut timer, Duration::from_secs(5 * 60), |duration| {
@@ -1892,7 +2004,7 @@ mod tests {
 
     #[test]
     fn a_repeated_manual_break_does_not_present_or_extend_the_active_break() {
-        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 8));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 8), UNIX_EPOCH);
         assert!(timer.take_break_now(Duration::from_secs(60)));
         let before = timer.tray_snapshot(Duration::from_secs(61), 0, true);
 
@@ -1953,43 +2065,44 @@ mod tests {
             Duration::from_secs(100),
             settings(20, 20),
             Duration::from_secs(90),
+            UNIX_EPOCH,
         );
 
-        assert_eq!(timer.tick(Duration::from_secs(99)), None);
-        assert_eq!(timer.tick(Duration::from_secs(189)), None);
+        assert_eq!(timer.tick(Duration::from_secs(99), UNIX_EPOCH), None);
+        assert_eq!(timer.tick(Duration::from_secs(189), UNIX_EPOCH), None);
         assert_eq!(
-            timer.tick(Duration::from_secs(190)),
+            timer.tick(Duration::from_secs(190), UNIX_EPOCH),
             Some(ReminderTransition::ResumeWorking)
         );
     }
 
     #[test]
     fn reminder_clock_is_injected_and_does_not_replay_missed_cycles() {
-        let mut timer = ReminderTimer::new(Duration::from_secs(10), settings(1, 5));
+        let mut timer = ReminderTimer::new(Duration::from_secs(10), settings(1, 5), UNIX_EPOCH);
 
-        assert_eq!(timer.tick(Duration::from_secs(69)), None);
+        assert_eq!(timer.tick(Duration::from_secs(69), UNIX_EPOCH), None);
         assert_eq!(
-            timer.tick(Duration::from_secs(600)),
+            timer.tick(Duration::from_secs(600), UNIX_EPOCH),
             Some(ReminderTransition::StartBreak)
         );
-        assert_eq!(timer.tick(Duration::from_secs(600)), None);
+        assert_eq!(timer.tick(Duration::from_secs(600), UNIX_EPOCH), None);
         assert_eq!(
-            timer.tick(Duration::from_secs(605)),
+            timer.tick(Duration::from_secs(605), UNIX_EPOCH),
             Some(ReminderTransition::EndBreak)
         );
     }
 
     #[test]
     fn a_clock_regression_does_not_advance_the_reminder() {
-        let mut timer = ReminderTimer::new(Duration::from_secs(100), settings(1, 5));
+        let mut timer = ReminderTimer::new(Duration::from_secs(100), settings(1, 5), UNIX_EPOCH);
 
-        assert_eq!(timer.tick(Duration::from_secs(90)), None);
+        assert_eq!(timer.tick(Duration::from_secs(90), UNIX_EPOCH), None);
         assert_eq!(timer.phase, ReminderPhase::Working);
     }
 
     #[test]
     fn tray_snapshot_comes_from_the_timer_and_never_goes_negative() {
-        let mut timer = ReminderTimer::new(Duration::from_secs(100), settings(1, 5));
+        let mut timer = ReminderTimer::new(Duration::from_secs(100), settings(1, 5), UNIX_EPOCH);
 
         let regressed = timer.tray_snapshot(Duration::from_secs(90), 4, false);
         assert_eq!(regressed.phase, TrayPhase::Working);
@@ -2002,7 +2115,7 @@ mod tests {
         assert_eq!(almost_due.remaining_milliseconds, Some(1));
 
         assert_eq!(
-            timer.tick(Duration::from_secs(600)),
+            timer.tick(Duration::from_secs(600), UNIX_EPOCH),
             Some(ReminderTransition::StartBreak)
         );
         let break_snapshot = timer.tray_snapshot(Duration::from_secs(600), 4, true);
@@ -2012,7 +2125,7 @@ mod tests {
         assert!(break_snapshot.overlay_active);
 
         assert_eq!(
-            timer.tick(Duration::from_secs(605)),
+            timer.tick(Duration::from_secs(605), UNIX_EPOCH),
             Some(ReminderTransition::EndBreak)
         );
         let resumed = timer.tray_snapshot(Duration::from_secs(605), 4, false);
@@ -2098,14 +2211,14 @@ mod tests {
         // Pure timer advancement has no probe input. Natural-break credit is a
         // separate scheduler step after StartBreak, not inside tick().
         for probes in [&active, &idle, &fullscreen, &failed] {
-            let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 3));
+            let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 3), UNIX_EPOCH);
             let _ = break_presentation(probes, Duration::from_secs(3), no_history());
             assert_eq!(
-                timer.tick(Duration::from_secs(60)),
+                timer.tick(Duration::from_secs(60), UNIX_EPOCH),
                 Some(ReminderTransition::StartBreak)
             );
             assert_eq!(
-                timer.tick(Duration::from_secs(63)),
+                timer.tick(Duration::from_secs(63), UNIX_EPOCH),
                 Some(ReminderTransition::EndBreak)
             );
         }
@@ -2185,32 +2298,32 @@ mod tests {
 
     #[test]
     fn natural_break_credit_returns_to_fresh_work_immediately() {
-        let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 20));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 20), UNIX_EPOCH);
         assert_eq!(
-            timer.tick(Duration::from_secs(60)),
+            timer.tick(Duration::from_secs(60), UNIX_EPOCH),
             Some(ReminderTransition::StartBreak)
         );
         assert_eq!(timer.phase, ReminderPhase::Break);
 
-        assert!(timer.credit_natural_break(Duration::from_secs(60)));
+        assert!(timer.credit_natural_break(Duration::from_secs(60), UNIX_EPOCH));
         assert_eq!(timer.phase, ReminderPhase::Working);
         let snapshot = timer.tray_snapshot(Duration::from_secs(60), 0, false);
         assert_eq!(snapshot.phase, TrayPhase::Working);
         assert_eq!(snapshot.remaining_milliseconds, Some(60_000));
         assert_eq!(snapshot.state_revision, 2);
 
-        assert!(!timer.credit_natural_break(Duration::from_secs(61)));
+        assert!(!timer.credit_natural_break(Duration::from_secs(61), UNIX_EPOCH));
     }
 
     #[test]
     fn natural_break_credit_applies_pending_settings() {
-        let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 20));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 20), UNIX_EPOCH);
         assert_eq!(
-            timer.tick(Duration::from_secs(60)),
+            timer.tick(Duration::from_secs(60), UNIX_EPOCH),
             Some(ReminderTransition::StartBreak)
         );
-        timer.apply_settings(settings(2, 10), Duration::from_secs(61));
-        assert!(timer.credit_natural_break(Duration::from_secs(62)));
+        timer.apply_settings(settings(2, 10), Duration::from_secs(61), UNIX_EPOCH);
+        assert!(timer.credit_natural_break(Duration::from_secs(62), UNIX_EPOCH));
         assert_eq!(timer.phase, ReminderPhase::Working);
         assert_eq!(timer.settings, settings(2, 10));
         let snapshot = timer.tray_snapshot(Duration::from_secs(62), 1, false);
@@ -2228,6 +2341,97 @@ mod tests {
         assert_eq!(
             break_presentation(&both, Duration::from_secs(20), no_history()),
             BreakPresentation::SuppressFullscreen
+        );
+    }
+
+    fn sync_settings(work_minutes: u64) -> ReminderSettings {
+        ReminderSettings::try_new(work_minutes, 20, true, 330).unwrap()
+    }
+
+    /// 2026-08-20, local IST time, as a SystemTime.
+    fn ist(hh: i64, mm: i64) -> SystemTime {
+        system_time_from_unix_seconds(1_787_184_000 + hh * 3600 + mm * 60 - 330 * 60)
+    }
+
+    #[test]
+    fn sync_mode_ends_the_work_phase_on_the_grid_not_on_the_interval() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
+        // 10:01 start takes the 10:20 grid point; nothing fires before it.
+        assert_eq!(timer.tick(Duration::from_secs(600), ist(10, 11)), None);
+        assert_eq!(
+            timer.tick(Duration::from_secs(1140), ist(10, 20)),
+            Some(ReminderTransition::StartBreak)
+        );
+    }
+
+    #[test]
+    fn sync_mode_skips_a_grid_point_that_was_not_earned() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 19));
+        // 10:20 is one minute away, so it is skipped in favour of 10:40.
+        assert_eq!(timer.tick(Duration::from_secs(60), ist(10, 20)), None);
+        assert_eq!(
+            timer.tick(Duration::from_secs(1260), ist(10, 40)),
+            Some(ReminderTransition::StartBreak)
+        );
+    }
+
+    #[test]
+    fn a_break_ending_off_grid_re_grids_to_the_next_whole_point() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
+        timer.tick(Duration::from_secs(1140), ist(10, 20)).unwrap(); // StartBreak
+                                                                     // The twenty-second break ends at 10:20:20; the next break is 10:40:00,
+                                                                     // not 10:40:20.
+        assert_eq!(
+            timer.tick(
+                Duration::from_secs(1160),
+                ist(10, 20) + Duration::from_secs(20)
+            ),
+            Some(ReminderTransition::EndBreak)
+        );
+        assert_eq!(timer.work_deadline, WorkDeadline::Wall(ist(10, 40)));
+    }
+
+    #[test]
+    fn settings_changed_during_a_break_apply_before_the_next_deadline_is_computed() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
+        timer.tick(Duration::from_secs(1140), ist(10, 20)).unwrap(); // StartBreak
+                                                                     // Switch to a ten-minute rhythm mid-break.
+        timer.apply_settings(sync_settings(10), Duration::from_secs(1145), ist(10, 20));
+        timer
+            .tick(
+                Duration::from_secs(1160),
+                ist(10, 20) + Duration::from_secs(20),
+            )
+            .unwrap();
+        // A ten-minute grid puts the next break at 10:30, not 10:40.
+        assert_eq!(timer.work_deadline, WorkDeadline::Wall(ist(10, 30)));
+    }
+
+    #[test]
+    fn a_manual_break_does_not_push_the_shared_grid() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, sync_settings(20), ist(10, 1));
+        // `take_break_now` enters Break, never Working, so it never touches the
+        // shared grid deadline and takes no wall clock.
+        timer.take_break_now(Duration::from_secs(240));
+        timer
+            .tick(
+                Duration::from_secs(260),
+                ist(10, 5) + Duration::from_secs(20),
+            )
+            .unwrap();
+        // Intended: the 10:20 grid break still fires after a 10:05 manual break.
+        assert_eq!(timer.work_deadline, WorkDeadline::Wall(ist(10, 20)));
+    }
+
+    #[test]
+    fn relative_mode_still_ends_the_work_phase_on_elapsed_time() {
+        let settings = ReminderSettings::default(); // sync off
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings, ist(10, 1));
+        assert_eq!(timer.work_deadline, WorkDeadline::Relative);
+        assert_eq!(timer.tick(Duration::from_secs(1199), ist(10, 21)), None);
+        assert_eq!(
+            timer.tick(Duration::from_secs(1200), ist(10, 21)),
+            Some(ReminderTransition::StartBreak)
         );
     }
 }
