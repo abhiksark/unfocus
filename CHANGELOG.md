@@ -5,8 +5,37 @@ released versions link to their GitHub release.
 
 ## [Unreleased]
 
+### Added
+
+- Optional cross-device break sync, off by default; the existing relative
+  timer is unchanged while it is off. With sync enabled, breaks land on a
+  shared wall-clock grid instead of counting from when the timer last
+  started, so every device with a matching work duration, break duration,
+  and grid offset rests at the same moment. No network is used; there are no
+  accounts and no pairing, and devices never communicate. Work duration and
+  break duration are ordinary settings fields and must be entered the same
+  on every device; grid offset has no field of its own and is instead filled
+  in automatically from each device's own clock the moment sync is turned
+  on, so it only lines up between devices that share a time zone. Nothing
+  detects a mismatch in any of the three, so compare the dashboard's "Breaks
+  at" line on two devices to confirm they actually agree.
+
 ### Changed
 
+- Downgrading to a build older than this one resets reminder settings to
+  defaults, discarding the saved work duration and break duration.
+  `reminder-settings.json` moves to schema v3 to carry the new sync fields
+  above, and loading the file with this build rewrites it to v3 even when
+  sync stays off. Older builds parse the file with `deny_unknown_fields`, so
+  a v3 file is rejected outright; the repair path that runs on a rejected
+  file then overwrites it with fresh defaults. This has always been how a
+  schema bump behaves, but this is the first release where stepping back to
+  an older build is a real possibility, so it is worth stating plainly: back
+  up `reminder-settings.json` first if a rollback is possible and the saved
+  durations matter.
+- With sync enabled, resuming from pause rejoins the shared grid instead of
+  starting a fresh work interval, and taking a manual break no longer
+  postpones the next scheduled break.
 - While it runs on macOS, Unfocus is intentionally tray and menu-bar only,
   with no Dock icon and no application menu. Reopen or focus the dashboard
   from the tray icon, which also carries the reminder controls and the quit
