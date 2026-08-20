@@ -132,6 +132,6 @@ mod tests {
     fn grace_takes_a_grid_point_exactly_half_an_interval_away() {
         // The comparison is `<`, so the exact boundary is taken, not skipped.
         let half_away = next_grid(BASE, 1200, 0) - 600;
-        assert_eq!(deadline_with_grace(half_away, 1200, 0), next_grid(BASE, 1200, 0));
+        assert_eq!(deadline_with_grace(half_away, 1200, 0) - half_away, 600);
     }
 }
