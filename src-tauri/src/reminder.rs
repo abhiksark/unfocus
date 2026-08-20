@@ -39,8 +39,9 @@ const REMINDER_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const REMINDER_CONTROL_CAPACITY: usize = 16;
 const REMINDER_CONTROL_TIMEOUT: Duration = Duration::from_secs(10);
 const SETTINGS_FILE_NAME: &str = "reminder-settings.json";
-const LEGACY_SETTINGS_SCHEMA_VERSION: u32 = 1;
-const SETTINGS_SCHEMA_VERSION: u32 = 2;
+const SETTINGS_SCHEMA_VERSION: u32 = 3;
+const MIN_GRID_OFFSET_MINUTES: i16 = -720; // UTC-12:00
+const MAX_GRID_OFFSET_MINUTES: i16 = 840; //  UTC+14:00
 
 static SETTINGS_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -49,10 +50,17 @@ static SETTINGS_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
 pub(crate) struct ReminderSettings {
     work_minutes: u64,
     break_seconds: u64,
+    sync_across_devices: bool,
+    grid_offset_minutes: i16,
 }
 
 impl ReminderSettings {
-    fn try_new(work_minutes: u64, break_seconds: u64) -> Result<Self, String> {
+    fn try_new(
+        work_minutes: u64,
+        break_seconds: u64,
+        sync_across_devices: bool,
+        grid_offset_minutes: i16,
+    ) -> Result<Self, String> {
         if !(MIN_WORK_MINUTES..=MAX_WORK_MINUTES).contains(&work_minutes) {
             return Err(format!(
                 "work duration must be between {MIN_WORK_MINUTES} and {MAX_WORK_MINUTES} minutes"
@@ -63,10 +71,17 @@ impl ReminderSettings {
                 "break duration must be between {MIN_OVERLAY_DURATION_SECONDS} and {MAX_OVERLAY_DURATION_SECONDS} seconds"
             ));
         }
+        if !(MIN_GRID_OFFSET_MINUTES..=MAX_GRID_OFFSET_MINUTES).contains(&grid_offset_minutes) {
+            return Err(format!(
+                "grid offset must be between {MIN_GRID_OFFSET_MINUTES} and {MAX_GRID_OFFSET_MINUTES} minutes"
+            ));
+        }
 
         Ok(Self {
             work_minutes,
             break_seconds,
+            sync_across_devices,
+            grid_offset_minutes,
         })
     }
 
@@ -77,6 +92,12 @@ impl ReminderSettings {
     fn break_duration(self) -> Duration {
         Duration::from_secs(self.break_seconds)
     }
+
+    /// The grid offset when sync is on. The timer's only view of sync state.
+    #[allow(dead_code)]
+    fn sync_offset(self) -> Option<i16> {
+        self.sync_across_devices.then_some(self.grid_offset_minutes)
+    }
 }
 
 impl Default for ReminderSettings {
@@ -84,6 +105,8 @@ impl Default for ReminderSettings {
         Self {
             work_minutes: DEFAULT_WORK_MINUTES,
             break_seconds: DEFAULT_BREAK_SECONDS,
+            sync_across_devices: false,
+            grid_offset_minutes: 0,
         }
     }
 }
@@ -93,6 +116,8 @@ impl Default for ReminderSettings {
 pub(crate) struct ReminderSettingsRequest {
     work_minutes: Value,
     break_seconds: Value,
+    sync_across_devices: bool,
+    grid_offset_minutes: Value,
 }
 
 impl ReminderSettingsRequest {
@@ -111,7 +136,19 @@ impl ReminderSettingsRequest {
             MAX_OVERLAY_DURATION_SECONDS,
             "seconds",
         )?;
-        ReminderSettings::try_new(work_minutes, break_seconds)
+        let grid_offset_minutes = signed_integer_setting(
+            &self.grid_offset_minutes,
+            "grid offset",
+            MIN_GRID_OFFSET_MINUTES.into(),
+            MAX_GRID_OFFSET_MINUTES.into(),
+            "minutes",
+        )? as i16;
+        ReminderSettings::try_new(
+            work_minutes,
+            break_seconds,
+            self.sync_across_devices,
+            grid_offset_minutes,
+        )
     }
 }
 
@@ -133,6 +170,24 @@ fn integer_setting(
     Ok(value)
 }
 
+fn signed_integer_setting(
+    value: &Value,
+    name: &str,
+    minimum: i64,
+    maximum: i64,
+    unit: &str,
+) -> Result<i64, String> {
+    let value = value
+        .as_i64()
+        .ok_or_else(|| format!("{name} must be a whole number"))?;
+    if !(minimum..=maximum).contains(&value) {
+        return Err(format!(
+            "{name} must be between {minimum} and {maximum} {unit}"
+        ));
+    }
+    Ok(value)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PersistedReminderSettings {
@@ -141,6 +196,10 @@ struct PersistedReminderSettings {
     break_seconds: u64,
     #[serde(default)]
     pause_until_unix_milliseconds: Option<u64>,
+    #[serde(default)]
+    sync_across_devices: bool,
+    #[serde(default)]
+    grid_offset_minutes: i16,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -159,21 +218,23 @@ impl PersistedReminderSettings {
                 .pause_until
                 .map(system_time_to_unix_milliseconds)
                 .transpose()?,
+            sync_across_devices: state.settings.sync_across_devices,
+            grid_offset_minutes: state.settings.grid_offset_minutes,
         })
     }
 
     fn into_state(self, now: SystemTime) -> Result<(PersistedReminderState, bool), String> {
         let mut needs_repair = match self.version {
-            LEGACY_SETTINGS_SCHEMA_VERSION => true,
-            SETTINGS_SCHEMA_VERSION => false,
-            _ => {
-                return Err(format!(
-                    "unsupported reminder settings version {}",
-                    self.version
-                ));
-            }
+            v if v == SETTINGS_SCHEMA_VERSION => false,
+            v if (1..SETTINGS_SCHEMA_VERSION).contains(&v) => true,
+            v => return Err(format!("unsupported reminder settings version {v}")),
         };
-        let settings = ReminderSettings::try_new(self.work_minutes, self.break_seconds)?;
+        let settings = ReminderSettings::try_new(
+            self.work_minutes,
+            self.break_seconds,
+            self.sync_across_devices,
+            self.grid_offset_minutes,
+        )?;
         let pause_until = self.pause_until_unix_milliseconds.and_then(|milliseconds| {
             let Some(pause_until) = UNIX_EPOCH.checked_add(Duration::from_millis(milliseconds))
             else {
@@ -1282,13 +1343,16 @@ mod tests {
     }
 
     fn settings(work_minutes: u64, break_seconds: u64) -> ReminderSettings {
-        ReminderSettings::try_new(work_minutes, break_seconds).expect("valid test settings")
+        ReminderSettings::try_new(work_minutes, break_seconds, false, 0)
+            .expect("valid test settings")
     }
 
     fn request(work_minutes: Value, break_seconds: Value) -> ReminderSettingsRequest {
         ReminderSettingsRequest {
             work_minutes,
             break_seconds,
+            sync_across_devices: false,
+            grid_offset_minutes: json!(0),
         }
     }
 
@@ -1320,10 +1384,13 @@ mod tests {
 
     #[test]
     fn settings_ranges_are_validated_at_the_rust_boundary() {
-        assert_eq!(settings(1, 3), ReminderSettings::try_new(1, 3).unwrap());
+        assert_eq!(
+            settings(1, 3),
+            ReminderSettings::try_new(1, 3, false, 0).unwrap()
+        );
         assert_eq!(
             settings(120, 30),
-            ReminderSettings::try_new(120, 30).unwrap()
+            ReminderSettings::try_new(120, 30, false, 0).unwrap()
         );
 
         for invalid in [
@@ -1339,6 +1406,81 @@ mod tests {
         ] {
             assert!(invalid.into_settings().is_err());
         }
+    }
+
+    #[test]
+    fn sync_settings_default_to_off_with_a_zero_offset() {
+        let settings = ReminderSettings::default();
+        assert!(!settings.sync_across_devices);
+        assert_eq!(settings.grid_offset_minutes, 0);
+        assert_eq!(settings.sync_offset(), None);
+    }
+
+    #[test]
+    fn sync_offset_is_exposed_only_when_sync_is_enabled() {
+        let on = ReminderSettings::try_new(20, 20, true, 330).unwrap();
+        assert_eq!(on.sync_offset(), Some(330));
+        let off = ReminderSettings::try_new(20, 20, false, 330).unwrap();
+        assert_eq!(off.sync_offset(), None);
+    }
+
+    #[test]
+    fn grid_offset_is_validated_against_real_utc_bounds() {
+        assert!(ReminderSettings::try_new(20, 20, true, -300).is_ok());
+        assert!(ReminderSettings::try_new(20, 20, true, -720).is_ok());
+        assert!(ReminderSettings::try_new(20, 20, true, 840).is_ok());
+        assert!(ReminderSettings::try_new(20, 20, true, -721).is_err());
+        assert!(ReminderSettings::try_new(20, 20, true, 841).is_err());
+    }
+
+    #[test]
+    fn a_version_one_file_migrates_to_version_three_with_sync_defaults() {
+        let body = br#"{"version":1,"workMinutes":20,"breakSeconds":20}"#;
+        let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
+        let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
+        assert!(needs_repair, "an older version must be rewritten");
+        assert!(!state.settings.sync_across_devices);
+        assert_eq!(state.settings.grid_offset_minutes, 0);
+    }
+
+    #[test]
+    fn a_version_two_file_migrates_to_version_three_with_sync_defaults() {
+        let body = br#"{"version":2,"workMinutes":25,"breakSeconds":15,"pauseUntilUnixMilliseconds":null}"#;
+        let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
+        let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
+        assert!(needs_repair);
+        assert_eq!(state.settings.work_minutes, 25);
+        assert!(!state.settings.sync_across_devices);
+    }
+
+    #[test]
+    fn a_version_three_file_round_trips_without_repair() {
+        let body = br#"{"version":3,"workMinutes":20,"breakSeconds":20,"pauseUntilUnixMilliseconds":null,"syncAcrossDevices":true,"gridOffsetMinutes":330}"#;
+        let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
+        let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
+        assert!(!needs_repair);
+        assert!(state.settings.sync_across_devices);
+        assert_eq!(state.settings.grid_offset_minutes, 330);
+        let round_tripped = PersistedReminderSettings::from_state(state).unwrap();
+        assert_eq!(round_tripped.version, SETTINGS_SCHEMA_VERSION);
+        assert_eq!(round_tripped.grid_offset_minutes, 330);
+    }
+
+    #[test]
+    fn an_unsupported_future_version_is_rejected() {
+        let body = br#"{"version":4,"workMinutes":20,"breakSeconds":20}"#;
+        let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
+        assert!(persisted.into_state(SystemTime::now()).is_err());
+    }
+
+    #[test]
+    fn a_negative_grid_offset_survives_the_command_boundary() {
+        let request: ReminderSettingsRequest = serde_json::from_str(
+            r#"{"workMinutes":20,"breakSeconds":20,"syncAcrossDevices":true,"gridOffsetMinutes":-300}"#,
+        )
+        .unwrap();
+        let settings = request.into_settings().unwrap();
+        assert_eq!(settings.grid_offset_minutes, -300);
     }
 
     #[test]
@@ -1402,7 +1544,7 @@ mod tests {
         fs::write(
             &path,
             serde_json::to_vec(&json!({
-                "version": LEGACY_SETTINGS_SCHEMA_VERSION,
+                "version": 1,
                 "workMinutes": 45,
                 "breakSeconds": 12,
                 "pauseUntilUnixMilliseconds": pause_until,

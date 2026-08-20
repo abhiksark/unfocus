@@ -59,7 +59,8 @@ plans/            Local working notes only (gitignored; not tracked docs)
   parsers synchronized.
 - Reminder defaults: 20-minute work interval, 20-second break. Valid ranges:
   work 1–120 minutes, break 3–30 seconds. Settings live in local app config as
-  `reminder-settings.json` (schema v2; includes bounded pause expiry).
+  `reminder-settings.json` (schema v3; includes bounded pause expiry and
+  opt-in cross-device sync).
 - Local reflection data also lives in app config as a 24-hour hot
   `activity-history.json`, fixed 30-day epoch
   `activity-archive-<key>.json` chunks, and a `break-events.json` ledger.
