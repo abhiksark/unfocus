@@ -24,14 +24,6 @@ pub(crate) fn next_grid(unix_secs: i64, interval_secs: i64, offset_minutes: i16)
 /// even, so the halving cannot truncate.
 #[allow(dead_code)]
 pub(crate) fn deadline_with_grace(unix_secs: i64, interval_secs: i64, offset_minutes: i16) -> i64 {
-    let local_seconds = unix_secs + i64::from(offset_minutes) * 60;
-    let phase = local_seconds.rem_euclid(interval_secs);
-
-    // If we're already at a grid point, grant half-interval grace.
-    if phase == 0 {
-        return unix_secs + interval_secs / 2;
-    }
-
     let next = next_grid(unix_secs, interval_secs, offset_minutes);
     if next - unix_secs < interval_secs / 2 {
         next + interval_secs
@@ -139,7 +131,7 @@ mod tests {
     #[test]
     fn grace_takes_a_grid_point_exactly_half_an_interval_away() {
         // The comparison is `<`, so the exact boundary is taken, not skipped.
-        let half_away = next_grid(BASE, 1200, 0);
-        assert_eq!(deadline_with_grace(half_away, 1200, 0) - half_away, 600);
+        let half_away = next_grid(BASE, 1200, 0) - 600;
+        assert_eq!(deadline_with_grace(half_away, 1200, 0), next_grid(BASE, 1200, 0));
     }
 }
