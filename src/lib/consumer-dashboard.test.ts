@@ -6,6 +6,7 @@ import {
   focusProgress,
   formatMinuteDuration,
   formatSyncPreview,
+  startSyncPreviewClock,
   syncPreviewWorkMinutes,
   type ConsumerWarningInput
 } from "./consumer-dashboard";
@@ -308,6 +309,35 @@ describe("syncPreviewWorkMinutes", () => {
 
   test("falls back to the saved value while the draft does not validate", () => {
     expect(syncPreviewWorkMinutes(undefined, 20)).toBe(20);
+  });
+});
+
+describe("startSyncPreviewClock", () => {
+  test("publishes the current time before waiting for the first refresh", () => {
+    const updates: number[] = [];
+    const times = [1_000, 3_000];
+    let scheduledRefresh = () => {};
+    let scheduledIntervalMs = 0;
+    let cleanedUp = false;
+
+    const cleanup = startSyncPreviewClock(
+      (nowMs) => updates.push(nowMs),
+      () => times.shift() ?? 0,
+      (refresh, intervalMs) => {
+        scheduledRefresh = refresh;
+        scheduledIntervalMs = intervalMs;
+        return () => {
+          cleanedUp = true;
+        };
+      }
+    );
+
+    expect(updates).toEqual([1_000]);
+    expect(scheduledIntervalMs).toBe(2_000);
+    scheduledRefresh();
+    expect(updates).toEqual([1_000, 3_000]);
+    cleanup();
+    expect(cleanedUp).toBe(true);
   });
 });
 

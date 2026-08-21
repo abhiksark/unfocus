@@ -19,8 +19,8 @@ released versions link to their GitHub release.
   on, so it only lines up between devices whose clocks were on the same UTC
   offset when sync was switched on; turn sync off and on again after a time
   change or a trip to re-derive it. Nothing detects a mismatch in any of the
-  three, so compare the dashboard's "Breaks at" (or "Next breaks at") line on
-  two devices to confirm they actually agree.
+  three, so compare the dashboard's break-times line on two devices to confirm
+  they actually agree.
 
 ### Changed
 

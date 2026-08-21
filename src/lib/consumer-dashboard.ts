@@ -24,6 +24,21 @@ export function syncPreviewWorkMinutes(
 }
 
 /**
+ * Start the clock that keeps an absolute-time sync preview current. Publishing
+ * once before scheduling matters because the editor may have been closed long
+ * enough for its retained timestamp to be stale.
+ */
+export function startSyncPreviewClock(
+  update: (nowMs: number) => void,
+  now: () => number,
+  schedule: (refresh: () => void, intervalMs: number) => () => void
+): () => void {
+  const refresh = () => update(now());
+  refresh();
+  return schedule(refresh, 2_000);
+}
+
+/**
  * The dashboard's cross-device verification line. Nothing else can detect a
  * settings mismatch between devices, so this string is the whole surface —
  * it must read cleanly and always carry the offset.

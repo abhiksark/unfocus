@@ -3,6 +3,7 @@
     describeRhythm,
     focusProgress,
     formatSyncPreview,
+    startSyncPreviewClock,
     syncPreviewWorkMinutes,
     type ConsumerReminderPresentation,
     type ConsumerWarning
@@ -162,10 +163,16 @@
 
   $effect(() => {
     if (!(timingEditorExpanded && syncAcrossDevices)) return;
-    const interval = window.setInterval(() => {
-      previewNowMs = Date.now();
-    }, 2_000);
-    return () => window.clearInterval(interval);
+    return startSyncPreviewClock(
+      (nowMs) => {
+        previewNowMs = nowMs;
+      },
+      Date.now,
+      (refresh, intervalMs) => {
+        const interval = window.setInterval(refresh, intervalMs);
+        return () => window.clearInterval(interval);
+      }
+    );
   });
 
   const syncPreview = $derived.by(() => {
