@@ -1,15 +1,12 @@
 use super::windows::APPKIT_OPERATION_TIMEOUT;
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc, Arc,
-    },
-    time::Duration,
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc, Arc,
 };
 use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_nspanel::{
     objc2_app_kit::{NSWindowCollectionBehavior, NSWindowStyleMask},
-    ManagerExt, Panel, PanelLevel, WebviewWindowExt,
+    ManagerExt, PanelLevel, WebviewWindowExt,
 };
 
 #[derive(Debug, Clone, Copy)]
