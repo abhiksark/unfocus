@@ -78,6 +78,11 @@ as `export let` or `$:` reactive statements.
 - Overlay events carry a `runId`; filter on it in every handler.
 - An untargeted `listen()` receives events from every run. Pass the current
   window label as `target` so the Rust side can scope delivery.
+- `break-grid.ts` mirrors the grid arithmetic in
+  `src-tauri/src/reminder/schedule.rs`. The two implementations cannot share
+  code, so the shared test table in `break-grid.test.ts` is the only guard
+  against drift. Change both sides together, exactly as the overlay label
+  parsers are kept synchronized.
 
 ## Break scene
 

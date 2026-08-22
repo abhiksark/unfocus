@@ -1,6 +1,68 @@
 import type { DiagnosticsReport } from "./diagnostics";
 import type { ReminderStatus } from "./reminder-status";
 import type { ReminderSettings } from "./reminder-settings";
+import { formatGridOffset, type GridPreview } from "./break-grid";
+
+/** The saved rhythm line, noting sync only when it is on. */
+export function describeRhythm(settings: ReminderSettings): string {
+  const base = `${settings.workMinutes} min focus → ${settings.breakSeconds} sec rest`;
+  return settings.syncAcrossDevices ? `${base} · synced across devices` : base;
+}
+
+/**
+ * Which work-minutes value drives the sync preview: the draft the user is
+ * currently typing, once it validates, falling back to the last saved
+ * value. Pairing this with an offset sourced from draft state too keeps the
+ * preview describing the setting the user is about to save rather than a
+ * stale mix of saved and draft values.
+ */
+export function syncPreviewWorkMinutes(
+  draftWorkMinutes: number | undefined,
+  savedWorkMinutes: number
+): number {
+  return draftWorkMinutes ?? savedWorkMinutes;
+}
+
+/**
+ * Start the clock that keeps an absolute-time sync preview current. Publishing
+ * once before scheduling matters because the editor may have been closed long
+ * enough for its retained timestamp to be stale.
+ */
+export function startSyncPreviewClock(
+  update: (nowMs: number) => void,
+  now: () => number,
+  schedule: (refresh: () => void, intervalMs: number) => () => void
+): () => void {
+  const refresh = () => update(now());
+  refresh();
+  return schedule(refresh, 2_000);
+}
+
+/**
+ * The dashboard's cross-device verification line. Nothing else can detect a
+ * settings mismatch between devices, so this string is the whole surface —
+ * it must read cleanly and always carry the offset.
+ */
+export function formatSyncPreview(
+  preview: GridPreview,
+  gridOffsetMinutes: number,
+  timeFormat: Intl.DateTimeFormat
+): string {
+  if (preview.kind === "hourly") {
+    // Minutes past the hour carry no 12-/24-hour choice, so they are padded
+    // directly rather than through Intl — a lone `minute: "2-digit"` request
+    // is allowed to fall back to unpadded numeric in some engines.
+    const listed = preview.minutes.map((minute) => `:${String(minute).padStart(2, "0")}`).join(", ");
+    // The offset must appear: the hourly pattern alone is identical in every
+    // zone, so without it two devices could read the same and still differ.
+    return `Breaks at ${listed} past the hour, ${formatGridOffset(gridOffsetMinutes)}.`;
+  }
+  if (preview.kind === "everyMinute") {
+    return `Breaks every minute, ${formatGridOffset(gridOffsetMinutes)}.`;
+  }
+  const listed = preview.atMs.map((atMs) => timeFormat.format(new Date(atMs))).join(", ");
+  return `Next breaks at ${listed}, ${formatGridOffset(gridOffsetMinutes)}.`;
+}
 
 export type ConsumerReminderKind =
   | "loading"

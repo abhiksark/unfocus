@@ -2,10 +2,15 @@ import { describe, expect, test } from "bun:test";
 import {
   consumerReminderPresentation,
   consumerWarning,
+  describeRhythm,
   focusProgress,
   formatMinuteDuration,
+  formatSyncPreview,
+  startSyncPreviewClock,
+  syncPreviewWorkMinutes,
   type ConsumerWarningInput
 } from "./consumer-dashboard";
+import type { GridPreview } from "./break-grid";
 import type { DiagnosticsReport } from "./diagnostics";
 import type { ReminderPhase, ReminderStatus } from "./reminder-status";
 import type { ReminderSettings } from "./reminder-settings";
@@ -209,7 +214,12 @@ describe("consumer warnings", () => {
   });
 });
 
-const settings: ReminderSettings = { workMinutes: 20, breakSeconds: 20 };
+const settings: ReminderSettings = {
+  workMinutes: 20,
+  breakSeconds: 20,
+  syncAcrossDevices: false,
+  gridOffsetMinutes: 0
+};
 
 describe("focusProgress", () => {
   test("returns null without a status", () => {
@@ -257,6 +267,102 @@ describe("focusProgress", () => {
   });
 
   test("returns null for a non-positive work interval", () => {
-    expect(focusProgress(status("working"), { workMinutes: 0, breakSeconds: 20 })).toBeNull();
+    expect(
+      focusProgress(status("working"), {
+        workMinutes: 0,
+        breakSeconds: 20,
+        syncAcrossDevices: false,
+        gridOffsetMinutes: 0
+      })
+    ).toBeNull();
+  });
+});
+
+describe("describeRhythm", () => {
+  test("describes the rhythm with its sync state", () => {
+    expect(
+      describeRhythm({
+        workMinutes: 20,
+        breakSeconds: 20,
+        syncAcrossDevices: false,
+        gridOffsetMinutes: 0
+      })
+    ).toBe("20 min focus → 20 sec rest");
+
+    expect(
+      describeRhythm({
+        workMinutes: 20,
+        breakSeconds: 20,
+        syncAcrossDevices: true,
+        gridOffsetMinutes: 330
+      })
+    ).toBe("20 min focus → 20 sec rest · synced across devices");
+  });
+});
+
+describe("syncPreviewWorkMinutes", () => {
+  // The preview must describe the setting the user is about to save, not a
+  // stale mix of the last-saved work minutes and the still-typed offset.
+  test("prefers the draft value once it validates", () => {
+    expect(syncPreviewWorkMinutes(25, 20)).toBe(25);
+  });
+
+  test("falls back to the saved value while the draft does not validate", () => {
+    expect(syncPreviewWorkMinutes(undefined, 20)).toBe(20);
+  });
+});
+
+describe("startSyncPreviewClock", () => {
+  test("publishes the current time before waiting for the first refresh", () => {
+    const updates: number[] = [];
+    const times = [1_000, 3_000];
+    let scheduledRefresh = () => {};
+    let scheduledIntervalMs = 0;
+    let cleanedUp = false;
+
+    const cleanup = startSyncPreviewClock(
+      (nowMs) => updates.push(nowMs),
+      () => times.shift() ?? 0,
+      (refresh, intervalMs) => {
+        scheduledRefresh = refresh;
+        scheduledIntervalMs = intervalMs;
+        return () => {
+          cleanedUp = true;
+        };
+      }
+    );
+
+    expect(updates).toEqual([1_000]);
+    expect(scheduledIntervalMs).toBe(2_000);
+    scheduledRefresh();
+    expect(updates).toEqual([1_000, 3_000]);
+    cleanup();
+    expect(cleanedUp).toBe(true);
+  });
+});
+
+describe("formatSyncPreview", () => {
+  const timeFormat = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" });
+
+  test("pads minutes past the hour with a leading zero", () => {
+    const preview: GridPreview = { kind: "hourly", minutes: [0, 20, 40] };
+    expect(formatSyncPreview(preview, 330, timeFormat)).toBe(
+      "Breaks at :00, :20, :40 past the hour, UTC+05:30."
+    );
+  });
+
+  test("formats upcoming absolute times with the offset", () => {
+    const preview: GridPreview = { kind: "upcoming", atMs: [0] };
+    const listed = timeFormat.format(new Date(0));
+    expect(formatSyncPreview(preview, 0, timeFormat)).toBe(
+      `Next breaks at ${listed}, UTC.`
+    );
+  });
+
+  test("describes a 1-minute interval without listing all sixty minutes", () => {
+    const preview: GridPreview = { kind: "everyMinute" };
+    expect(formatSyncPreview(preview, 330, timeFormat)).toBe(
+      "Breaks every minute, UTC+05:30."
+    );
   });
 });
