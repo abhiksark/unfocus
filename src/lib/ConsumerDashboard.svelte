@@ -1,9 +1,14 @@
 <script lang="ts">
   import {
+    describeRhythm,
     focusProgress,
+    formatSyncPreview,
+    startSyncPreviewClock,
+    syncPreviewWorkMinutes,
     type ConsumerReminderPresentation,
     type ConsumerWarning
   } from "$lib/consumer-dashboard";
+  import { gridPreview } from "$lib/break-grid";
   import { DASHBOARD_REMINDER_ACTIONS_LABEL } from "$lib/dashboard-a11y";
   import {
     MAX_BREAK_SECONDS,
@@ -58,6 +63,8 @@
     timingEditorExpanded: boolean;
     workMinutesInput: string;
     breakSecondsInput: string;
+    syncAcrossDevices: boolean;
+    gridOffsetMinutes: number;
     settingsLoading: boolean;
     settingsSaving: boolean;
     settingsValidation: ReminderSettingsValidation;
@@ -72,6 +79,7 @@
     onToggleTimingEditor: () => void;
     onWorkMinutesInput: (value: string) => void;
     onBreakSecondsInput: (value: string) => void;
+    onToggleSync: (enabled: boolean) => void;
     onSaveSettings: () => void;
     onResetSettings: () => void;
     onOpenDeveloperMode: () => void;
@@ -98,6 +106,8 @@
     timingEditorExpanded,
     workMinutesInput,
     breakSecondsInput,
+    syncAcrossDevices,
+    gridOffsetMinutes,
     settingsLoading,
     settingsSaving,
     settingsValidation,
@@ -112,6 +122,7 @@
     onToggleTimingEditor,
     onWorkMinutesInput,
     onBreakSecondsInput,
+    onToggleSync,
     onSaveSettings,
     onResetSettings,
     onOpenDeveloperMode,
@@ -139,11 +150,40 @@
         ? "Break screen open"
         : "Preview break screen"
   );
-  const rhythm = $derived(
-    savedSettings
-      ? `${savedSettings.workMinutes} min focus → ${savedSettings.breakSeconds} sec rest`
-      : "Reading saved rhythm…"
-  );
+  const rhythm = $derived(savedSettings ? describeRhythm(savedSettings) : "Reading saved rhythm…");
+  const timeFormat = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" });
+
+  // The "upcoming" branch of the sync preview renders absolute times, so it
+  // goes stale the instant it is computed unless something re-triggers the
+  // derivation as the clock moves. Date.now() alone carries no reactivity —
+  // $derived.by only reruns when a tracked value it reads changes — so this
+  // state exists purely to give the derivation a value to track. The
+  // interval only runs while the preview is actually on screen.
+  let previewNowMs = $state(Date.now());
+
+  $effect(() => {
+    if (!(timingEditorExpanded && syncAcrossDevices)) return;
+    return startSyncPreviewClock(
+      (nowMs) => {
+        previewNowMs = nowMs;
+      },
+      Date.now,
+      (refresh, intervalMs) => {
+        const interval = window.setInterval(refresh, intervalMs);
+        return () => window.clearInterval(interval);
+      }
+    );
+  });
+
+  const syncPreview = $derived.by(() => {
+    if (!savedSettings) return "";
+    const workMinutes = syncPreviewWorkMinutes(
+      settingsValidation.settings?.workMinutes,
+      savedSettings.workMinutes
+    );
+    const preview = gridPreview(previewNowMs, workMinutes, gridOffsetMinutes);
+    return formatSyncPreview(preview, gridOffsetMinutes, timeFormat);
+  });
   const settingsConfirmation = $derived(
     settingsResult === "saved"
       ? "Timing saved."
@@ -466,6 +506,25 @@
                 <small id="consumer-break-error" class="field-error">{breakSecondsError}</small>
               {/if}
             </div>
+          </div>
+
+          <div class="sync-field">
+            <label class="sync-toggle">
+              <input
+                type="checkbox"
+                checked={syncAcrossDevices}
+                onchange={(event) => onToggleSync(event.currentTarget.checked)}
+                disabled={settingsLoading || settingsSaving}
+              />
+              Sync breaks across devices
+            </label>
+            <p class="t-micro">
+              Breaks land on the clock instead of counting from when you started, so every
+              device with the same settings rests together. Nothing is sent over the network.
+            </p>
+            {#if syncAcrossDevices}
+              <p class="t-micro">{syncPreview}</p>
+            {/if}
           </div>
 
           <div class="settings-actions">
@@ -1027,6 +1086,31 @@
     margin-top: 6px;
     color: var(--ink-2);
     font-size: 0.68rem;
+  }
+
+  .sync-field {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--line);
+  }
+
+  .sync-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s2);
+    color: var(--ink);
+    font-size: 0.78rem;
+    font-weight: 650;
+  }
+
+  .sync-toggle input {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--ink);
+  }
+
+  .sync-field .t-micro {
+    margin: 6px 0 0;
   }
 
   .settings-actions {
