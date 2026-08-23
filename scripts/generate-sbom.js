@@ -105,8 +105,6 @@ for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
   const version = entry[0].slice(separator + 1);
   const manifest = installedNodePackages.get(`${name}@${version}`);
   const platformLicense =
-    name.startsWith("@esbuild/") ||
-    name.startsWith("@rollup/") ||
     name.startsWith("@rolldown/binding-") ||
     name === "fsevents"
     ? "MIT"
@@ -116,9 +114,7 @@ for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
         ? "MPL-2.0"
         : name.startsWith("@tauri-apps/cli-")
           ? "Apache-2.0 OR MIT"
-          : name.startsWith("@napi-rs/lzma-")
-            ? "MIT"
-            : null;
+          : null;
   const purl = npmPurl(name, version);
   const integrity = typeof entry[3] === "string" ? entry[3].match(/^sha512-(.+)$/) : null;
   const metadata = entry[2] ?? {};

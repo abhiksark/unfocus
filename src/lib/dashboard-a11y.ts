@@ -6,7 +6,6 @@ import type { ConsumerReminderPresentation } from "./consumer-dashboard";
 
 /** Stable region names used by the consumer dashboard. */
 export const DASHBOARD_REMINDER_ACTIONS_LABEL = "Reminder actions";
-export const DASHBOARD_STATE_LIVE_REGION = true;
 
 /**
  * Which primary actions must be keyboard-reachable for a presentation.
