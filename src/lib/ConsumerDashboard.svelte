@@ -234,7 +234,13 @@
 
   <section class="state" aria-labelledby="consumer-state-title">
     <div class="state-copy" aria-live="polite" aria-atomic="true">
-      <h1 id="consumer-state-title" class="t-display">{presentation.heading}</h1>
+      <h1
+        id="consumer-state-title"
+        class="t-display"
+        data-type-role="reflective-display"
+      >
+        {presentation.heading}
+      </h1>
       <div class="meter">
         <p class="t-lead">{presentation.secondary}</p>
         {#if progress !== null}
@@ -293,6 +299,7 @@
           Day starts
           <select
             class="day-start-select"
+            data-type-role="mono"
             value={dayStartHour}
             onchange={(event) =>
               onDayStartChange(Number((event.currentTarget as HTMLSelectElement).value))}
@@ -357,7 +364,7 @@
         </div>
       </div>
 
-      <div class="strip-axis" aria-hidden="true">
+      <div class="strip-axis" data-type-role="mono" aria-hidden="true">
         {#each axisTicks as tick (tick.timestampMs)}
           {#if tick.showLabel}
             <span
@@ -460,6 +467,7 @@
               <div class="duration-input" class:invalid={workMinutesError}>
                 <input
                   id="consumer-work-duration"
+                  data-type-role="mono"
                   type="text"
                   inputmode="numeric"
                   pattern="[0-9]*"
@@ -486,6 +494,7 @@
               <div class="duration-input" class:invalid={breakSecondsError}>
                 <input
                   id="consumer-break-duration"
+                  data-type-role="mono"
                   type="text"
                   inputmode="numeric"
                   pattern="[0-9]*"
@@ -685,11 +694,10 @@
   .t-display {
     max-width: 20ch;
     margin: 0;
-    font-family: var(--serif);
     font-size: clamp(2rem, 4.4vw, 2.9rem);
-    font-weight: 400;
-    letter-spacing: -0.012em;
-    line-height: 1.05;
+    font-weight: 450;
+    letter-spacing: -0.006em;
+    line-height: 1.1;
   }
 
   .t-lead {
@@ -702,7 +710,7 @@
   .t-micro {
     margin: 0;
     color: var(--ink-3);
-    font-size: 0.74rem;
+    font-size: 0.75rem;
     line-height: 1.45;
   }
 
@@ -949,6 +957,7 @@
     background: transparent;
     color: var(--ink-2);
     font: inherit;
+    font-family: var(--mono);
     padding: 2px 22px 2px 8px;
     background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
       linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
@@ -969,7 +978,7 @@
     margin: 0;
     padding: 0;
     color: var(--ink-3);
-    font-size: 0.74rem;
+    font-size: 0.75rem;
     list-style: none;
   }
 
@@ -1044,7 +1053,7 @@
     margin-bottom: 7px;
     color: var(--ink);
     font-size: 0.78rem;
-    font-weight: 620;
+    font-weight: 600;
   }
 
   .duration-input {
@@ -1073,19 +1082,20 @@
     color: var(--ink);
     background: transparent;
     font: inherit;
+    font-family: var(--mono);
   }
 
   .duration-input span {
     padding-right: 11px;
     color: var(--ink-2);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
 
   .duration-field small {
     display: block;
     margin-top: 6px;
     color: var(--ink-2);
-    font-size: 0.68rem;
+    font-size: 0.75rem;
   }
 
   .sync-field {
@@ -1100,7 +1110,7 @@
     gap: var(--s2);
     color: var(--ink);
     font-size: 0.78rem;
-    font-weight: 650;
+    font-weight: 600;
   }
 
   .sync-toggle input {
@@ -1137,7 +1147,7 @@
     cursor: pointer;
     color: var(--ink);
     font-size: 0.78rem;
-    font-weight: 650;
+    font-weight: 600;
   }
 
   .advanced p {

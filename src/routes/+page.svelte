@@ -530,7 +530,8 @@
 
     --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
       "Helvetica Neue", sans-serif;
-    --serif: "Fraunces", Georgia, serif;
+    --display: "Newsreader", Georgia, serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
 
   @media (prefers-contrast: more) {
@@ -589,14 +590,14 @@
   .invalid-overlay .eyebrow {
     color: #79cf91;
     font-size: 0.7rem;
-    font-weight: 750;
+    font-weight: 600;
     letter-spacing: 0.17em;
     text-transform: uppercase;
   }
 
   .invalid-overlay .shortcut-hint {
     color: #9ca69e;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
 
   .invalid-overlay kbd {
@@ -617,6 +618,7 @@
     padding: 9px 11px;
     color: #ffc4c4;
     background: #2a1717;
+    font-family: var(--mono);
     overflow-wrap: anywhere;
   }
 
@@ -627,7 +629,7 @@
     color: #dce7de;
     background: #18201a;
     font: inherit;
-    font-weight: 620;
+    font-weight: 600;
     cursor: pointer;
   }
 

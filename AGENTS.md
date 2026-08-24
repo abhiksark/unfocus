@@ -44,7 +44,7 @@ src-tauri/        Rust core, tray, windows, probes, reminder scheduler
   src/tray.rs     System tray, status menu, hide-or-exit dashboard policy
   src/diagnostics.rs  Environment, monitors, probe snapshot for developer UI
 scripts/          Generators, asset provenance, and repository-integrity gates
-static/           Break-scene delivery asset, icon source, vendored Fraunces font
+static/           Break-scene delivery asset, icon source, vendored Newsreader font
 .github/          CI, releases, Dependabot, issue templates, SECURITY.md
 plans/            Local working notes only (gitignored; not tracked docs)
 ```

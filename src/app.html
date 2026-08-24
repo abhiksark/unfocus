@@ -3,15 +3,36 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%sveltekit.assets%/unfocus-icon.svg" />
+    <link
+      rel="preload"
+      href="%sveltekit.assets%/fonts/newsreader.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#111713" />
     <style>
       @font-face {
-        font-family: "Fraunces";
-        src: url("%sveltekit.assets%/fonts/fraunces.woff2") format("woff2");
-        font-weight: 300 600;
+        font-family: "Newsreader";
+        src: url("%sveltekit.assets%/fonts/newsreader.woff2") format("woff2");
+        font-weight: 200 800;
         font-style: normal;
         font-display: swap;
+      }
+
+      [data-type-role="reflective-display"] {
+        font-family: var(--display);
+        font-optical-sizing: auto;
+      }
+
+      [data-type-role="ui"] {
+        font-family: var(--sans);
+      }
+
+      [data-type-role="mono"] {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
       }
     </style>
     <title>Unfocus</title>

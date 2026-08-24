@@ -199,15 +199,17 @@
 
   <header class="overlay-header" aria-hidden="true">
     <div class="wordmark"><span></span>Unfocus</div>
-    <time>{clock}</time>
+    <time data-type-role="mono">{clock}</time>
   </header>
 
   <section class="break-content" aria-labelledby="break-message">
-    <p class="eyebrow">A moment for your eyes</p>
+    <p class="eyebrow" data-type-role="ui">A moment for your eyes</p>
     {#key currentMessage}
-      <h1 id="break-message" class="message">{currentMessage}</h1>
+      <h1 id="break-message" class="message" data-type-role="reflective-display">
+        {currentMessage}
+      </h1>
     {/key}
-    <p class="guidance">
+    <p class="guidance" data-type-role="ui">
       {complete
         ? "Notice how your eyes feel before returning."
         : "Rest your focus on something beyond the screen."}
@@ -231,7 +233,7 @@
         ></circle>
       </svg>
       {#key countdown}
-        <span class="timer-digits">{countdown}</span>
+        <span class="timer-digits" data-type-role="mono">{countdown}</span>
       {/key}
     </div>
   </section>
@@ -244,7 +246,9 @@
       End break
     </button>
     <p class="shortcut">Press <kbd>Esc</kbd> to close</p>
-    <p class="display-label">Display {monitorIndex + 1} of {monitorCount}</p>
+    <p class="display-label" data-type-role="mono">
+      Display {monitorIndex + 1} of {monitorCount}
+    </p>
     {#if actionError}
       <p class="action-error" role="alert">Could not close the break: {actionError}</p>
     {/if}
@@ -279,7 +283,7 @@
       rgba(41, 77, 67, 0.12) 38.2%,
       rgba(2, 9, 7, 0.28)
     );
-    --scene-copy-x: 61.8%;
+    --scene-copy-x: 50%;
     --scene-copy-core: rgba(3, 14, 13, 0.62);
     --scene-copy-mid: rgba(3, 14, 13, 0.44);
     color: #f6f3e8;
@@ -359,7 +363,7 @@
   }
 
   .return-light {
-    --return-light-x: 61.8%;
+    --return-light-x: 50%;
 
     background: radial-gradient(
       ellipse 61.8% 38.2% at var(--return-light-x) 61.8%,
@@ -403,7 +407,7 @@
     gap: 10px;
     color: rgba(235, 246, 239, 0.78);
     font-size: 0.72rem;
-    font-weight: 650;
+    font-weight: 600;
     letter-spacing: 0.15em;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
     text-transform: uppercase;
@@ -426,7 +430,7 @@
 
   .break-content {
     position: relative;
-    left: 11.8vw;
+    left: 0;
     display: flex;
     width: min(61.8vw, 960px);
     max-height: 100%;
@@ -447,10 +451,9 @@
   .eyebrow {
     margin: 0 0 21px;
     color: rgba(190, 232, 205, 0.82);
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 0.7rem;
     font-weight: 500;
-    letter-spacing: 0.32em;
+    letter-spacing: 0.17em;
     text-transform: uppercase;
   }
 
@@ -458,11 +461,10 @@
     max-width: 960px;
     margin: 0;
     color: #f6f3e8;
-    font-family: var(--serif);
     font-size: clamp(2.6rem, 4.8vw, 4.8rem);
-    font-weight: 380;
-    letter-spacing: 0.002em;
-    line-height: 1.14;
+    font-weight: 450;
+    letter-spacing: -0.006em;
+    line-height: 1.1;
     text-wrap: balance;
     text-shadow: 0 13px 34px rgba(0, 0, 0, 0.42);
     animation: message-arrive 650ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -517,7 +519,6 @@
 
   .timer-digits {
     color: rgba(240, 248, 243, 0.82);
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.08em;
@@ -554,7 +555,7 @@
       0 12px 34px rgba(0, 0, 0, 0.16);
     font: inherit;
     font-size: 0.78rem;
-    font-weight: 620;
+    font-weight: 600;
     cursor: pointer;
     transition:
       color 180ms ease,
@@ -597,7 +598,7 @@
   .sync-error {
     margin: 13px 0 0;
     color: rgba(228, 240, 232, 0.74);
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     line-height: 1.35;
     text-align: center;
   }
@@ -748,16 +749,7 @@
     }
 
     .break-content {
-      left: 0;
       width: min(88vw, 760px);
-    }
-
-    .return-light {
-      --return-light-x: 50%;
-    }
-
-    .break-overlay {
-      --scene-copy-x: 50%;
     }
   }
 

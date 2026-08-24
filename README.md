@@ -277,15 +277,15 @@ local settings. Report a suspected vulnerability privately through the
 
 The break screen is designed to lose a staring contest. Its bundled,
 first-party matte landscape uses an asymmetric summit around the left golden
-line and, on wide screens, places the interface around the right golden line.
-Constrained crops recenter the interface so legibility wins over mathematical
-placement. When a break begins, device-local time selects one static,
-cool-biased lighting treatment—dawn from 05:00, day from 09:00, dusk from 17:00,
-or night from 21:00—and holds it across every monitor for that break. This
-requires no location permission or network request. One localized amber
-ellipse fades in near the lower golden line when it is time to return. There is
-no continuous full-viewport motion, and reduced-motion and higher-contrast
-preferences receive dedicated fallbacks.
+line while centering the interface and its supporting light fields on every
+screen. The asymmetry stays in the landscape rather than the reading axis.
+When a break begins, device-local time selects one static, cool-biased lighting
+treatment—dawn from 05:00, day from 09:00, dusk from 17:00, or night from
+21:00—and holds it across every monitor for that break. This requires no
+location permission or network request. One localized amber ellipse fades in
+near the lower golden line when it is time to return. There is no continuous
+full-viewport motion, and reduced-motion and higher-contrast preferences
+receive dedicated fallbacks.
 
 The credentialed source and its deterministic provenance are retained under
 [`scripts/asset-sources/`](scripts/asset-sources/). The bundled JPEG is a 4K
@@ -298,6 +298,6 @@ locally with the app; the scene uses no network request or asset CDN.
   [retained source](scripts/asset-sources/break-scene-source.png) and bundled
   delivery derivative: [MIT](LICENSE)
   ([provenance](scripts/asset-sources/break-scene.provenance.json))
-- Vendored Fraunces font: [SIL Open Font License 1.1](static/fonts/OFL.txt)
+- Vendored Newsreader font: [SIL Open Font License 1.1](static/fonts/OFL.txt)
 - Dependency license texts and notices: bundled with every package and tracked
   in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)

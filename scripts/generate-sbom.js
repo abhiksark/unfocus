@@ -155,18 +155,18 @@ for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
   bunPackagesByName.set(name, versions);
 }
 
-const fontRef = "pkg:generic/Fraunces@variable-font";
-const fontPath = join(root, "static/fonts/fraunces.woff2");
+const fontRef = "pkg:generic/Newsreader@1.003";
+const fontPath = join(root, "static/fonts/newsreader.woff2");
 const fontHash = createHash("sha256").update(readFileSync(fontPath)).digest("hex");
 components.push({
   type: "file",
   "bom-ref": fontRef,
-  name: "Fraunces",
-  version: "variable-font",
+  name: "Newsreader",
+  version: "1.003",
   purl: fontRef,
   licenses: [{ license: { id: "OFL-1.1" } }],
   hashes: [{ alg: "SHA-256", content: fontHash }],
-  properties: [{ name: "unfocus:source", value: "static/fonts/fraunces.woff2" }]
+  properties: [{ name: "unfocus:source", value: "static/fonts/newsreader.woff2" }]
 });
 
 components.sort((left, right) => compareText(left["bom-ref"], right["bom-ref"]));

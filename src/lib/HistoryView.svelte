@@ -338,7 +338,7 @@
     </button>
     <div>
       <p class="t-label">History</p>
-      <h1 class="t-title">The last 90 days</h1>
+      <h1 class="t-title" data-type-role="reflective-display">The last 90 days</h1>
     </div>
   </header>
 
@@ -556,7 +556,12 @@
                         <ul>
                           {#each slot.breakMarkers as event, index (`${event.atMs}-${event.kind}-${index}`)}
                             <li>
-                              <time datetime={new Date(event.atMs).toISOString()}>{formatTime(event.atMs)}</time>
+                              <time
+                                data-type-role="mono"
+                                datetime={new Date(event.atMs).toISOString()}
+                              >
+                                {formatTime(event.atMs)}
+                              </time>
                               <span>{breakKindLabel(event, detail)}</span>
                             </li>
                           {/each}
@@ -568,7 +573,7 @@
               {/each}
             </div>
           </div>
-          <div class="timeline-axis" aria-hidden="true">
+          <div class="timeline-axis" data-type-role="mono" aria-hidden="true">
             <span>{detail.hourSlots[0]?.label}</span>
             <span>{detail.hourSlots[6]?.label}</span>
             <span>{detail.hourSlots[12]?.label}</span>
@@ -614,6 +619,13 @@
     background: var(--bg);
   }
 
+  .history-top h1 {
+    font-size: clamp(1.7rem, 3.6vw, 2.25rem);
+    font-weight: 450;
+    letter-spacing: -0.006em;
+    line-height: 1.1;
+  }
+
   .history-panel,
   .day-panel,
   .history-message {
@@ -640,7 +652,7 @@
   .t-micro {
     margin: 0;
     color: var(--ink-3);
-    font-size: 0.74rem;
+    font-size: 0.75rem;
     line-height: 1.45;
   }
 
@@ -697,7 +709,7 @@
     gap: 2px;
     margin: 0;
     color: var(--ink-3);
-    font-size: 0.74rem;
+    font-size: 0.75rem;
     text-align: right;
   }
 
@@ -814,7 +826,7 @@
     margin: 0;
     padding: 0;
     color: var(--ink-2);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     list-style: none;
   }
 
@@ -917,7 +929,7 @@
 
   .stat-hint {
     color: var(--ink-3);
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     line-height: 1.35;
   }
 
@@ -925,7 +937,7 @@
     min-height: 20px;
     margin: 0;
     color: var(--ink-2);
-    font-size: 0.74rem;
+    font-size: 0.75rem;
     line-height: 1.4;
   }
 
@@ -1005,7 +1017,7 @@
     padding: var(--s3);
     color: var(--ink);
     background: #121a15;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     line-height: 1.35;
     text-align: left;
   }

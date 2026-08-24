@@ -15,9 +15,14 @@ as `export let` or `$:` reactive statements.
   `:global(:root)` blocks leave the winner dependent on stylesheet order, which
   Svelte does not guarantee.
 - Spacing is `--s1` to `--s6` (4, 8, 12, 16, 24, 32). Radius is `--r-control`
-  and `--r-button` only. `--sans` and `--serif` are the only shared font stacks;
-  the overlay's monospace eyebrow and countdown keep their literal
-  `ui-monospace` stack, which is deliberate and described under Break scene.
+  and `--r-button` only. `--display`, `--sans`, and `--mono` are the shared font
+  stacks. Newsreader carries only reflective display moments; native sans owns
+  body and interface copy, and native monospace is reserved for timing and
+  technical evidence. Mark deliberate role boundaries with `data-type-role`.
+- Use 400, 500, 600, or 700 for native UI weights instead of fractional values
+  that collapse differently across platforms. Newsreader display copy may use
+  weight 450 through its variable font. Keep essential metadata at least
+  `0.75rem`; compact, aria-hidden chart scaffolding may remain smaller.
 - Use a token where one matches the value exactly. Where none matches, keep the
   literal rather than snapping to the nearest step; the overlay's spacing is
   tuned against monitor height and a 2px snap moves it.
@@ -90,14 +95,15 @@ as `export let` or `$:` reactive statements.
   first-party source and provenance retained under `scripts/asset-sources/`;
   the source itself is not native 4K. Update the source, derivative, hashes,
   and provenance together if the artwork changes.
-- On sufficiently wide screens, preserve the golden-ratio composition: keep
-  the asymmetric summit around the left `38.2%` line, the content optical axis
-  around `61.8%`, and the horizon and return light around the lower `61.8%`
-  line. Use smooth `61.8:38.2` elliptical fields and golden-section Bezier
-  easing, not a literal spiral ornament.
-- Legibility and crop safety override the golden grid. Recenter the interface
-  on constrained and portrait-like viewports, keep the focal summit in frame,
-  and retain a minimum 44 px control target.
+- Preserve the golden-ratio artwork composition: keep the asymmetric summit
+  around the left `38.2%` line and the horizon and return light around the
+  lower `61.8%` line. Center the functional interface and its supporting
+  contrast and return-light fields on every viewport; asymmetry belongs in the
+  landscape, not the reading axis. Use smooth `61.8:38.2` elliptical fields
+  and golden-section Bezier easing, not a literal spiral ornament.
+- Legibility and crop safety override the golden grid. Keep the interface
+  centered on constrained and portrait-like viewports, keep the focal summit
+  in frame, and retain a minimum 44 px control target.
 - Select the local-time palette once from the shared run start
   (`deadlineMs - durationSeconds * 1_000`): dawn is 05:00–09:00, day is
   09:00–17:00, dusk is 17:00–21:00, and night is 21:00–05:00. Use the device's
@@ -113,9 +119,10 @@ as `export let` or `$:` reactive statements.
   keeps every copy and control state legible across supported crops.
 - Derive one-shot presentation delays from `--presentation-offset` so all
   monitors share one visual phase.
-- Fraunces is vendored under `static/fonts/` with the OFL and is used for
-  display copy; eyebrows and digits use monospace. Do not add font or asset
-  CDNs, runtime downloads, or other network-backed scene assets.
+- Newsreader is vendored under `static/fonts/` with the OFL and is used only for
+  reflective display copy. Overlay timing uses native monospace while labels,
+  guidance, and controls use native sans. Do not add font or asset CDNs,
+  runtime downloads, or other network-backed scene assets.
 
 ## Checks
 

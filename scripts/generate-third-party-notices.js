@@ -230,10 +230,10 @@ for (const entry of Object.values(bunLock.packages)) {
 const fontLicense = join(root, "static", "fonts", "OFL.txt");
 components.push({
   ecosystem: "Vendored asset",
-  name: "Fraunces",
-  version: "variable font",
+  name: "Newsreader",
+  version: "1.003 variable font",
   declared: "OFL-1.1",
-  authors: ["The Fraunces Project Authors"],
+  authors: ["The Newsreader Project Authors"],
   files: [fontLicense]
 });
 
