@@ -77,7 +77,7 @@ Unfocus itself does not make that request over the network.
 
 ## Install
 
-Unfocus is alpha software. Linux X11 is the only qualified platform today;
+Unfocus is beta software. Linux X11 is the only qualified platform today;
 macOS and Windows builds are available for early testing.
 
 ### Ubuntu and Debian on X11
@@ -87,8 +87,8 @@ The preferred Linux installation is the signed public APT repository:
 ```sh
 curl -fsSL https://apt.abhik.ai/public-key.asc \
   | sudo gpg --dearmor -o /usr/share/keyrings/unfocus-archive-keyring.gpg
-echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://apt.abhik.ai alpha main' \
-  | sudo tee /etc/apt/sources.list.d/unfocus-alpha.list
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://apt.abhik.ai beta main' \
+  | sudo tee /etc/apt/sources.list.d/unfocus-beta.list
 sudo apt update
 sudo apt install unfocus
 ```
@@ -97,15 +97,27 @@ Confirm that `echo $XDG_SESSION_TYPE` prints `x11`. On Ubuntu GNOME, choose
 **Ubuntu on Xorg** at login if necessary and enable the Ubuntu AppIndicators
 extension if the tray icon is missing.
 
+Existing alpha installs stay on the frozen alpha channel. To migrate, replace
+the alpha source with the beta source before upgrading; the exact commands are
+in the [install guide](docs/install.md#migrate-from-the-alpha-apt-channel).
+
 ### macOS
 
-Install the alpha from the public Homebrew tap:
+Install the beta from the public Homebrew tap:
 
 ```sh
-brew install --cask abhiksark/unfocus/unfocus@alpha
+brew install --cask abhiksark/unfocus/unfocus@beta
 ```
 
-The macOS build is not notarized. On first launch, right-click Unfocus and
+Existing Homebrew alpha installs also stay pinned. Migrate without `--zap` so
+local application data is preserved:
+
+```sh
+brew uninstall --cask abhiksark/unfocus/unfocus@alpha
+brew install --cask abhiksark/unfocus/unfocus@beta
+```
+
+The macOS 11+ build is not notarized. On first launch, right-click Unfocus and
 select **Open**. While running, Unfocus is intentionally available from the
 menu-bar icon without a Dock icon or application menu.
 
@@ -125,11 +137,11 @@ built.
 | Platform | Status | Notes |
 | --- | --- | --- |
 | Linux X11 | **Qualified** | Synchronized multi-monitor overlays, idle detection, fullscreen detection, and AppIndicator tray support. Ubuntu is the primary test environment. |
-| macOS | **Preview** | Idle and fullscreen probes work interactively. Physical multi-monitor acceptance is not complete. |
+| macOS 11+ | **Preview** | Idle and fullscreen probes work interactively. Physical multi-monitor acceptance is not complete. |
 | Windows x64 | **Early build** | Idle and fullscreen probes are implemented. Interactive multi-monitor qualification is pending. |
 | Linux Wayland | **Unsupported** | Default packages do not provide Wayland probes. |
 
-APT repository metadata is signed with the archive OpenPGP key; the alpha
+APT repository metadata is signed with the archive OpenPGP key; the beta
 packages themselves remain application-unsigned. The macOS app is not
 code-signed or notarized, and Windows installers are not code-signed, so
 platform warnings may appear. Unfocus does not auto-update; install updates

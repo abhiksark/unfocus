@@ -1,6 +1,6 @@
 # Install Unfocus
 
-This guide covers installing Unfocus alpha builds on each supported package
+This guide covers installing Unfocus prerelease builds on each supported package
 type, verifying downloads, first-run steps, local data, uninstall, and common
 problems.
 
@@ -42,8 +42,8 @@ Labels describe tested behavior, not only whether a package exists.
 | **Ubuntu / Debian on Linux X11** | **Qualified** | Preferred install: signed APT repo at [apt.abhik.ai](https://apt.abhik.ai). Tray needs an AppIndicator host (on Ubuntu GNOME: **Ubuntu AppIndicators**; see [Tray icon on Linux](#tray-icon-on-linux)). |
 | Other Linux **X11** | **Qualified** backend | Same probes and overlays as Ubuntu; install via release `.deb` / `.rpm` / AppImage and verify `SHA256SUMS`. |
 | Linux **Wayland** | **Unsupported** | Packages may start, but idle and fullscreen probes are not qualified. Do not treat Wayland as supported. |
-| Windows x64 | Early build | Installers ship; interactive multi-monitor qualification is still pending. Idle and fullscreen probes are implemented in current alphas. Not application code-signed. |
-| macOS (Apple silicon and Intel) | Preview | Intentionally tray/menu-bar-only while running: no Dock icon or application menu. Reopen or focus the dashboard from the tray icon. Physical multi-monitor acceptance is unfinished. Builds are not code-signed or notarized. |
+| Windows x64 | Early build | Installers ship; interactive multi-monitor qualification is still pending. Idle and fullscreen probes are implemented in current prereleases. Not application code-signed. |
+| macOS 11+ (Apple silicon and Intel) | Preview | Intentionally tray/menu-bar-only while running: no Dock icon or application menu. Reopen or focus the dashboard from the tray icon. Physical multi-monitor acceptance is unfinished. Builds are not code-signed or notarized. |
 
 ### Package trust and install sources
 
@@ -51,7 +51,7 @@ Labels describe tested behavior, not only whether a package exists.
 | --- | --- | --- |
 | **Ubuntu / Debian APT** (preferred on those systems) | Archive signed with the Unfocus OpenPGP key; `apt` verifies `InRelease` on every update. Optional `.deb.asc` next to each pool package. | [apt.abhik.ai](https://apt.abhik.ai); see [Debian / Ubuntu (APT)](#debian--ubuntu-apt-preferred) |
 | GitHub release assets (`.deb`, `.rpm`, AppImage, DMG, setup/MSI) | Verify `SHA256SUMS` (required). Optional GitHub build-provenance attestations. | [GitHub Releases](https://github.com/abhiksark/unfocus/releases); **published** prereleases only, not draft releases |
-| macOS Homebrew cask | Homebrew’s cask install path | `brew install --cask abhiksark/unfocus/unfocus@alpha` |
+| macOS Homebrew cask | Homebrew’s cask install path | `brew install --cask abhiksark/unfocus/unfocus@beta` |
 
 macOS and Windows packages are **not** application code-signed or notarized.
 Ubuntu/Debian APT is the path that is archive-signed today. That is normal
@@ -62,7 +62,7 @@ Authenticode.
 
 | Audience | Linux | macOS | Windows |
 | --- | --- | --- | --- |
-| **End user (release package)** | No extra libraries for APT / `.deb` / `.rpm`. AppImage may need your distribution's FUSE / AppImage support. A tray host is recommended on GNOME (below). | **None.** No Xcode. | **None** beyond a normal Windows 10/11 x64 system. The WebView2 runtime is usually already present on those systems. |
+| **End user (release package)** | APT, `.deb`, and `.rpm` installs resolve their GTK 3, WebKitGTK 4.1, AppIndicator, and libc runtime packages automatically; no manual preinstall. AppImage may need your distribution's FUSE / AppImage support. A tray host is recommended on GNOME (below). | No separate runtime install on macOS 11 or later; Unfocus uses macOS-provided AppKit and WebKit. No Xcode. | No separate runtime install on a normal Windows 10/11 x64 system. Unfocus uses WebView2; if it is missing, the setup installer downloads Microsoft's bootstrapper. |
 | **Developer (build from source)** | WebKitGTK 4.1, AppIndicator, libxdo, and related deps; see [Build from source](#build-from-source-all-platforms) and [Tauri Linux prerequisites](https://v2.tauri.app/start/prerequisites/#linux). | Xcode Command Line Tools; see [Tauri macOS prerequisites](https://v2.tauri.app/start/prerequisites/#macos). | MSVC C++ build tools and WebView2 where required; see [Tauri Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows). |
 
 ### Choose a package
@@ -75,10 +75,10 @@ when one exists) from:
 
 **https://github.com/abhiksark/unfocus/releases**
 
-Filenames embed the full version (example: `0.5.0-alpha.1`). Replace
+Filenames embed the full version (example: `0.6.0-beta.1`). Replace
 `VERSION` in the commands below with that string, or download the matching
 file from the release page in a browser. The release tag is the same string
-with a `v` prefix (example: `v0.5.0-alpha.1`).
+with a `v` prefix (example: `v0.6.0-beta.1`).
 
 | You have | Download or install path |
 | --- | --- |
@@ -111,11 +111,11 @@ you install or run anything.
 ### 1. Download the package and `SHA256SUMS`
 
 From the same **published** release tag as the package (example tag
-`v0.5.0-alpha.1`):
+`v0.6.0-beta.1`):
 
 ```sh
 # Example version; use the version from the release page.
-VERSION=0.5.0-alpha.1
+VERSION=0.6.0-beta.1
 BASE="https://github.com/abhiksark/unfocus/releases/download/v${VERSION}"
 
 curl -fsSL -O "${BASE}/SHA256SUMS"
@@ -141,7 +141,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 **Windows (PowerShell), for one file:**
 
 ```powershell
-Get-FileHash .\Unfocus_0.5.0-alpha.1_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\Unfocus_0.6.0-beta.1_x64-setup.exe -Algorithm SHA256
 # Compare the hash to the matching line in SHA256SUMS
 ```
 
@@ -191,8 +191,8 @@ desktop.
 
 This is the supported day-to-day install path on Ubuntu and Debian.
 
-Install the alpha from the public APT repository at
-[https://apt.abhik.ai](https://apt.abhik.ai). The suite name is **`alpha`**
+Install the beta from the public APT repository at
+[https://apt.abhik.ai](https://apt.abhik.ai). The suite name is **`beta`**
 (architecture **amd64** only for now).
 
 **What “signed” means here:** the **APT archive** is signed with the Unfocus
@@ -206,8 +206,8 @@ That is the normal Linux trust model for third-party repositories.
 curl -fsSL https://apt.abhik.ai/public-key.asc \
   | sudo gpg --dearmor -o /usr/share/keyrings/unfocus-archive-keyring.gpg
 
-echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://apt.abhik.ai alpha main' \
-  | sudo tee /etc/apt/sources.list.d/unfocus-alpha.list
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://apt.abhik.ai beta main' \
+  | sudo tee /etc/apt/sources.list.d/unfocus-beta.list
 
 sudo apt update
 sudo apt install unfocus
@@ -217,10 +217,10 @@ sudo apt install unfocus
 key once):
 
 ```sh
-DEB_VERSION=0.5.0~alpha.1-1
+DEB_VERSION=0.6.0~beta.1-1
 DEB_FILE="unfocus_${DEB_VERSION}_amd64.deb"
-curl -fsSL -O "https://apt.abhik.ai/pool/main/u/unfocus/${DEB_FILE}"
-curl -fsSL -O "https://apt.abhik.ai/pool/main/u/unfocus/${DEB_FILE}.asc"
+curl -fsSL -O "https://apt.abhik.ai/pool/beta/u/unfocus/${DEB_FILE}"
+curl -fsSL -O "https://apt.abhik.ai/pool/beta/u/unfocus/${DEB_FILE}.asc"
 gpg --no-default-keyring \
   --keyring /usr/share/keyrings/unfocus-archive-keyring.gpg \
   --verify "${DEB_FILE}.asc" "$DEB_FILE"
@@ -239,6 +239,19 @@ sudo apt update
 sudo apt install --only-upgrade unfocus
 ```
 
+#### Migrate from the alpha APT channel
+
+The alpha suite remains frozen and does not receive beta packages. Existing
+alpha users can explicitly move to beta with:
+
+```sh
+sudo rm -f /etc/apt/sources.list.d/unfocus-alpha.list
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://apt.abhik.ai beta main' \
+  | sudo tee /etc/apt/sources.list.d/unfocus-beta.list
+sudo apt update
+sudo apt install --only-upgrade unfocus
+```
+
 **Remove the package:**
 
 ```sh
@@ -248,7 +261,7 @@ sudo apt remove unfocus
 To remove the APT source as well:
 
 ```sh
-sudo rm -f /etc/apt/sources.list.d/unfocus-alpha.list
+sudo rm -f /etc/apt/sources.list.d/unfocus-beta.list
 sudo rm -f /usr/share/keyrings/unfocus-archive-keyring.gpg
 sudo apt update
 ```
@@ -267,7 +280,7 @@ Use this for offline install or when you want to verify a specific release
 asset yourself.
 
 ```sh
-VERSION=0.5.0-alpha.1
+VERSION=0.6.0-beta.1
 # After downloading Unfocus_${VERSION}_amd64.deb and verifying SHA256SUMS:
 
 sudo apt install "./Unfocus_${VERSION}_amd64.deb"
@@ -277,9 +290,9 @@ sudo apt install "./Unfocus_${VERSION}_amd64.deb"
 ```
 
 **Upgrade:** install a newer `.deb` the same way. Prerelease Debian versions
-are ordered so later alphas and stables can upgrade normally. The filename
-keeps the full SemVer (for example `0.5.0-alpha.1`); the package’s embedded
-Debian `Version` uses tilde ordering (for example `0.5.0~alpha.1-1`) so
+are ordered so later prereleases and stables can upgrade normally. The filename
+keeps the full SemVer (for example `0.6.0-beta.1`); the package’s embedded
+Debian `Version` uses tilde ordering (for example `0.6.0~beta.1-1`) so
 upgrades sort correctly.
 
 **Remove the package:**
@@ -292,7 +305,7 @@ sudo apt remove unfocus
 ### Fedora / RHEL (`.rpm`)
 
 ```sh
-VERSION=0.5.0-alpha.1
+VERSION=0.6.0-beta.1
 # After downloading Unfocus-${VERSION}-1.x86_64.rpm and verifying SHA256SUMS:
 
 sudo dnf install "./Unfocus-${VERSION}-1.x86_64.rpm"
@@ -308,7 +321,7 @@ sudo dnf remove unfocus
 ### Portable AppImage
 
 ```sh
-VERSION=0.5.0-alpha.1
+VERSION=0.6.0-beta.1
 chmod +x "./Unfocus_${VERSION}_amd64.AppImage"
 "./Unfocus_${VERSION}_amd64.AppImage"
 ```
@@ -352,7 +365,9 @@ The desktop must provide a **StatusNotifier / AppIndicator** host.
 Preview platform. Physical multi-monitor behavior has not completed an
 acceptance run. While running, macOS intentionally uses Accessory activation:
 Unfocus is tray/menu-bar-only, with no Dock icon or application menu.
-**No Xcode or other developer tools are required** to install a release DMG.
+Release packages require macOS 11 or later and use the AppKit and WebKit
+frameworks included with macOS. **No Xcode or other developer tools are
+required** to install a release DMG.
 
 ### Which DMG
 
@@ -372,7 +387,7 @@ Check **Apple menu → About This Mac** if you are unsure.
 
 ### First launch (unsigned / not notarized)
 
-Alpha builds are **not code-signed or notarized**. Gatekeeper will block a
+Prerelease builds are **not code-signed or notarized**. Gatekeeper will block a
 normal double-click the first time.
 
 1. In **Finder**, open **Applications**.
@@ -391,23 +406,31 @@ Use the Unfocus tray/menu-bar icon and choose **Open Unfocus** to reopen or
 focus the dashboard. The tray menu also exposes the reminder controls and quit
 action.
 
-### Homebrew (alpha cask)
+### Homebrew (beta cask)
 
 If you use Homebrew:
 
 ```sh
-brew install --cask abhiksark/unfocus/unfocus@alpha
+brew install --cask abhiksark/unfocus/unfocus@beta
 ```
 
 That needs Homebrew itself. It does not install Xcode. First-run Gatekeeper
 steps may still apply depending on how the cask delivers the app; use
 Control-click → Open if macOS blocks the app.
 
-Upgrade when a new alpha is published:
+Upgrade when a new beta is published:
 
 ```sh
 brew update
-brew upgrade --cask abhiksark/unfocus/unfocus@alpha
+brew upgrade --cask abhiksark/unfocus/unfocus@beta
+```
+
+Existing alpha cask installs remain pinned. Migrate explicitly without
+`--zap`, which preserves local application data:
+
+```sh
+brew uninstall --cask abhiksark/unfocus/unfocus@alpha
+brew install --cask abhiksark/unfocus/unfocus@beta
 ```
 
 ### Permissions
@@ -420,7 +443,7 @@ explicitly.
 ### Remove on macOS
 
 - Drag **Unfocus** from Applications to the Trash, or
-- If installed via Homebrew: `brew uninstall --cask abhiksark/unfocus/unfocus@alpha`
+- If installed via Homebrew: `brew uninstall --cask abhiksark/unfocus/unfocus@beta`
 
 Removing the app does not always delete local settings. See
 [Local data and clean uninstall](#local-data-and-clean-uninstall).
@@ -430,7 +453,7 @@ Removing the app does not always delete local settings. See
 | Symptom | What to try |
 | --- | --- |
 | Checksum mismatch | Do not install; re-download and re-verify |
-| “App can’t be opened because it is from an unidentified developer” | Control-click → Open (unsigned alpha) |
+| “App can’t be opened because it is from an unidentified developer” | Control-click → Open (unsigned prerelease) |
 | Wrong architecture | Use `aarch64` vs `x64` DMG for your Mac |
 | Tray or multi-monitor oddities | Expected gaps while status is Preview; report with the platform report form |
 
@@ -440,18 +463,19 @@ Removing the app does not always delete local settings. See
 
 Early build. Packages are produced for **64-bit Windows**. Interactive
 multi-monitor qualification is still pending. Idle and fullscreen probes are
-implemented in current alphas; treat overall Windows support as early, not
+implemented in current prereleases; treat overall Windows support as early, not
 fully qualified.
 
 Modern Windows 10 and 11 systems usually already include the WebView2 runtime
-that Tauri uses. A separate WebView2 install is not part of the normal end-user
-path for these packages.
+that Tauri uses. If WebView2 is missing, the setup installer downloads
+Microsoft's bootstrapper; the installed Unfocus application still makes no
+application-originated runtime network calls.
 
 ### Setup installer (`.exe`)
 
 1. Download `Unfocus_VERSION_x64-setup.exe` and `SHA256SUMS`; verify the hash.
 2. Run the setup executable.
-3. If **SmartScreen** warns that the app is unrecognized (unsigned alpha):
+3. If **SmartScreen** warns that the app is unrecognized (unsigned prerelease):
    choose **More info**, then **Run anyway** only if you verified the checksum
    from the official release.
 4. Finish the wizard and start Unfocus from the Start menu.
@@ -465,16 +489,16 @@ verifying its checksum.
 2. Double-click the MSI, or for scripted install:
 
 ```powershell
-msiexec /i Unfocus_0.5.0-alpha.1_x64_en-US.msi
+msiexec /i Unfocus_0.6.0-beta.1_x64_en-US.msi
 ```
 
-The MSI **ProductVersion** is the numeric core only (for example `0.5.0` for
-`0.5.0-alpha.1`) because Windows requires that format. The filename still
+The MSI **ProductVersion** is the numeric core only (for example `0.6.0` for
+`0.6.0-beta.1`) because Windows requires that format. The filename still
 carries the full prerelease version.
 
 ### SmartScreen and unsigned builds
 
-Alpha installers are **not code-signed**. SmartScreen warnings are expected.
+Prerelease installers are **not code-signed**. SmartScreen warnings are expected.
 Always verify `SHA256SUMS` before choosing **Run anyway**.
 
 ### Remove on Windows
@@ -619,7 +643,7 @@ sudo apt install --only-upgrade unfocus
 
 ```sh
 brew update
-brew upgrade --cask abhiksark/unfocus/unfocus@alpha
+brew upgrade --cask abhiksark/unfocus/unfocus@beta
 ```
 
 **GitHub release packages:** download a newer published asset and verify

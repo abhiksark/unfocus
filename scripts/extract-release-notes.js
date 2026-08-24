@@ -49,10 +49,10 @@ export function extractReleaseNotes(changelog, tag) {
 }
 
 export function composeReleaseNotes(changelog, tag) {
-  return "These early builds are not code-signed or notarized. Verify downloads with SHA256SUMS and the GitHub build-provenance attestations.\n" +
+  return "These prerelease builds are not code-signed or notarized. Verify downloads with SHA256SUMS and the GitHub build-provenance attestations.\n" +
     "The release also includes a CycloneDX SBOM and the bundled third-party notices.\n\n" +
     "- **Linux**: X11 is qualified. APT archive metadata is signed; application binaries are unsigned. Wayland is unsupported.\n" +
-    "- **macOS**: Preview and unnotarized. Multi-monitor behavior is not yet qualified.\n" +
+    "- **macOS 11+**: Preview and unnotarized. Uses the system-provided AppKit and WebKit frameworks; multi-monitor behavior is not yet qualified.\n" +
     "- **Windows**: Idle and fullscreen probes are implemented, but interactive multi-monitor qualification is pending.\n\n" +
     `## Changes\n\n${extractReleaseNotes(changelog, tag)}`;
 }

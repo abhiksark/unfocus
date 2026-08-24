@@ -93,8 +93,10 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
   `abhiksark/homebrew-unfocus`. Its credentials live in the
   default-branch-restricted `homebrew-tap-automation` environment and mint a
   token scoped only to that tap.
-- The source repository may use that token only to send the
-  `unfocus-alpha-published` repository dispatch. The tap may use it only to
+- The source repository may use that token only to send the channel-specific
+  `unfocus-alpha-published` or `unfocus-beta-published` repository dispatch.
+  Alpha workflows accept only alpha tags and beta workflows accept only beta
+  tags. The tap may use the dispatch only to
   push an automation branch and open a reviewable cask pull request.
 - The App has only Contents and Pull Requests read/write permissions on the
   tap. It must never be installed on Unfocus or receive Administration,
@@ -105,20 +107,23 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
 
 ## APT repository automation boundary
 
-- The APT archive for alpha packages lives in `abhiksark/unfocus-apt` and is
-  served from GitHub Pages at `https://apt.abhik.ai/`. Suite name is `alpha`;
-  package name is `unfocus`; architecture is `amd64` only.
+- The APT archive for prerelease packages lives in `abhiksark/unfocus-apt` and
+  is served from GitHub Pages at `https://apt.abhik.ai/`. Alpha and beta use
+  isolated `alpha` and `beta` suites and pool paths; package name is `unfocus`;
+  architecture is `amd64` only. A channel workflow must accept only its exact
+  channel tag form.
 - Credentials live in the `apt-repo-automation` environment on both
   repositories. Source repo secret: `APT_DISPATCH_TOKEN` (may only create
   `repository_dispatch` events on `unfocus-apt`). Apt-repo secrets:
   `APT_SIGNING_KEY` (armored archive private key) and optional
   `APT_SIGNING_KEY_PASSPHRASE`.
 - The source repository must never push apt tree files, hold the archive
-  private key, or sign indexes. It only dispatches `unfocus-alpha-published`.
+  private key, or sign indexes. It dispatches only the channel-specific
+  `unfocus-alpha-published` or `unfocus-beta-published` event.
 - The apt repository rebuilds `pool/`, `dists/`, and `public-key.asc` and
   pushes to `main` with `GITHUB_TOKEN`. It must never alter Unfocus releases.
-- Archive GPG signing authenticates **repository metadata** only. Alpha `.deb`
-  packages remain application-unsigned; docs must keep that distinction.
+- Archive GPG signing authenticates **repository metadata** only. Prerelease
+  `.deb` packages remain application-unsigned; docs must keep that distinction.
 - Operator setup is documented in `abhiksark/unfocus-apt` (`OPERATOR.md`).
 
 ## Repository settings

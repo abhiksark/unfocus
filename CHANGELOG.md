@@ -3,10 +3,13 @@
 Notable changes to Unfocus are recorded here. Dates use `YYYY-MM-DD`, and
 released versions link to their GitHub release.
 
-## [Unreleased]
+## [0.6.0-beta.1] - 2026-08-24
 
 ### Added
 
+- Added dedicated beta distribution channels: the `beta` APT suite and the
+  `unfocus@beta` Homebrew cask. Existing alpha installs remain on their frozen
+  channels until users explicitly migrate using the install-guide steps.
 - Optional cross-device break sync, off by default; the existing relative
   timer is unchanged while it is off. With sync enabled, breaks land on a
   shared wall-clock grid instead of counting from when the timer last
@@ -29,6 +32,9 @@ released versions link to their GitHub release.
   static dawn, day, dusk, or night treatment selected from local time and held
   for the complete break, and one localized amber return fade with
   reduced-motion, higher-contrast, and constrained-crop fallbacks.
+- Centered the break message and assigned the reflective message, guidance,
+  and countdown to distinct local Newsreader, system-sans, and monospace roles
+  while preserving reduced-motion and higher-contrast behavior.
 - Downgrading to a build older than this one resets reminder settings to
   defaults, discarding the saved work duration and break duration.
   `reminder-settings.json` moves to schema v3 to carry the new sync fields
@@ -61,6 +67,9 @@ released versions link to their GitHub release.
   which crates.io metadata does not supply.
 - Continuous integration now runs the locked Rust test suite on macOS instead
   of only a compile check.
+- Updated SvelteKit to 2.70.3, Bun types to 1.4.0, Svelte to 5.56.10, Vite to
+  8.2.2, and the pinned Rust toolchain to 1.98.0; regenerated the lockfile and
+  third-party notices.
 - Reworked History into a compact Monday-aligned calendar covering the newest
   90 local days. Fixed intensity levels represent confirmed active
   minutes, while zero activity and unavailable data remain distinct. Selecting
@@ -293,7 +302,8 @@ changes are included in and superseded by [0.4.0-alpha.1].
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
-[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.5.0-alpha.1...HEAD
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.1...HEAD
+[0.6.0-beta.1]: https://github.com/abhiksark/unfocus/compare/v0.5.0-alpha.1...v0.6.0-beta.1
 [0.5.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.4.0-alpha.1...v0.5.0-alpha.1
 [0.4.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.4.0-alpha.1
 [0.3.1-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.3.1-alpha.1

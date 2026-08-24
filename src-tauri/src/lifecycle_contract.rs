@@ -127,8 +127,8 @@ impl EvidenceStatus {
     }
 }
 
-/// Release tier required for a qualification claim. Alpha may ship with a
-/// narrower physical matrix than stable.
+/// Release tier required for a qualification claim. A prerelease may ship
+/// with a narrower physical matrix than stable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReleaseTier {
     Alpha,
@@ -144,7 +144,7 @@ pub(crate) fn linux_x11_lifecycle_required(tier: ReleaseTier) -> bool {
 }
 
 /// Whether macOS multi-monitor acceptance is required for a tier.
-/// macOS remains preview until #23 evidence lands; not required for alpha.
+/// macOS remains preview until #23 evidence lands; required before stable.
 pub(crate) fn macos_multi_monitor_required(tier: ReleaseTier) -> bool {
     matches!(tier, ReleaseTier::Stable)
 }
