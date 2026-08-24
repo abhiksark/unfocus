@@ -418,7 +418,7 @@ mod tests {
             "{name} has a truncated pixel buffer"
         );
         let mut visible = 0_usize;
-        for pixel in rgba.chunks_exact(4) {
+        for pixel in rgba.as_chunks::<4>().0 {
             if pixel[3] == 0 {
                 continue;
             }

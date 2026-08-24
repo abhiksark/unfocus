@@ -507,7 +507,7 @@ should prefer a [release package](#choose-a-package).
 | Tool | Pin | Source |
 | --- | --- | --- |
 | Bun | `1.3.5` | `.bun-version` |
-| Rust | `1.97.1` | `rust-toolchain.toml` |
+| Rust | `1.98.0` | `rust-toolchain.toml` |
 
 Install those versions (or let `rustup` pick up `rust-toolchain.toml` when you
 build in the repo). Use Bun for all JavaScript and TypeScript work in this

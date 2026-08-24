@@ -33,7 +33,7 @@ Declared license: MIT
 Upstream authors: Justin Ridgewell <justin@ridgewell.name>
 License text IDs: 769d154fbde32a915af110b1123650bc79f4cbe675acc66e005265bf069c6c6c
 
-JavaScript: @oxc-project/types@0.143.0
+JavaScript: @oxc-project/types@0.146.0
 Declared license: MIT
 Upstream authors: Boshen and oxc contributors
 License text IDs: 95ced5ecf1133fbf41d409b5555c86c344f83f3b019926057ddbc07cfdcc27b3
@@ -43,72 +43,77 @@ Declared license: MIT
 Upstream authors: Luke Edwards
 License text IDs: ba573393f24555ac0528612ad39665fab5bdcc80330a61096024bbf5f736526d
 
-JavaScript: @rolldown/binding-android-arm64@1.2.3
+JavaScript: @rolldown/binding-android-arm-eabi@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-darwin-arm64@1.2.3
+JavaScript: @rolldown/binding-android-arm64@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-darwin-x64@1.2.3
+JavaScript: @rolldown/binding-darwin-arm64@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-freebsd-x64@1.2.3
+JavaScript: @rolldown/binding-darwin-x64@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-arm-gnueabihf@1.2.3
+JavaScript: @rolldown/binding-freebsd-x64@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-arm64-gnu@1.2.3
+JavaScript: @rolldown/binding-linux-arm-gnueabihf@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-arm64-musl@1.2.3
+JavaScript: @rolldown/binding-linux-arm64-gnu@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-ppc64-gnu@1.2.3
+JavaScript: @rolldown/binding-linux-arm64-musl@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-s390x-gnu@1.2.3
+JavaScript: @rolldown/binding-linux-ppc64-gnu@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-x64-gnu@1.2.3
+JavaScript: @rolldown/binding-linux-s390x-gnu@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-x64-musl@1.2.3
+JavaScript: @rolldown/binding-linux-x64-gnu@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-openharmony-arm64@1.2.3
+JavaScript: @rolldown/binding-linux-x64-musl@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-win32-arm64-msvc@1.2.3
+JavaScript: @rolldown/binding-openharmony-arm64@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-win32-x64-msvc@1.2.3
+JavaScript: @rolldown/binding-win32-arm64-msvc@1.2.5
+Declared license: MIT
+Upstream authors: VoidZero Inc. & Contributors
+License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
+
+JavaScript: @rolldown/binding-win32-x64-msvc@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
@@ -131,7 +136,7 @@ JavaScript: @sveltejs/adapter-static@3.0.10
 Declared license: MIT
 License text IDs: 3572965e1f08277c2edc0cca242bc4c27a50ec1d5bbe5b0918511e3d2a467178
 
-JavaScript: @sveltejs/kit@2.70.2
+JavaScript: @sveltejs/kit@2.70.3
 Declared license: MIT
 License text IDs: 3572965e1f08277c2edc0cca242bc4c27a50ec1d5bbe5b0918511e3d2a467178
 
@@ -208,7 +213,7 @@ Declared license: Apache-2.0 OR MIT
 Upstream authors: Tauri Programme within The Commons Conservancy
 License text IDs: 9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
-JavaScript: @types/bun@1.3.14
+JavaScript: @types/bun@1.4.0
 Declared license: MIT
 Upstream authors: Jarred Sumner, Robobun, Dylan Conway, Ciro Spaciari, Sosuke Suzuki, Alistair Smith
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
@@ -221,11 +226,6 @@ License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0d
 JavaScript: @types/estree@1.0.9
 Declared license: MIT
 Upstream authors: RReverser
-License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
-
-JavaScript: @types/node@26.1.2
-Declared license: MIT
-Upstream authors: Microsoft TypeScript, Alberto Schiabel, Andrew Makarov, Benjamin Toueg, David Junger, Mohsen Azimi, Nikita Galkin, Sebastian Silbermann, Wilco Bakker, Marcin Kopacz, Trivikram Kamat, Junxiao Shi, Ilia Baryshnikov, ExE Boss, Piotr Błażejewicz, Anna Henningsen, Victor Perin, NodeJS Contributors, Linus Unnebäck, wafuwafu13, Matteo Collina, Dmitry Semigradsky, René, Yagiz Nizipli
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
 
 JavaScript: @types/node@26.2.0
@@ -352,7 +352,7 @@ Declared license: Apache-2.0
 Upstream authors: Jesse Beach <splendidnoise@gmail.com>
 License text IDs: c8df456c7ccba74b959087dff494d4ac2a12dfb0400c08b46b2494a08a000567
 
-JavaScript: bun-types@1.3.14
+JavaScript: bun-types@1.4.0
 Declared license: MIT
 License text IDs: 274aae0e20ef5129f395c859ac5922e9f8138ab77eca1f69b93af15ee3f4d279
 
@@ -506,7 +506,7 @@ Declared license: MIT
 Upstream authors: Jon Schlinkert (https://github.com/jonschlinkert)
 License text IDs: d0cd141b0c322fded5dfad1d4645bb2fedfc05b7321fe1009469638190d59ef9
 
-JavaScript: postcss@8.5.25
+JavaScript: postcss@8.5.26
 Declared license: MIT
 Upstream authors: Andrey Sitnik <andrey@sitnik.es>
 License text IDs: 5be1f3465bba68a626777f984878814aaf35e7ef8e9fd314d469bcf887050fb8
@@ -516,7 +516,7 @@ Declared license: MIT
 Upstream authors: Thorsten Lorenz <thlorenz@gmx.de> (thlorenz.com), Thorsten Lorenz <thlorenz@gmx.de> (thlorenz.com), Paul Miller (https://paulmillr.com)
 License text IDs: dffec71d93f273d2af7b54c6c7e7e70b3289c632ec0d7253210ec21ac336d5ac
 
-JavaScript: rolldown@1.2.3
+JavaScript: rolldown@1.2.5
 Declared license: MIT
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
@@ -545,7 +545,7 @@ Declared license: MIT
 Upstream authors: The Svelte Community
 License text IDs: ada595bb2ec8d71616dde1b956edb8fbad63eadab32b8d9ab9310a1aef08e5c5
 
-JavaScript: svelte@5.56.9
+JavaScript: svelte@5.56.10
 Declared license: MIT
 License text IDs: 06257f4847b13a49a039efb17b944c141e71b12fd8d231b362d86919067d77a3
 
@@ -574,7 +574,7 @@ Declared license: MIT
 Upstream authors: Daniele Belardi, Ethan Arrowood, Matteo Collina, Matthew Aitken, Robert Nagy, Szymon Marczak, Tomas Della Vedova
 License text IDs: a6db8096b2707bc0102d256917d4d33f298ba36d8c3f25de067a2b5bb379db27
 
-JavaScript: vite@8.2.1
+JavaScript: vite@8.2.2
 Declared license: MIT
 Upstream authors: Evan You
 License text IDs: 387dd7baa307083401a27c58c362c30832f5ba1dba84f10cc22c33401523f45c
@@ -3046,7 +3046,7 @@ Creator: Person: Daniel Thompson-Yvetot
 ===============================================================================
 License text ID: 06257f4847b13a49a039efb17b944c141e71b12fd8d231b362d86919067d77a3
 Used by:
-  - JavaScript: svelte@5.56.9
+  - JavaScript: svelte@5.56.10
 -------------------------------------------------------------------------------
 Copyright (c) 2016-2025 [Svelte Contributors](https://github.com/sveltejs/svelte/graphs/contributors)
 
@@ -6111,21 +6111,22 @@ according to those terms.
 ===============================================================================
 License text ID: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 Used by:
-  - JavaScript: @rolldown/binding-android-arm64@1.2.3
-  - JavaScript: @rolldown/binding-darwin-arm64@1.2.3
-  - JavaScript: @rolldown/binding-darwin-x64@1.2.3
-  - JavaScript: @rolldown/binding-freebsd-x64@1.2.3
-  - JavaScript: @rolldown/binding-linux-arm-gnueabihf@1.2.3
-  - JavaScript: @rolldown/binding-linux-arm64-gnu@1.2.3
-  - JavaScript: @rolldown/binding-linux-arm64-musl@1.2.3
-  - JavaScript: @rolldown/binding-linux-ppc64-gnu@1.2.3
-  - JavaScript: @rolldown/binding-linux-s390x-gnu@1.2.3
-  - JavaScript: @rolldown/binding-linux-x64-gnu@1.2.3
-  - JavaScript: @rolldown/binding-linux-x64-musl@1.2.3
-  - JavaScript: @rolldown/binding-openharmony-arm64@1.2.3
-  - JavaScript: @rolldown/binding-win32-arm64-msvc@1.2.3
-  - JavaScript: @rolldown/binding-win32-x64-msvc@1.2.3
-  - JavaScript: rolldown@1.2.3
+  - JavaScript: @rolldown/binding-android-arm-eabi@1.2.5
+  - JavaScript: @rolldown/binding-android-arm64@1.2.5
+  - JavaScript: @rolldown/binding-darwin-arm64@1.2.5
+  - JavaScript: @rolldown/binding-darwin-x64@1.2.5
+  - JavaScript: @rolldown/binding-freebsd-x64@1.2.5
+  - JavaScript: @rolldown/binding-linux-arm-gnueabihf@1.2.5
+  - JavaScript: @rolldown/binding-linux-arm64-gnu@1.2.5
+  - JavaScript: @rolldown/binding-linux-arm64-musl@1.2.5
+  - JavaScript: @rolldown/binding-linux-ppc64-gnu@1.2.5
+  - JavaScript: @rolldown/binding-linux-s390x-gnu@1.2.5
+  - JavaScript: @rolldown/binding-linux-x64-gnu@1.2.5
+  - JavaScript: @rolldown/binding-linux-x64-musl@1.2.5
+  - JavaScript: @rolldown/binding-openharmony-arm64@1.2.5
+  - JavaScript: @rolldown/binding-win32-arm64-msvc@1.2.5
+  - JavaScript: @rolldown/binding-win32-x64-msvc@1.2.5
+  - JavaScript: rolldown@1.2.5
 -------------------------------------------------------------------------------
 MIT License
 
@@ -6465,7 +6466,7 @@ SOFTWARE.
 ===============================================================================
 License text ID: 274aae0e20ef5129f395c859ac5922e9f8138ab77eca1f69b93af15ee3f4d279
 Used by:
-  - JavaScript: bun-types@1.3.14
+  - JavaScript: bun-types@1.4.0
 -------------------------------------------------------------------------------
 MIT License
 
@@ -7474,7 +7475,7 @@ DEALINGS IN THE SOFTWARE.
 License text ID: 3572965e1f08277c2edc0cca242bc4c27a50ec1d5bbe5b0918511e3d2a467178
 Used by:
   - JavaScript: @sveltejs/adapter-static@3.0.10
-  - JavaScript: @sveltejs/kit@2.70.2
+  - JavaScript: @sveltejs/kit@2.70.3
 -------------------------------------------------------------------------------
 Copyright (c) 2020 [these people](https://github.com/sveltejs/kit/graphs/contributors)
 
@@ -7599,7 +7600,7 @@ DEALINGS IN THE SOFTWARE.
 ===============================================================================
 License text ID: 387dd7baa307083401a27c58c362c30832f5ba1dba84f10cc22c33401523f45c
 Used by:
-  - JavaScript: vite@8.2.1
+  - JavaScript: vite@8.2.2
 -------------------------------------------------------------------------------
 # Vite core license
 Vite is released under the MIT license:
@@ -10013,10 +10014,9 @@ THE SOFTWARE.
 ===============================================================================
 License text ID: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
 Used by:
-  - JavaScript: @types/bun@1.3.14
+  - JavaScript: @types/bun@1.4.0
   - JavaScript: @types/cookie@0.6.0
   - JavaScript: @types/estree@1.0.9
-  - JavaScript: @types/node@26.1.2
   - JavaScript: @types/node@26.2.0
   - JavaScript: @types/trusted-types@2.0.7
   - Rust: windows-collections@0.2.0
@@ -11484,7 +11484,7 @@ DEALINGS IN THE SOFTWARE.
 ===============================================================================
 License text ID: 5be1f3465bba68a626777f984878814aaf35e7ef8e9fd314d469bcf887050fb8
 Used by:
-  - JavaScript: postcss@8.5.25
+  - JavaScript: postcss@8.5.26
 -------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -15527,7 +15527,7 @@ THE SOFTWARE.
 ===============================================================================
 License text ID: 95ced5ecf1133fbf41d409b5555c86c344f83f3b019926057ddbc07cfdcc27b3
 Used by:
-  - JavaScript: @oxc-project/types@0.143.0
+  - JavaScript: @oxc-project/types@0.146.0
 -------------------------------------------------------------------------------
 MIT License
 
