@@ -21,6 +21,8 @@ badges, accounts, or mascots competing for your attention.
 
 ![The Unfocus dashboard with the focus countdown, Your day activity, and break outcomes](.github/media/dashboard.png)
 
+[Watch how Unfocus works in 45 seconds](.github/media/how-unfocus-works.mp4)
+
 ## Why Unfocus
 
 A screen-break reminder should help you look away, not give you another
