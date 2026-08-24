@@ -16,7 +16,7 @@ it is time to rest, and it shows a calm picture of how your day went.
 [Request a feature](https://github.com/abhiksark/unfocus/issues/new?template=feature_request.yml) ·
 [Security](https://github.com/abhiksark/unfocus/security/policy)
 
-![The bundled Unfocus break-scene artwork: a calm illustrated mountain valley](static/break-scene.jpg)
+![The Unfocus break overlay during a daytime rest, with centered reflective guidance, a countdown, and controls](.github/media/break-overlay.png)
 
 **Break.** By default, every twenty minutes Unfocus covers every monitor with a
 quiet, static distant landscape, colored for the device's local time, and
@@ -114,11 +114,28 @@ Saving a change during work starts a new work countdown immediately; a break
 already on screen keeps its original duration and the saved timing applies to
 the next work phase.
 
+#### Optional cross-device timing
+
+Cross-device timing is off by default, so the existing relative timer is
+unchanged unless you opt in. When enabled, each device independently uses the
+same wall-clock grid—without accounts, pairing, networking, communication, or
+one device acting as a coordinator.
+
+Set the same work and break durations on every device. Unfocus captures the
+device's UTC offset when you enable sync; after travel or another offset change,
+turn sync off and on again to capture the new offset. Compare the dashboard's
+break-time preview on each device to confirm that their upcoming points align.
+
+Resuming reminders rejoins the shared grid. Starting a manual break does not
+postpone the next scheduled grid point.
+
 ### Reflection (Your day)
 
 Where the idle probe is available, a **Your day** summary on the consumer
 dashboard shows a rolling last-24-hour view of continuous computer use versus
 time away from the keyboard:
+
+![The consumer dashboard with synthetic focus activity, break outcomes, and the saved rhythm](.github/media/dashboard.png)
 
 - Presence only: keyboard and mouse idle signals, never keylogging
 - Gaps under five minutes stay inside continuous work; stretches of at least
@@ -137,6 +154,8 @@ time away from the keyboard:
 - Compatible existing local data is preserved, but activity from before
   History was installed cannot be backfilled
 - Observe-only: it does not pause, skip, or advance the break timer
+
+![History with a synthetic 90-day activity calendar and a selected day's hourly activity and break outcomes](.github/media/history.png)
 
 Scheduled break presentation may use that same local presence history so a long
 continuous stretch requires a real away period before natural credit, while a
@@ -187,8 +206,6 @@ panel chose to display a successfully constructed indicator. If the icon is
 missing, keep the dashboard open, enable or restart the desktop's indicator
 host, and restart Unfocus. A known setup error appears in the dashboard, and
 closing that dashboard exits instead of hiding an unreachable process.
-
-![The consumer dashboard with focus countdown, Your day activity strip, break outcomes, and saved rhythm](.github/media/dashboard.png)
 
 ## Build from source
 
