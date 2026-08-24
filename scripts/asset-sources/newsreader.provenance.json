@@ -1,0 +1,21 @@
+{
+  "family": "Newsreader",
+  "version": "1.003",
+  "upstream": {
+    "repository": "https://github.com/productiontype/Newsreader",
+    "commit": "cfcb4f7af0e52c25e8df2a2431814c8e5fe2e155",
+    "path": "fonts/variable/woff2/Newsreader[opsz,wght].woff2"
+  },
+  "asset": {
+    "path": "static/fonts/newsreader.woff2",
+    "sha256": "1faa3380ac0e87e057b180e03fd94bd708a612afb67d2590677be4508909fae9"
+  },
+  "license": {
+    "upstreamPath": "OFL.txt",
+    "upstreamSha256": "fdfad38143ec470553cae82a1e45320bdd1b9ec70415d37bd0171051d8a4ded8",
+    "normalization": "strip trailing horizontal whitespace",
+    "path": "static/fonts/OFL.txt",
+    "spdx": "OFL-1.1",
+    "sha256": "afdae9053282ba66bbacbc4cb20ad20b12ef46379ac587fd464fe3ff8ce1cd4a"
+  }
+}

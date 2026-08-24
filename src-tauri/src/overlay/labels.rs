@@ -40,11 +40,16 @@ pub(super) fn next_overlay_run_id() -> u64 {
     run_id
 }
 
-pub(super) fn overlay_deadline_ms(duration_seconds: u64) -> Result<u64, String> {
-    unix_timestamp_ms()
+fn overlay_deadline_ms_from(now_ms: u64, duration_seconds: u64) -> Result<u64, String> {
+    let duration_seconds = bounded_overlay_duration(duration_seconds);
+    now_ms
         .checked_add(duration_seconds.saturating_mul(1_000))
         .filter(|deadline| *deadline <= JAVASCRIPT_MAX_SAFE_INTEGER)
         .ok_or_else(|| "overlay deadline exceeds JavaScript's safe-integer range".to_owned())
+}
+
+pub(super) fn overlay_deadline_ms(duration_seconds: u64) -> Result<u64, String> {
+    overlay_deadline_ms_from(unix_timestamp_ms(), duration_seconds)
 }
 
 pub(super) fn overlay_label(
@@ -203,6 +208,14 @@ mod tests {
         assert_eq!(bounded_overlay_duration(0), 3);
         assert_eq!(bounded_overlay_duration(8), 8);
         assert_eq!(bounded_overlay_duration(300), 30);
+    }
+
+    #[test]
+    fn overlay_deadline_uses_the_bounded_duration() {
+        assert_eq!(
+            overlay_deadline_ms_from(1_800_000_000_000, 300),
+            Ok(1_800_000_030_000)
+        );
     }
 
     #[test]

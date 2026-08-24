@@ -35,7 +35,7 @@ implementation rules in the closest child file.
 ```text
 src/              SvelteKit dashboard and break overlay
   routes/         Single page: window label routes dashboard vs overlay
-  lib/            UI, pure helpers, tests, generated scene.svg
+  lib/            UI, pure helpers, tests, break-scene presentation
 src-tauri/        Rust core, tray, windows, probes, reminder scheduler
   src/lib.rs      Composition root, command registration, window events
   src/reminder.rs Pure timer, settings, pause/resume, scheduler thread
@@ -43,8 +43,8 @@ src-tauri/        Rust core, tray, windows, probes, reminder scheduler
   src/probes/     Platform idle/fullscreen probes (Linux X11, macOS)
   src/tray.rs     System tray, status menu, hide-or-exit dashboard policy
   src/diagnostics.rs  Environment, monitors, probe snapshot for developer UI
-scripts/          Generators and repository-integrity gates
-static/           Icon source and vendored Fraunces font
+scripts/          Generators, asset provenance, and repository-integrity gates
+static/           Break-scene delivery asset, icon source, vendored Newsreader font
 .github/          CI, releases, Dependabot, issue templates, SECURITY.md
 plans/            Local working notes only (gitignored; not tracked docs)
 ```
@@ -111,10 +111,13 @@ plans/            Local working notes only (gitignored; not tracked docs)
   invalid; packaged builds must be measured correctly before any claim.
 - The product is local-first: no telemetry, accounts, cloud dependency, or
   runtime network calls.
-- No mascots or characters. Scene lighting carries state: cool green while
-  resting and amber dawn while returning or complete.
-- `src/lib/scene.svg` and tray PNGs are generated. Edit generators and
-  regenerate; never hand-edit those outputs.
+- No mascots or characters. Each break holds one cool-biased local-time scene
+  palette across every monitor; localized amber light signals returning or
+  complete.
+- `static/break-scene.jpg` is a local 4K delivery derivative of the first-party
+  artwork retained with provenance under `scripts/asset-sources/`; it is not a
+  native-4K source. Tray PNGs remain generated outputs; edit their source and
+  regenerate rather than hand-editing them.
 
 ## Working contract
 

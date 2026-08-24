@@ -24,6 +24,11 @@ released versions link to their GitHub release.
 
 ### Changed
 
+- Replaced the generated SVG break landscape with a bundled first-party
+  illustration and 4K delivery derivative, using golden-ratio placement, a
+  static dawn, day, dusk, or night treatment selected from local time and held
+  for the complete break, and one localized amber return fade with
+  reduced-motion, higher-contrast, and constrained-crop fallbacks.
 - Downgrading to a build older than this one resets reminder settings to
   defaults, discarding the saved work duration and break duration.
   `reminder-settings.json` moves to schema v3 to carry the new sync fields
