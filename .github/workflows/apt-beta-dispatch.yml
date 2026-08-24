@@ -1,4 +1,4 @@
-name: Dispatch APT alpha update
+name: Dispatch APT beta update
 
 on:
   release:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: Published alpha tag to redispatch
+        description: Published beta tag to redispatch
         required: true
         type: string
 
@@ -14,12 +14,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: apt-alpha-dispatch-${{ github.event.release.tag_name || inputs.tag_name }}
+  group: apt-beta-dispatch-${{ github.event.release.tag_name || inputs.tag_name }}
   cancel-in-progress: false
 
 jobs:
   dispatch:
-    if: github.event_name != 'release' || contains(github.event.release.tag_name, '-alpha.')
+    if: github.event_name != 'release' || contains(github.event.release.tag_name, '-beta.')
     runs-on: ubuntu-24.04
     environment: apt-repo-automation
     steps:
@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Resolve a published alpha release
+      - name: Resolve a published beta release
         id: release
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -37,13 +37,13 @@ jobs:
           INPUT_TAG: ${{ inputs.tag_name }}
         run: |
           set -euo pipefail
-          TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-alpha\.(0|[1-9][0-9]*)$'
+          TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-beta\.(0|[1-9][0-9]*)$'
 
           if [ "$EVENT_NAME" = release ]; then
             RELEASE=$(jq -c . <<<"$EVENT_RELEASE")
           else
             [[ "$INPUT_TAG" =~ $TAG_PATTERN ]] || {
-              echo "Manual retries require an exact vX.Y.Z-alpha.N tag." >&2
+              echo "Manual retries require an exact vX.Y.Z-beta.N tag." >&2
               exit 1
             }
             RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$INPUT_TAG")
@@ -61,7 +61,7 @@ jobs:
             exit 1
           }
           [[ "$TAG" =~ $TAG_PATTERN ]] || {
-            echo "Release tag $TAG is not an exact alpha version." >&2
+            echo "Release tag $TAG is not an exact beta version." >&2
             exit 1
           }
           [[ "$TARGET_COMMITISH" =~ ^[0-9a-f]{40}$ ]] || {
@@ -123,7 +123,7 @@ jobs:
             --argjson release_id "$RELEASE_ID" \
             --arg tag_name "$TAG_NAME" \
             '{
-              event_type: "unfocus-alpha-published",
+              event_type: "unfocus-beta-published",
               client_payload: {
                 source_repository: $source_repository,
                 release_id: $release_id,
