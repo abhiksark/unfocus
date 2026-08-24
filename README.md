@@ -275,22 +275,72 @@ local settings. Report a suspected vulnerability privately through the
 
 ## Design
 
-The break screen is designed to lose a staring contest. Its bundled,
-first-party matte landscape uses an asymmetric summit around the left golden
-line while centering the interface and its supporting light fields on every
-screen. The asymmetry stays in the landscape rather than the reading axis.
-When a break begins, device-local time selects one static, cool-biased lighting
-treatment—dawn from 05:00, day from 09:00, dusk from 17:00, or night from
-21:00—and holds it across every monitor for that break. This requires no
-location permission or network request. One localized amber ellipse fades in
-near the lower golden line when it is time to return. There is no continuous
-full-viewport motion, and reduced-motion and higher-contrast preferences
-receive dedicated fallbacks.
+The break screen is designed to lose a staring contest. It keeps the words,
+countdown, veil, and returning light on a centered reading axis so the next
+instruction is easy to find without making the whole scene visually
+symmetrical.
 
-The credentialed source and its deterministic provenance are retained under
-[`scripts/asset-sources/`](scripts/asset-sources/). The bundled JPEG is a 4K
-delivery derivative, not a native-4K source. The delivery asset is bundled
-locally with the app; the scene uses no network request or asset CDN.
+### Composition
+
+The bundled, first-party matte landscape keeps its asymmetric summit around
+the left `38.2%` golden line. The horizon and the center of the return light sit
+around the lower `61.8%` line, while the functional interface remains centered
+on every viewport. Supporting light and contrast fields use smooth `61.8:38.2`
+ellipses rather than drawing a literal golden-ratio ornament.
+
+Legibility and crop safety take priority over the grid. On narrower,
+portrait-like, or short displays, the composition preserves the centered copy
+and keeps the summit in frame; nonessential guidance can yield before the
+countdown or exit control does. The exit control retains at least a 44 px
+target in the most constrained layout.
+
+### Typography
+
+Typography separates reflection from operation instead of applying one brand
+face everywhere:
+
+| Role | Typeface | Used for |
+| --- | --- | --- |
+| Reflective display | Newsreader 1.003, weight 450, automatic optical sizing | The consumer state heading, History page heading, and break message |
+| Interface | Native system sans-serif | Body copy, labels, guidance, navigation, and controls; developer mode also keeps its heading in this role |
+| Timing and evidence | Native system monospace with tabular numbers | Clocks, countdowns, timeline and event times, timing inputs, display labels, monitor geometry, and diagnostic values |
+
+Newsreader is a locally vendored variable font, preloaded with the application
+and reserved for those reflective headings. Interface copy therefore follows
+the conventions of the host operating system, while changing digits and
+technical values remain stable and easy to compare.
+
+### Light, motion, and accessibility
+
+At the shared start of a break, device-local time selects one cool-biased
+lighting treatment: dawn from 05:00 to 09:00, day from 09:00 to 17:00, dusk
+from 17:00 to 21:00, or night from 21:00 to 05:00. That choice is held across
+every connected monitor for the complete break, so synchronized overlays do
+not shift palette midway through a run. It needs neither location permission
+nor a network lookup.
+
+The artwork and selected local-time veil stay still. The only scene-state
+change is a localized amber return light that fades in once during the final
+moments and remains through completion. There is no continuous full-viewport
+animation. With reduced motion enabled, entrance motion is removed and the
+return and dismissal fades are shortened to 120 ms. Increased contrast uses a
+stronger dark veil, brighter text, and reinforced control states across the
+supported crops.
+
+### Local assets and provenance
+
+The retained first-party
+[artwork source](scripts/asset-sources/break-scene-source.png) and its
+[deterministic provenance](scripts/asset-sources/break-scene.provenance.json)
+live beside the font records under `scripts/asset-sources/`. The bundled JPEG
+is a 4K delivery derivative, not a native-4K source. Newsreader is likewise
+pinned to version 1.003 with its upstream commit, asset and license hashes, and
+normalization recorded in the
+[font provenance](scripts/asset-sources/newsreader.provenance.json).
+
+Both the scene and font ship inside the app: there is no runtime font download,
+asset CDN, or scene network request. The font's OFL identity is also carried in
+the generated third-party notices and release SBOM.
 
 ## License
 
