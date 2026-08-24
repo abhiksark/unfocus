@@ -1,11 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { svelte } from "@sveltejs/vite-plugin-svelte";
-import { render } from "svelte/server";
-import { createServer, type ViteDevServer } from "vite";
+import { compile, type AST } from "svelte/compiler";
 
 function sha256(bytes: Uint8Array): string {
   return new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
@@ -18,6 +12,54 @@ type FontProvenance = {
   asset: { path: string; sha256: string };
   license: { path: string; spdx: string; sha256: string };
 };
+
+function staticAttribute(element: AST.RegularElement, name: string): string | null {
+  const attribute = element.attributes.find(
+    (candidate): candidate is AST.Attribute =>
+      candidate.type === "Attribute" && candidate.name === name
+  );
+  if (!attribute || attribute.value === true || !Array.isArray(attribute.value)) return null;
+  if (attribute.value.length !== 1 || attribute.value[0].type !== "Text") return null;
+  return attribute.value[0].data;
+}
+
+function typographyRoles(root: AST.Root): Record<string, string | null> {
+  const roles = new Map<string, string | null>();
+
+  function visit(value: unknown) {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+
+    if ((value as { type?: string }).type === "RegularElement") {
+      const element = value as AST.RegularElement;
+      const id = staticAttribute(element, "id");
+      const classes = new Set((staticAttribute(element, "class") ?? "").split(/\s+/));
+      const key =
+        id === "break-message"
+          ? "message"
+          : classes.has("guidance")
+            ? "guidance"
+            : classes.has("eyebrow")
+              ? "eyebrow"
+              : element.name === "time"
+                ? "clock"
+                : classes.has("timer-digits")
+                  ? "countdown"
+                  : classes.has("display-label")
+                    ? "display"
+                    : null;
+      if (key !== null) roles.set(key, staticAttribute(element, "data-type-role"));
+    }
+
+    for (const child of Object.values(value as Record<string, unknown>)) visit(child);
+  }
+
+  visit(root);
+  return Object.fromEntries(roles);
+}
 
 describe("vendored typography", () => {
   test("ships the selected local Newsreader font without the retired Fraunces asset", async () => {
@@ -74,69 +116,21 @@ describe("vendored typography", () => {
 });
 
 describe("typography roles", () => {
-  test("renders reflective, interface, and monospace roles on the real break content", async () => {
-    const projectRoot = fileURLToPath(new URL("../..", import.meta.url));
-    const libDirectory = fileURLToPath(new URL(".", import.meta.url));
-    const cacheDirectory = await mkdtemp(join(tmpdir(), "unfocus-vite-"));
-    let vite: ViteDevServer | undefined;
+  test("marks reflective, interface, and monospace roles on the real break content", async () => {
+    const source = await Bun.file(new URL("./BreakOverlay.svelte", import.meta.url)).text();
+    const { ast } = compile(source, {
+      filename: "src/lib/BreakOverlay.svelte",
+      generate: false,
+      modernAst: true
+    });
 
-    try {
-      vite = await createServer({
-        appType: "custom",
-        cacheDir: cacheDirectory,
-        configFile: false,
-        logLevel: "silent",
-        plugins: [svelte({ compilerOptions: { dev: false } })],
-        resolve: { alias: { $lib: libDirectory } },
-        root: projectRoot,
-        server: { middlewareMode: true }
-      });
-
-      const module = await vite.ssrLoadModule("/src/lib/BreakOverlay.svelte");
-      const { body } = render(module.default, {
-        props: {
-          runId: 1,
-          monitorIndex: 0,
-          monitorCount: 1,
-          durationSeconds: 20,
-          deadlineMs: Date.now() + 20_000,
-          onClose: async () => {}
-        }
-      });
-
-      const roles = new Map<string, string | null>();
-      const captureRole = (
-        key: string
-      ): HTMLRewriterTypes.HTMLRewriterElementContentHandlers => ({
-        element(element) {
-          roles.set(key, element.getAttribute("data-type-role"));
-        }
-      });
-
-      await new HTMLRewriter()
-        .on("#break-message", captureRole("message"))
-        .on(".guidance", captureRole("guidance"))
-        .on(".eyebrow", captureRole("eyebrow"))
-        .on(".overlay-header time", captureRole("clock"))
-        .on(".timer-digits", captureRole("countdown"))
-        .on(".display-label", captureRole("display"))
-        .transform(new Response(body))
-        .text();
-
-      expect(Object.fromEntries(roles)).toEqual({
-        clock: "mono",
-        eyebrow: "ui",
-        message: "reflective-display",
-        guidance: "ui",
-        countdown: "mono",
-        display: "mono"
-      });
-    } finally {
-      try {
-        await vite?.close();
-      } finally {
-        await rm(cacheDirectory, { recursive: true, force: true });
-      }
-    }
-  }, 30_000);
+    expect(typographyRoles(ast as AST.Root)).toEqual({
+      clock: "mono",
+      eyebrow: "ui",
+      message: "reflective-display",
+      guidance: "ui",
+      countdown: "mono",
+      display: "mono"
+    });
+  });
 });
