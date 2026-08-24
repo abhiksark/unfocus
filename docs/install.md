@@ -43,7 +43,7 @@ Labels describe tested behavior, not only whether a package exists.
 | Other Linux **X11** | **Qualified** backend | Same probes and overlays as Ubuntu; install via release `.deb` / `.rpm` / AppImage and verify `SHA256SUMS`. |
 | Linux **Wayland** | **Unsupported** | Packages may start, but idle and fullscreen probes are not qualified. Do not treat Wayland as supported. |
 | Windows x64 | Early build | Installers ship; interactive multi-monitor qualification is still pending. Idle and fullscreen probes are implemented in current prereleases. Not application code-signed. |
-| macOS 11+ (Apple silicon and Intel) | Preview | Intentionally tray/menu-bar-only while running: no Dock icon or application menu. Reopen or focus the dashboard from the tray icon. Physical multi-monitor acceptance is unfinished. Builds are not code-signed or notarized. |
+| macOS 11+ (Apple silicon and Intel) | Preview | Intentionally tray/menu-bar-only while running: no Dock icon or application menu. Reopen or focus the dashboard from the tray icon. Physical multi-monitor acceptance is unfinished. Builds are ad-hoc signed but not Developer ID-signed or notarized. |
 
 ### Package trust and install sources
 
@@ -53,10 +53,10 @@ Labels describe tested behavior, not only whether a package exists.
 | GitHub release assets (`.deb`, `.rpm`, AppImage, DMG, setup/MSI) | Verify `SHA256SUMS` (required). Optional GitHub build-provenance attestations. | [GitHub Releases](https://github.com/abhiksark/unfocus/releases); **published** prereleases only, not draft releases |
 | macOS Homebrew cask | Homebrew’s cask install path | `brew install --cask abhiksark/unfocus/unfocus@beta` |
 
-macOS and Windows packages are **not** application code-signed or notarized.
-Ubuntu/Debian APT is the path that is archive-signed today. That is normal
-Linux third-party repository signing, not Apple Developer ID or Windows
-Authenticode.
+macOS app bundles are ad-hoc signed but not Developer ID-signed or notarized.
+Windows packages are **not** application code-signed. Ubuntu/Debian APT is the
+path that is archive-signed today. That is normal Linux third-party repository
+signing, not Apple Developer ID or Windows Authenticode.
 
 ### Preinstalls
 
@@ -385,10 +385,11 @@ Check **Apple menu → About This Mac** if you are unsure.
    location).
 3. Eject the DMG.
 
-### First launch (unsigned / not notarized)
+### First launch (ad-hoc signed / not notarized)
 
-Prerelease builds are **not code-signed or notarized**. Gatekeeper will block a
-normal double-click the first time.
+Prerelease builds are ad-hoc signed so the app bundle passes local codesign
+verification, but they are **not** Developer ID-signed or notarized.
+Gatekeeper will still block a normal double-click the first time.
 
 1. In **Finder**, open **Applications**.
 2. **Control-click** (or right-click) **Unfocus**.
@@ -453,7 +454,7 @@ Removing the app does not always delete local settings. See
 | Symptom | What to try |
 | --- | --- |
 | Checksum mismatch | Do not install; re-download and re-verify |
-| “App can’t be opened because it is from an unidentified developer” | Control-click → Open (unsigned prerelease) |
+| “App can’t be opened because it is from an unidentified developer” | Control-click → Open (ad-hoc-signed, unnotarized prerelease) |
 | Wrong architecture | Use `aarch64` vs `x64` DMG for your Mac |
 | Tray or multi-monitor oddities | Expected gaps while status is Preview; report with the platform report form |
 
