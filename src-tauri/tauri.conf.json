@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Unfocus",
-  "version": "0.6.0-beta.1",
+  "version": "0.6.0-beta.2",
   "identifier": "com.unfocus.desktop",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -41,6 +41,7 @@
       "icons/icon.ico"
     ],
     "macOS": {
+      "signingIdentity": "-",
       "minimumSystemVersion": "11.0"
     },
     "linux": {

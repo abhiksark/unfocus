@@ -3,6 +3,25 @@
 Notable changes to Unfocus are recorded here. Dates use `YYYY-MM-DD`, and
 released versions link to their GitHub release.
 
+## [0.6.0-beta.2] - 2026-08-24
+
+### Changed
+
+- macOS release notes, install guidance, and repository release policy now say
+  exactly what ships: the app bundle is ad-hoc signed so its package signature
+  can be verified locally, but it is still not Developer ID-signed or
+  notarized, and first-launch Gatekeeper warnings still apply.
+
+### Fixed
+
+- Tauri macOS packaging now requests an explicit ad-hoc app-bundle signature
+  instead of leaving the bundle in the linker-signed state. The packaged
+  `.app` now binds `Info.plist`, seals resources, and passes strict deep
+  `codesign` verification on Apple silicon.
+- Release automation now verifies the real Tauri-reported macOS `.app` bundle
+  before artifacts are uploaded, so a linker-only macOS package cannot ship
+  unnoticed again.
+
 ## [0.6.0-beta.1] - 2026-08-24
 
 ### Added
@@ -302,7 +321,8 @@ changes are included in and superseded by [0.4.0-alpha.1].
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
-[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.1...HEAD
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.2...HEAD
+[0.6.0-beta.2]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.1...v0.6.0-beta.2
 [0.6.0-beta.1]: https://github.com/abhiksark/unfocus/compare/v0.5.0-alpha.1...v0.6.0-beta.1
 [0.5.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.4.0-alpha.1...v0.5.0-alpha.1
 [0.4.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.4.0-alpha.1

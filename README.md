@@ -117,9 +117,10 @@ brew uninstall --cask abhiksark/unfocus/unfocus@alpha
 brew install --cask abhiksark/unfocus/unfocus@beta
 ```
 
-The macOS 11+ build is not notarized. On first launch, right-click Unfocus and
-select **Open**. While running, Unfocus is intentionally available from the
-menu-bar icon without a Dock icon or application menu.
+The macOS 11+ build is ad-hoc signed but not Developer ID-signed or notarized.
+On first launch, right-click Unfocus and select **Open**. While running,
+Unfocus is intentionally available from the menu-bar icon without a Dock icon
+or application menu.
 
 ### Other packages
 
@@ -142,10 +143,11 @@ built.
 | Linux Wayland | **Unsupported** | Default packages do not provide Wayland probes. |
 
 APT repository metadata is signed with the archive OpenPGP key; the beta
-packages themselves remain application-unsigned. The macOS app is not
-code-signed or notarized, and Windows installers are not code-signed, so
-platform warnings may appear. Unfocus does not auto-update; install updates
-through APT, Homebrew, or a newer release package.
+packages themselves remain application-unsigned. The macOS app is ad-hoc
+signed but not Developer ID-signed or notarized, and Windows installers are
+not code-signed, so platform warnings may appear. Unfocus does not
+auto-update; install updates through APT, Homebrew, or a newer release
+package.
 
 ## Using Unfocus
 
