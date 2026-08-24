@@ -196,6 +196,12 @@ jobs:
           uploadUpdaterJson: false
           args: ${{ matrix.args }}
 
+      - name: Verify the packaged macOS app bundle signature
+        if: startsWith(matrix.platform, 'macos-')
+        env:
+          TAURI_ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
+        run: bun run release:verify-macos-bundle
+
       - name: Collect distributable bundles
         env:
           TAURI_ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}

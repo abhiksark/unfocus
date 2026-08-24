@@ -3,6 +3,25 @@
 Notable changes to Unfocus are recorded here. Dates use `YYYY-MM-DD`, and
 released versions link to their GitHub release.
 
+## [0.6.0-beta.2] - 2026-08-24
+
+### Changed
+
+- macOS release notes, install guidance, and repository release policy now say
+  exactly what ships: the app bundle is ad-hoc signed so its package signature
+  can be verified locally, but it is still not Developer ID-signed or
+  notarized, and first-launch Gatekeeper warnings still apply.
+
+### Fixed
+
+- Tauri macOS packaging now requests an explicit ad-hoc app-bundle signature
+  instead of leaving the bundle in the linker-signed state. The packaged
+  `.app` now binds `Info.plist`, seals resources, and passes strict deep
+  `codesign` verification on Apple silicon.
+- Release automation now verifies the real Tauri-reported macOS `.app` bundle
+  before artifacts are uploaded, so a linker-only macOS package cannot ship
+  unnoticed again.
+
 ## [0.6.0-beta.1] - 2026-08-24
 
 ### Added

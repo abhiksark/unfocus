@@ -35,10 +35,10 @@ describe("release-note extraction", () => {
   test("composes complete platform-qualified release notes", () => {
     const composeReleaseNotes = releaseNotes.composeReleaseNotes ?? (() => "");
     expect(composeReleaseNotes(changelog, "v0.2.0-alpha.1")).toBe(
-      "These prerelease builds are not code-signed or notarized. Verify downloads with SHA256SUMS and the GitHub build-provenance attestations.\n" +
+      "These prerelease builds are not notarized. macOS app bundles are ad-hoc signed rather than Developer ID-signed, and Windows installers are not code-signed. Verify downloads with SHA256SUMS and the GitHub build-provenance attestations.\n" +
         "The release also includes a CycloneDX SBOM and the bundled third-party notices.\n\n" +
         "- **Linux**: X11 is qualified. APT archive metadata is signed; application binaries are unsigned. Wayland is unsupported.\n" +
-        "- **macOS 11+**: Preview and unnotarized. Uses the system-provided AppKit and WebKit frameworks; multi-monitor behavior is not yet qualified.\n" +
+        "- **macOS 11+**: Preview, ad-hoc signed, and not notarized. Uses the system-provided AppKit and WebKit frameworks; multi-monitor behavior is not yet qualified.\n" +
         "- **Windows**: Idle and fullscreen probes are implemented, but interactive multi-monitor qualification is pending.\n\n" +
         "## Changes\n\n" +
         "### Added\n\n- Consumer dashboard.\n\n### Changed\n\n- Debian ordering.\n",

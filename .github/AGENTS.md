@@ -84,8 +84,10 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
   release writes and again before uploads. Never tolerate a moved tag.
 - Create or update only a draft prerelease. Published releases are immutable:
   never replace their assets, reuse their tag, or overwrite their notes.
-- Current packages are not code-signed or notarized. Release notes must say so
-  and retain checksum and build-provenance verification guidance.
+- Current macOS app bundles are ad-hoc signed but not Developer ID-signed or
+  notarized, and current Windows installers are not code-signed. Release notes
+  must preserve those distinctions and retain checksum and build-provenance
+  verification guidance.
 
 ## Homebrew tap automation boundary
 
