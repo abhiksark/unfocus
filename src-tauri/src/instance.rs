@@ -213,12 +213,20 @@ mod tests {
         }
 
         assert_eq!(window.calls.borrow().len(), 9);
-        assert!(window.calls.borrow().chunks_exact(3).all(|calls| calls
-            == [
-                ActivationStep::Show,
-                ActivationStep::Unminimize,
-                ActivationStep::Focus,
-            ]));
+        assert!(window
+            .calls
+            .borrow()
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .all(|calls| {
+                calls
+                    == &[
+                        ActivationStep::Show,
+                        ActivationStep::Unminimize,
+                        ActivationStep::Focus,
+                    ]
+            }));
     }
 
     #[test]

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: Published prerelease tag to redispatch
+        description: Published alpha tag to redispatch
         required: true
         type: string
 
@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   dispatch:
+    if: github.event_name != 'release' || contains(github.event.release.tag_name, '-alpha.')
     runs-on: ubuntu-24.04
     environment: apt-repo-automation
     steps:
@@ -27,7 +28,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Resolve a published prerelease
+      - name: Resolve a published alpha release
         id: release
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -36,13 +37,13 @@ jobs:
           INPUT_TAG: ${{ inputs.tag_name }}
         run: |
           set -euo pipefail
-          TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*$'
+          TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-alpha\.(0|[1-9][0-9]*)$'
 
           if [ "$EVENT_NAME" = release ]; then
             RELEASE=$(jq -c . <<<"$EVENT_RELEASE")
           else
             [[ "$INPUT_TAG" =~ $TAG_PATTERN ]] || {
-              echo "Manual retries require a v-prefixed prerelease tag." >&2
+              echo "Manual retries require an exact vX.Y.Z-alpha.N tag." >&2
               exit 1
             }
             RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$INPUT_TAG")
@@ -50,6 +51,7 @@ jobs:
 
           ID=$(jq -r '.id // empty' <<<"$RELEASE")
           TAG=$(jq -r '.tag_name // empty' <<<"$RELEASE")
+          TARGET_COMMITISH=$(jq -r '.target_commitish // empty' <<<"$RELEASE")
           DRAFT=$(jq -r '.draft | if type == "boolean" then tostring else empty end' <<<"$RELEASE")
           PRERELEASE=$(jq -r '.prerelease | if type == "boolean" then tostring else empty end' <<<"$RELEASE")
           PUBLISHED_AT=$(jq -r '.published_at // empty' <<<"$RELEASE")
@@ -59,7 +61,11 @@ jobs:
             exit 1
           }
           [[ "$TAG" =~ $TAG_PATTERN ]] || {
-            echo "Release tag $TAG is not a supported prerelease version." >&2
+            echo "Release tag $TAG is not an exact alpha version." >&2
+            exit 1
+          }
+          [[ "$TARGET_COMMITISH" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Release target_commitish must be an exact lowercase commit SHA." >&2
             exit 1
           }
           if [ "$EVENT_NAME" = workflow_dispatch ] && [ "$TAG" != "$INPUT_TAG" ]; then
@@ -72,16 +78,26 @@ jobs:
           fi
 
           git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          TARGET_COMMIT=$(git rev-parse --verify "${TARGET_COMMITISH}^{commit}")
+          [ "$TARGET_COMMIT" = "$TARGET_COMMITISH" ] || {
+            echo "Release target_commitish did not resolve to its exact commit." >&2
+            exit 1
+          }
+          git merge-base --is-ancestor "$TARGET_COMMIT" refs/remotes/origin/main || {
+            echo "Release target_commitish is not on origin/main." >&2
+            exit 1
+          }
           git fetch --no-tags origin "+refs/tags/$TAG:refs/tags/$TAG"
           TAG_COMMIT=$(git rev-parse --verify "${TAG}^{commit}")
-          git merge-base --is-ancestor "$TAG_COMMIT" refs/remotes/origin/main || {
-            echo "$TAG does not point to a commit on origin/main." >&2
+          [ "$TAG_COMMIT" = "$TARGET_COMMIT" ] || {
+            echo "$TAG does not point to the release target commit." >&2
             exit 1
           }
 
           {
             echo "release_id=$ID"
             echo "tag_name=$TAG"
+            echo "target_commit=$TARGET_COMMIT"
           } >> "$GITHUB_OUTPUT"
 
       - name: Dispatch the apt repository update
@@ -89,10 +105,17 @@ jobs:
           GH_TOKEN: ${{ secrets.APT_DISPATCH_TOKEN }}
           RELEASE_ID: ${{ steps.release.outputs.release_id }}
           TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          TARGET_COMMIT: ${{ steps.release.outputs.target_commit }}
         run: |
           set -euo pipefail
           [ -n "${GH_TOKEN:-}" ] || {
             echo "APT_DISPATCH_TOKEN is required in the apt-repo-automation environment." >&2
+            exit 1
+          }
+          git fetch --no-tags origin "+refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"
+          TAG_COMMIT=$(git rev-parse --verify "${TAG_NAME}^{commit}")
+          [ "$TAG_COMMIT" = "$TARGET_COMMIT" ] || {
+            echo "$TAG_NAME moved after release validation; refusing to dispatch." >&2
             exit 1
           }
           jq -n \

@@ -3,6 +3,7 @@
   import ConsumerDashboard from "$lib/ConsumerDashboard.svelte";
   import DeveloperDashboard from "$lib/DeveloperDashboard.svelte";
   import HistoryView from "$lib/HistoryView.svelte";
+  import { deviceGridOffsetMinutes } from "$lib/break-grid";
   import {
     consumerReminderPresentation,
     consumerWarning
@@ -18,6 +19,7 @@
     writeDayStartHour
   } from "$lib/day-start";
   import type { DiagnosticsReport } from "$lib/diagnostics";
+  import { historyActivationUsesKeyboard } from "$lib/history";
   import { parseWindowLabel } from "$lib/overlay-label";
   import {
     type ReminderSettings,
@@ -41,6 +43,9 @@
 
   let dashboardMode = $state<DashboardMode>("consumer");
   let dashboardView = $state<"dashboard" | "history">("dashboard");
+  let historyMounted = $state(false);
+  let dashboardScrollY = 0;
+  let historyScrollY = 0;
   let dayStartHour = $state(DEFAULT_DAY_START_HOUR);
   let report = $state<DiagnosticsReport | null>(null);
   let diagnosticsError = $state<string | null>(null);
@@ -53,6 +58,8 @@
   let savedSettings = $state<ReminderSettings | null>(null);
   let workMinutesInput = $state("");
   let breakSecondsInput = $state("");
+  let syncAcrossDevices = $state(false);
+  let gridOffsetMinutes = $state(0);
   let settingsLoading = $state(true);
   let settingsSaving = $state(false);
   let settingsError = $state<string | null>(null);
@@ -74,7 +81,10 @@
   }
 
   const settingsValidation = $derived(
-    validateReminderSettings(workMinutesInput, breakSecondsInput)
+    validateReminderSettings(workMinutesInput, breakSecondsInput, {
+      syncAcrossDevices,
+      gridOffsetMinutes
+    })
   );
   const workMinutesError = $derived(
     settingsLoading ? null : settingsValidation.workMinutesError
@@ -112,18 +122,31 @@
     writeDashboardMode(browserStorage(), mode);
   }
 
-  function openHistory(): void {
+  async function openHistory(event: MouseEvent): Promise<void> {
+    dashboardScrollY = window.scrollY;
+    historyMounted = true;
     dashboardView = "history";
+    await tick();
+    window.scrollTo({ top: historyScrollY, behavior: "auto" });
+    if (historyActivationUsesKeyboard(event.detail)) {
+      document.getElementById("history-back-button")?.focus({ preventScroll: true });
+    }
   }
 
-  async function returnFromHistory(): Promise<void> {
+  async function returnFromHistory(restoreFocus: boolean): Promise<void> {
+    historyScrollY = window.scrollY;
     dashboardView = "dashboard";
     await tick();
-    document.getElementById("view-history-trigger")?.focus();
+    window.scrollTo({ top: dashboardScrollY, behavior: "auto" });
+    if (restoreFocus) {
+      document.getElementById("view-history-trigger")?.focus({ preventScroll: true });
+    }
   }
 
   function setDayStartHour(hour: number): void {
     dayStartHour = hour;
+    historyMounted = false;
+    historyScrollY = 0;
     writeDayStartHour(browserStorage(), hour);
   }
 
@@ -227,6 +250,15 @@
     savedSettings = settings;
     workMinutesInput = String(settings.workMinutes);
     breakSecondsInput = String(settings.breakSeconds);
+    syncAcrossDevices = settings.syncAcrossDevices;
+    gridOffsetMinutes = settings.gridOffsetMinutes;
+  }
+
+  function toggleSyncAcrossDevices(enabled: boolean) {
+    syncAcrossDevices = enabled;
+    if (enabled) {
+      gridOffsetMinutes = deviceGridOffsetMinutes(new Date());
+    }
   }
 
   async function loadReminderSettings() {
@@ -416,48 +448,60 @@
     onSaveSettings={() => void saveReminderSettings()}
     onResetSettings={() => void resetReminderSettings()}
   />
-{:else if dashboardView === "history"}
-  <HistoryView {dayStartHour} onBack={() => void returnFromHistory()} />
 {:else}
-  <ConsumerDashboard
-    presentation={reminderPresentation}
-    {warning}
-    {reminderStatus}
-    {reminderActionPending}
-    {reminderActionResult}
-    {overlayRunning}
-    diagnosticsReady={report !== null}
-    {todayActivity}
-    {todayActivityError}
-    {breakSummary}
-    {breakSummaryError}
-    {dayStartHour}
-    onDayStartChange={setDayStartHour}
-    {savedSettings}
-    {timingEditorExpanded}
-    {workMinutesInput}
-    {breakSecondsInput}
-    {settingsLoading}
-    {settingsSaving}
-    {settingsValidation}
-    {workMinutesError}
-    {breakSecondsError}
-    {settingsError}
-    {settingsErrorContext}
-    {settingsResult}
-    onTakeBreak={() => void runReminderAction("take_break_now")}
-    onPauseAction={runPauseAction}
-    onPreview={() => void runOverlayTest()}
-    onToggleTimingEditor={() => (timingEditorExpanded = !timingEditorExpanded)}
-    onWorkMinutesInput={updateWorkMinutes}
-    onBreakSecondsInput={updateBreakSeconds}
-    onSaveSettings={() => void saveReminderSettings()}
-    onResetSettings={() => void resetReminderSettings()}
-    onOpenDeveloperMode={() => setDashboardMode("developer")}
-    {authorWebsiteError}
-    onOpenAuthorWebsite={() => void openAuthorWebsite()}
-    onViewHistory={openHistory}
-  />
+  <div class="view-shell" hidden={dashboardView !== "dashboard"}>
+    <ConsumerDashboard
+      presentation={reminderPresentation}
+      {warning}
+      {reminderStatus}
+      {reminderActionPending}
+      {reminderActionResult}
+      {overlayRunning}
+      diagnosticsReady={report !== null}
+      {todayActivity}
+      {todayActivityError}
+      {breakSummary}
+      {breakSummaryError}
+      {dayStartHour}
+      onDayStartChange={setDayStartHour}
+      {savedSettings}
+      {timingEditorExpanded}
+      {workMinutesInput}
+      {breakSecondsInput}
+      {syncAcrossDevices}
+      {gridOffsetMinutes}
+      {settingsLoading}
+      {settingsSaving}
+      {settingsValidation}
+      {workMinutesError}
+      {breakSecondsError}
+      {settingsError}
+      {settingsErrorContext}
+      {settingsResult}
+      onTakeBreak={() => void runReminderAction("take_break_now")}
+      onPauseAction={runPauseAction}
+      onPreview={() => void runOverlayTest()}
+      onToggleTimingEditor={() => (timingEditorExpanded = !timingEditorExpanded)}
+      onWorkMinutesInput={updateWorkMinutes}
+      onBreakSecondsInput={updateBreakSeconds}
+      onToggleSync={toggleSyncAcrossDevices}
+      onSaveSettings={() => void saveReminderSettings()}
+      onResetSettings={() => void resetReminderSettings()}
+      onOpenDeveloperMode={() => setDashboardMode("developer")}
+      {authorWebsiteError}
+      onOpenAuthorWebsite={() => void openAuthorWebsite()}
+      onViewHistory={openHistory}
+    />
+  </div>
+  {#if historyMounted}
+    <div class="view-shell" hidden={dashboardView !== "history"}>
+      <HistoryView
+        {dayStartHour}
+        active={dashboardView === "history"}
+        onBack={(restoreFocus) => void returnFromHistory(restoreFocus)}
+      />
+    </div>
+  {/if}
 {/if}
 
 <style>
@@ -486,7 +530,8 @@
 
     --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
       "Helvetica Neue", sans-serif;
-    --serif: "Fraunces", Georgia, serif;
+    --display: "Newsreader", Georgia, serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
 
   @media (prefers-contrast: more) {
@@ -516,6 +561,14 @@
     background: var(--bg);
   }
 
+  .view-shell {
+    display: contents;
+  }
+
+  .view-shell[hidden] {
+    display: none;
+  }
+
   .invalid-overlay {
     display: flex;
     min-height: 100vh;
@@ -537,14 +590,14 @@
   .invalid-overlay .eyebrow {
     color: #79cf91;
     font-size: 0.7rem;
-    font-weight: 750;
+    font-weight: 600;
     letter-spacing: 0.17em;
     text-transform: uppercase;
   }
 
   .invalid-overlay .shortcut-hint {
     color: #9ca69e;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
 
   .invalid-overlay kbd {
@@ -565,6 +618,7 @@
     padding: 9px 11px;
     color: #ffc4c4;
     background: #2a1717;
+    font-family: var(--mono);
     overflow-wrap: anywhere;
   }
 
@@ -575,7 +629,7 @@
     color: #dce7de;
     background: #18201a;
     font: inherit;
-    font-weight: 620;
+    font-weight: 600;
     cursor: pointer;
   }
 

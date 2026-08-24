@@ -3,6 +3,90 @@
 Notable changes to Unfocus are recorded here. Dates use `YYYY-MM-DD`, and
 released versions link to their GitHub release.
 
+## [0.6.0-beta.1] - 2026-08-24
+
+### Added
+
+- Added dedicated beta distribution channels: the `beta` APT suite and the
+  `unfocus@beta` Homebrew cask. Existing alpha installs remain on their frozen
+  channels until users explicitly migrate using the install-guide steps.
+- Optional cross-device break sync, off by default; the existing relative
+  timer is unchanged while it is off. With sync enabled, breaks land on a
+  shared wall-clock grid instead of counting from when the timer last
+  started, so every device with a matching work duration, break duration,
+  and grid offset rests at the same moment. No network is used; there are no
+  accounts and no pairing, and devices never communicate. Work duration and
+  break duration are ordinary settings fields and must be entered the same
+  on every device; grid offset has no field of its own and is instead filled
+  in automatically from each device's own clock the moment sync is turned
+  on, so it only lines up between devices whose clocks were on the same UTC
+  offset when sync was switched on; turn sync off and on again after a time
+  change or a trip to re-derive it. Nothing detects a mismatch in any of the
+  three, so compare the dashboard's break-times line on two devices to confirm
+  they actually agree.
+
+### Changed
+
+- Replaced the generated SVG break landscape with a bundled first-party
+  illustration and 4K delivery derivative, using golden-ratio placement, a
+  static dawn, day, dusk, or night treatment selected from local time and held
+  for the complete break, and one localized amber return fade with
+  reduced-motion, higher-contrast, and constrained-crop fallbacks.
+- Centered the break message and assigned the reflective message, guidance,
+  and countdown to distinct local Newsreader, system-sans, and monospace roles
+  while preserving reduced-motion and higher-contrast behavior.
+- Downgrading to a build older than this one resets reminder settings to
+  defaults, discarding the saved work duration and break duration.
+  `reminder-settings.json` moves to schema v3 to carry the new sync fields
+  above, and loading the file with this build rewrites it to v3 even when
+  sync stays off. Older builds parse the file with `deny_unknown_fields`, so
+  a v3 file is rejected outright; the repair path that runs on a rejected
+  file then overwrites it with fresh defaults. This has always been how a
+  schema bump behaves, but this is the first release where stepping back to
+  an older build is a real possibility, so it is worth stating plainly: back
+  up `reminder-settings.json` first if a rollback is possible and the saved
+  durations matter.
+- With sync enabled, resuming from pause rejoins the shared grid instead of
+  starting a fresh work interval, and taking a manual break no longer
+  postpones the next scheduled break.
+- While it runs on macOS, Unfocus is intentionally tray and menu-bar only,
+  with no Dock icon and no application menu. Reopen or focus the dashboard
+  from the tray icon, which also carries the reminder controls and the quit
+  action.
+- Hardened the shared overlay lifecycle on every platform. A break now builds
+  every monitor's window before showing any of them, so a late failure cannot
+  leave one display covered while the others are still loading. A failed
+  overlay close is retried up to three times with a bounded backoff instead of
+  being logged and abandoned, a sibling-close command that cannot be delivered
+  immediately is retried rather than dropped, and a new break is refused while
+  a previous run's cleanup is still outstanding.
+- Added `tauri-nspanel` as a macOS-only dependency, pinned to an immutable Git
+  revision because no released crate provides the necessary Tauri 2 panel
+  behavior. `THIRD_PARTY_NOTICES.txt` and the generated SBOM now record the
+  complete locked Git identity and declared license of Git-sourced packages,
+  which crates.io metadata does not supply.
+- Continuous integration now runs the locked Rust test suite on macOS instead
+  of only a compile check.
+- Updated SvelteKit to 2.70.3, Bun types to 1.4.0, Svelte to 5.56.10, Vite to
+  8.2.2, and the pinned Rust toolchain to 1.98.0; regenerated the lockfile and
+  third-party notices.
+- Reworked History into a compact Monday-aligned calendar covering the newest
+  90 local days. Fixed intensity levels represent confirmed active
+  minutes, while zero activity and unavailable data remain distinct. Selecting
+  a day reveals only that day's totals, hourly activity, and grouped break
+  outcomes without streaks, scores, or timer controls.
+
+### Fixed
+
+- Break overlays on macOS did not reach other Spaces or cover full-screen
+  applications. Each overlay is now a non-activating native panel at
+  screen-saver level that joins every Space and acts as a full-screen
+  auxiliary, so a break can cover each connected display without taking
+  activation away from the app you were using. The panels stay above the layer
+  the Quartz full-screen probe reads, so an overlay never classifies itself as
+  the active full-screen window. macOS remains preview; this establishes no
+  physical multi-monitor qualification.
+
 ## [0.5.0-alpha.1] - 2026-08-16
 
 ### Added
@@ -218,6 +302,8 @@ changes are included in and superseded by [0.4.0-alpha.1].
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.1...HEAD
+[0.6.0-beta.1]: https://github.com/abhiksark/unfocus/compare/v0.5.0-alpha.1...v0.6.0-beta.1
 [0.5.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.4.0-alpha.1...v0.5.0-alpha.1
 [0.4.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.4.0-alpha.1
 [0.3.1-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.3.1-alpha.1

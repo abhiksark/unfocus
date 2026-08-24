@@ -32,6 +32,13 @@ orchestration, OS probes, timing, and diagnostics.
 - `src/reminder.rs` owns the pure reminder timer, probe-based presentation
   decision (including optional activity-history adaptation that never mutates
   the clock), and scheduler thread (including observe-only activity sampling).
+- `src/reminder/schedule.rs` owns pure wall-clock break-grid arithmetic for
+  sync mode: the next grid point on the local-time epoch (`unix_secs +
+  offset_minutes * 60`) and the half-interval grace rule. This coincides with
+  local midnight only when the interval divides 86400. It has no calendar and
+  no clock of its own; every input is injected. Its test table is mirrored
+  byte-for-byte in `src/lib/break-grid.test.ts` and the two must be changed
+  together.
 - `src/tray.rs` owns tray construction, callbacks, embedded assets, and asset
   tests.
 - `src/probes/mod.rs` owns probe caches, workers, snapshots, panic containment,

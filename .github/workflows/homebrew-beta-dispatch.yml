@@ -1,0 +1,255 @@
+name: Dispatch Homebrew beta update
+
+on:
+  release:
+    types: [published]
+  repository_dispatch:
+    types: [unfocus-homebrew-beta-published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Published beta tag to redispatch
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homebrew-beta-dispatch-${{ github.event.release.tag_name || github.event.client_payload.tag_name || inputs.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  relay:
+    if: github.event_name == 'release' && contains(github.event.release.tag_name, '-beta.')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate the published beta release
+        id: release
+        env:
+          EVENT_RELEASE: ${{ toJSON(github.event.release) }}
+        run: |
+          set -euo pipefail
+          TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-beta\.(0|[1-9][0-9]*)$'
+          ID=$(jq -r '.id // empty' <<<"$EVENT_RELEASE")
+          TAG=$(jq -r '.tag_name // empty' <<<"$EVENT_RELEASE")
+          TARGET_COMMITISH=$(jq -r '.target_commitish // empty' <<<"$EVENT_RELEASE")
+          DRAFT=$(jq -r '.draft | if type == "boolean" then tostring else empty end' <<<"$EVENT_RELEASE")
+          PRERELEASE=$(jq -r '.prerelease | if type == "boolean" then tostring else empty end' <<<"$EVENT_RELEASE")
+          PUBLISHED_AT=$(jq -r '.published_at // empty' <<<"$EVENT_RELEASE")
+
+          [[ "$ID" =~ ^[0-9]+$ ]] || {
+            echo "Release event did not provide a numeric release id." >&2
+            exit 1
+          }
+          [[ "$TAG" =~ $TAG_PATTERN ]] || {
+            echo "Release event tag $TAG is not an exact beta version." >&2
+            exit 1
+          }
+          [[ "$TARGET_COMMITISH" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Release target_commitish must be an exact lowercase commit SHA." >&2
+            exit 1
+          }
+          if [ "$DRAFT" != false ] || [ "$PRERELEASE" != true ] || [ -z "$PUBLISHED_AT" ]; then
+            echo "$TAG is not a published, non-draft prerelease." >&2
+            exit 1
+          fi
+
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          TARGET_COMMIT=$(git rev-parse --verify "${TARGET_COMMITISH}^{commit}")
+          [ "$TARGET_COMMIT" = "$TARGET_COMMITISH" ] || {
+            echo "Release target_commitish did not resolve to its exact commit." >&2
+            exit 1
+          }
+          git merge-base --is-ancestor "$TARGET_COMMIT" refs/remotes/origin/main || {
+            echo "Release target_commitish is not on origin/main." >&2
+            exit 1
+          }
+          git fetch --no-tags origin "+refs/tags/$TAG:refs/tags/$TAG"
+          TAG_COMMIT=$(git rev-parse --verify "${TAG}^{commit}")
+          [ "$TAG_COMMIT" = "$TARGET_COMMIT" ] || {
+            echo "$TAG does not point to the release target commit." >&2
+            exit 1
+          }
+
+          {
+            echo "release_id=$ID"
+            echo "tag_name=$TAG"
+            echo "target_commit=$TARGET_COMMIT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Relay the published release through the default branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          TARGET_COMMIT: ${{ steps.release.outputs.target_commit }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"
+          TAG_COMMIT=$(git rev-parse --verify "${TAG_NAME}^{commit}")
+          [ "$TAG_COMMIT" = "$TARGET_COMMIT" ] || {
+            echo "$TAG_NAME moved after release validation; refusing to relay." >&2
+            exit 1
+          }
+          jq -n \
+            --argjson release_id "$RELEASE_ID" \
+            --arg tag_name "$TAG_NAME" \
+            '{
+              event_type: "unfocus-homebrew-beta-published",
+              client_payload: {
+                release_id: $release_id,
+                tag_name: $tag_name
+              }
+            }' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" --input -
+
+  dispatch:
+    if: github.event_name != 'release'
+    runs-on: ubuntu-24.04
+    environment: homebrew-tap-automation
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve a published beta release
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag_name }}
+          RELAY_RELEASE_ID: ${{ github.event.client_payload.release_id }}
+          RELAY_TAG: ${{ github.event.client_payload.tag_name }}
+        run: |
+          set -euo pipefail
+          TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-beta\.(0|[1-9][0-9]*)$'
+
+          if [ "$EVENT_NAME" = repository_dispatch ]; then
+            [[ "$RELAY_RELEASE_ID" =~ ^[0-9]+$ ]] || {
+              echo "Release relay did not provide a numeric release id." >&2
+              exit 1
+            }
+            [[ "$RELAY_TAG" =~ $TAG_PATTERN ]] || {
+              echo "Release relay tag $RELAY_TAG is not an exact beta version." >&2
+              exit 1
+            }
+            RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELAY_RELEASE_ID")
+          else
+            [[ "$INPUT_TAG" =~ $TAG_PATTERN ]] || {
+              echo "Manual retries require an exact vX.Y.Z-beta.N tag." >&2
+              exit 1
+            }
+            RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$INPUT_TAG")
+          fi
+
+          ID=$(jq -r '.id // empty' <<<"$RELEASE")
+          TAG=$(jq -r '.tag_name // empty' <<<"$RELEASE")
+          TARGET_COMMITISH=$(jq -r '.target_commitish // empty' <<<"$RELEASE")
+          DRAFT=$(jq -r '.draft | if type == "boolean" then tostring else empty end' <<<"$RELEASE")
+          PRERELEASE=$(jq -r '.prerelease | if type == "boolean" then tostring else empty end' <<<"$RELEASE")
+          PUBLISHED_AT=$(jq -r '.published_at // empty' <<<"$RELEASE")
+
+          [[ "$ID" =~ ^[0-9]+$ ]] || {
+            echo "GitHub did not return a numeric release id." >&2
+            exit 1
+          }
+          [[ "$TAG" =~ $TAG_PATTERN ]] || {
+            echo "Release tag $TAG is not an exact beta version." >&2
+            exit 1
+          }
+          [[ "$TARGET_COMMITISH" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Release target_commitish must be an exact lowercase commit SHA." >&2
+            exit 1
+          }
+          case "$EVENT_NAME" in
+            repository_dispatch)
+              if [ "$ID" != "$RELAY_RELEASE_ID" ] || [ "$TAG" != "$RELAY_TAG" ]; then
+                echo "GitHub returned release $ID ($TAG) for relayed release $RELAY_RELEASE_ID ($RELAY_TAG)." >&2
+                exit 1
+              fi
+              ;;
+            workflow_dispatch)
+              if [ "$TAG" != "$INPUT_TAG" ]; then
+                echo "GitHub returned tag $TAG for requested tag $INPUT_TAG." >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unsupported dispatch event $EVENT_NAME." >&2
+              exit 1
+              ;;
+          esac
+          if [ "$DRAFT" != false ] || [ "$PRERELEASE" != true ] || [ -z "$PUBLISHED_AT" ]; then
+            echo "$TAG is not a published, non-draft prerelease." >&2
+            exit 1
+          fi
+
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          TARGET_COMMIT=$(git rev-parse --verify "${TARGET_COMMITISH}^{commit}")
+          [ "$TARGET_COMMIT" = "$TARGET_COMMITISH" ] || {
+            echo "Release target_commitish did not resolve to its exact commit." >&2
+            exit 1
+          }
+          git merge-base --is-ancestor "$TARGET_COMMIT" refs/remotes/origin/main || {
+            echo "Release target_commitish is not on origin/main." >&2
+            exit 1
+          }
+          git fetch --no-tags origin "+refs/tags/$TAG:refs/tags/$TAG"
+          TAG_COMMIT=$(git rev-parse --verify "${TAG}^{commit}")
+          [ "$TAG_COMMIT" = "$TARGET_COMMIT" ] || {
+            echo "$TAG does not point to the release target commit." >&2
+            exit 1
+          }
+
+          {
+            echo "release_id=$ID"
+            echo "tag_name=$TAG"
+            echo "target_commit=$TARGET_COMMIT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Mint a tap-only GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.HOMEBREW_APP_ID }}
+          private-key: ${{ secrets.HOMEBREW_APP_PRIVATE_KEY }}
+          owner: abhiksark
+          permission-contents: write
+          repositories: homebrew-unfocus
+
+      - name: Dispatch the tap update
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          TARGET_COMMIT: ${{ steps.release.outputs.target_commit }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"
+          TAG_COMMIT=$(git rev-parse --verify "${TAG_NAME}^{commit}")
+          [ "$TAG_COMMIT" = "$TARGET_COMMIT" ] || {
+            echo "$TAG_NAME moved after release validation; refusing to dispatch." >&2
+            exit 1
+          }
+          jq -n \
+            --arg source_repository "$GITHUB_REPOSITORY" \
+            --argjson release_id "$RELEASE_ID" \
+            --arg tag_name "$TAG_NAME" \
+            '{
+              event_type: "unfocus-beta-published",
+              client_payload: {
+                source_repository: $source_repository,
+                release_id: $release_id,
+                tag_name: $tag_name
+              }
+            }' \
+            | gh api --method POST "repos/abhiksark/homebrew-unfocus/dispatches" --input -

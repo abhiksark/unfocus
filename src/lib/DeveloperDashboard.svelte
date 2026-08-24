@@ -111,26 +111,11 @@
   <header>
     <div class="brand-lockup">
       <div class="scene-swatch" class:degraded={health !== "healthy"} aria-hidden="true">
-        <svg viewBox="0 0 56 56">
-          <defs>
-            <linearGradient id="sw-sky" x1="0" y1="0" x2="0" y2="56" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#060f0d" />
-              <stop offset="0.62" stop-color="#0c231d" />
-              <stop offset="1" stop-color="#164434" />
-            </linearGradient>
-            <mask id="sw-moon">
-              <circle cx="41" cy="14" r="6" fill="#fff" />
-              <circle cx="38.8" cy="12.4" r="5.4" fill="#000" />
-            </mask>
-          </defs>
-          <circle cx="41" cy="14" r="6" fill="#d7ecdc" opacity="0.85" mask="url(#sw-moon)" />
-          <path d="M0 40 C6 38 10 24 16 21 C21 18.5 26 30 33 34 C42 39 50 39 56 37 L56 56 L0 56 Z" fill="#23493b" />
-          <path d="M0 47 C9 43.5 18 46 27 47.5 C38 49.5 48 47 56 45 L56 56 L0 56 Z" fill="#0a1c16" />
-        </svg>
+        <span></span>
       </div>
       <div>
         <p class="eyebrow">Developer mode</p>
-        <h1>Your timer is running.</h1>
+        <h1 data-type-role="ui">Your timer is running.</h1>
         <p class="lede">Native evidence from Tauri and {backend}—not mocked browser data.</p>
       </div>
     </div>
@@ -175,22 +160,32 @@
   <section class="summary-grid" aria-label="Platform probe summary">
     <article>
       <span>Session</span>
-      <strong>{report?.sessionType?.toUpperCase() ?? "—"}</strong>
+      <strong data-type-role="mono">{report?.sessionType?.toUpperCase() ?? "—"}</strong>
       <small>{desktopCaption}</small>
     </article>
     <article>
       <span>Displays</span>
-      <strong>{report && !report.monitorError ? report.monitors.length : "—"}</strong>
+      <strong data-type-role="mono">
+        {report && !report.monitorError ? report.monitors.length : "—"}
+      </strong>
       <small>{report?.monitorError ?? displayCaption}</small>
     </article>
     <article>
       <span>Idle time</span>
-      <strong>{report?.idleSeconds ?? "—"}<i>{typeof report?.idleSeconds === "number" ? "s" : ""}</i></strong>
+      <strong data-type-role="mono">
+        {report?.idleSeconds ?? "—"}<i>{typeof report?.idleSeconds === "number" ? "s" : ""}</i>
+      </strong>
       <small>{idleCaption}</small>
     </article>
     <article>
       <span>Active fullscreen</span>
-      <strong>{report?.activeWindowFullscreen === true ? "Yes" : report?.activeWindowFullscreen === false ? "No" : "—"}</strong>
+      <strong data-type-role="mono">
+        {report?.activeWindowFullscreen === true
+          ? "Yes"
+          : report?.activeWindowFullscreen === false
+            ? "No"
+            : "—"}
+      </strong>
       <small>{fullscreenCaption}</small>
     </article>
   </section>
@@ -251,6 +246,7 @@
           <div class="duration-input" class:invalid={workMinutesError}>
             <input
               id="developer-work-duration"
+              data-type-role="mono"
               type="text"
               inputmode="numeric"
               pattern="[0-9]*"
@@ -273,6 +269,7 @@
           <div class="duration-input" class:invalid={breakSecondsError}>
             <input
               id="developer-break-duration"
+              data-type-role="mono"
               type="text"
               inputmode="numeric"
               pattern="[0-9]*"
@@ -324,12 +321,12 @@
     <div class="monitor-list">
       {#each report?.monitors ?? [] as monitor, index}
         <article class="monitor">
-          <div class="monitor-number">{index + 1}</div>
+          <div class="monitor-number" data-type-role="mono">{index + 1}</div>
           <div>
             <strong>{monitor.name ?? `Display ${index + 1}`}</strong>
-            <span>{monitor.width} × {monitor.height} px</span>
+            <span data-type-role="mono">{monitor.width} × {monitor.height} px</span>
           </div>
-          <code>{monitor.x}, {monitor.y} · {monitor.scaleFactor}×</code>
+          <code data-type-role="mono">{monitor.x}, {monitor.y} · {monitor.scaleFactor}×</code>
         </article>
       {:else}
         <p class="empty">Waiting for the native monitor API…</p>
@@ -402,19 +399,54 @@
   }
 
   .scene-swatch {
+    position: relative;
     flex: 0 0 auto;
     width: 58px;
     height: 58px;
     overflow: hidden;
     border: 1px solid #2c463a;
     border-radius: 15px;
-    background: linear-gradient(180deg, #060f0d 0%, #0c231d 62%, #164434 100%);
+    background:
+      radial-gradient(
+        ellipse 61.8% 38.2% at 61.8% 38.2%,
+        rgba(125, 207, 155, 0.24),
+        transparent 61.8%
+      ),
+      linear-gradient(145deg, #789a8d 0%, #274b3f 61.8%, #07100c 100%);
   }
 
-  .scene-swatch svg {
-    display: block;
-    width: 100%;
-    height: 100%;
+  .scene-swatch::before {
+    position: absolute;
+    right: -9px;
+    bottom: -13px;
+    left: -11px;
+    height: 34px;
+    border-radius: 61.8% 38.2% 0 0 / 100% 100% 0 0;
+    background: #153a2e;
+    content: "";
+    transform: rotate(-5deg);
+  }
+
+  .scene-swatch::after {
+    position: absolute;
+    top: calc(38.2% - 9px);
+    left: calc(61.8% - 9px);
+    width: 18px;
+    height: 18px;
+    border: 1px solid rgba(215, 236, 220, 0.42);
+    border-radius: 50%;
+    content: "";
+  }
+
+  .scene-swatch span {
+    position: absolute;
+    z-index: 1;
+    top: calc(38.2% - 3px);
+    left: calc(61.8% - 3px);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #7dcf9b;
   }
 
   .scene-swatch.degraded {
@@ -429,16 +461,15 @@
 
   h1 {
     margin-bottom: 8px;
-    font-family: "Fraunces", Georgia, serif;
     font-size: clamp(2rem, 5vw, 3.3rem);
-    font-weight: 420;
-    line-height: 1.05;
+    font-weight: 600;
+    line-height: 1.08;
   }
 
   h2 {
     margin-bottom: 0;
     font-size: 1.15rem;
-    font-weight: 590;
+    font-weight: 600;
     letter-spacing: -0.02em;
   }
 
@@ -446,7 +477,7 @@
     margin-bottom: 8px;
     color: #79cf91;
     font-size: 0.7rem;
-    font-weight: 750;
+    font-weight: 600;
     letter-spacing: 0.17em;
     text-transform: uppercase;
   }
@@ -488,7 +519,7 @@
     border-radius: 9px;
     padding: 11px 16px;
     font: inherit;
-    font-weight: 620;
+    font-weight: 600;
     cursor: pointer;
   }
 
@@ -544,17 +575,17 @@
     padding: 17px;
   }
 
-  .summary-grid span { color: #a0aaa2; font-size: 0.72rem; }
+  .summary-grid span { color: #a0aaa2; font-size: 0.75rem; }
   .summary-grid strong {
     margin: auto 0 5px;
     overflow: hidden;
     color: #edf5ef;
     font-size: 1.65rem;
-    font-weight: 590;
+    font-weight: 600;
     text-overflow: ellipsis;
   }
   .summary-grid i { margin-left: 2px; color: #a0aaa2; font-size: 0.8rem; font-style: normal; }
-  .summary-grid small { color: #a4aea6; font-size: 0.65rem; line-height: 1.35; overflow-wrap: anywhere; }
+  .summary-grid small { color: #a4aea6; font-size: 0.75rem; line-height: 1.4; overflow-wrap: anywhere; }
 
   .panel { border-radius: 14px; padding: 22px; }
 
@@ -577,7 +608,7 @@
   }
 
   .reminder-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-  .reminder-feedback { width: 100%; color: #b9ddc2; font-size: 0.68rem; text-align: right; }
+  .reminder-feedback { width: 100%; color: #b9ddc2; font-size: 0.75rem; text-align: right; }
 
   .settings-panel {
     display: grid;
@@ -589,18 +620,18 @@
   .settings-form { min-width: 0; }
   .duration-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .duration-field { min-width: 0; }
-  .duration-field label { display: block; margin-bottom: 7px; color: #dce7de; font-size: 0.78rem; font-weight: 620; }
+  .duration-field label { display: block; margin-bottom: 7px; color: #dce7de; font-size: 0.78rem; font-weight: 600; }
   .duration-input { display: flex; align-items: center; border: 1px solid #3a473d; border-radius: 9px; background: #0f1511; }
   .duration-input:focus-within { border-color: #75d38e; box-shadow: 0 0 0 3px rgba(117, 211, 142, 0.12); }
   .duration-input.invalid { border-color: #a95454; }
-  .duration-input input { width: 100%; min-width: 0; border: 0; outline: 0; padding: 10px 5px 10px 12px; color: #edf5ef; background: transparent; font: inherit; }
-  .duration-input span { padding-right: 11px; color: #929c94; font-size: 0.68rem; }
-  .duration-field small { display: block; margin-top: 6px; color: #929c94; font-size: 0.66rem; line-height: 1.35; }
+  .duration-input input { width: 100%; min-width: 0; border: 0; outline: 0; padding: 10px 5px 10px 12px; color: #edf5ef; background: transparent; font: inherit; font-family: var(--mono); }
+  .duration-input span { padding-right: 11px; color: #929c94; font-size: 0.75rem; }
+  .duration-field small { display: block; margin-top: 6px; color: #929c94; font-size: 0.75rem; line-height: 1.4; }
   .duration-field .field-error,
   .settings-error { color: #ffc4c4; }
   .settings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
   .settings-feedback { min-height: 1.2rem; margin-top: 8px; }
-  .settings-feedback p { margin: 0; font-size: 0.68rem; line-height: 1.4; }
+  .settings-feedback p { margin: 0; font-size: 0.75rem; line-height: 1.4; }
   .settings-success { color: #b9ddc2; }
 
   .panel-heading { padding-bottom: 18px; }
@@ -612,20 +643,19 @@
 
   .monitor-list { display: grid; gap: 8px; }
   .monitor { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 13px; border-radius: 10px; padding: 11px 13px; background: #0f1511; }
-  .monitor-number { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #344039; border-radius: 7px; color: #84b790; font-size: 0.72rem; }
+  .monitor-number { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #344039; border-radius: 7px; color: #84b790; font-size: 0.75rem; }
   .monitor strong,
   .monitor span { display: block; }
-  .monitor strong { font-size: 0.82rem; font-weight: 610; }
+  .monitor strong { font-size: 0.82rem; font-weight: 600; }
   .monitor span,
   .monitor code,
-  .empty { color: #9ca69e; font-size: 0.68rem; }
-  .monitor code { font-family: "SFMono-Regular", Consolas, monospace; }
+  .empty { color: #9ca69e; font-size: 0.75rem; }
   .empty { margin: 8px 0; }
 
   .test-panel { margin-top: 12px; border-radius: 14px; padding: 22px; }
   .test-panel > div { max-width: 600px; }
   .test-panel p:not(.eyebrow) { margin-top: 9px; font-size: 0.78rem; }
-  footer { margin-top: 20px; color: #929c94; font-size: 0.68rem; text-align: center; }
+  footer { margin-top: 20px; color: #929c94; font-size: 0.75rem; text-align: center; }
 
   @media (max-width: 760px) {
     .developer-dashboard { padding: 28px 22px; }

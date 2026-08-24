@@ -33,7 +33,7 @@ Declared license: MIT
 Upstream authors: Justin Ridgewell <justin@ridgewell.name>
 License text IDs: 769d154fbde32a915af110b1123650bc79f4cbe675acc66e005265bf069c6c6c
 
-JavaScript: @oxc-project/types@0.143.0
+JavaScript: @oxc-project/types@0.146.0
 Declared license: MIT
 Upstream authors: Boshen and oxc contributors
 License text IDs: 95ced5ecf1133fbf41d409b5555c86c344f83f3b019926057ddbc07cfdcc27b3
@@ -43,72 +43,77 @@ Declared license: MIT
 Upstream authors: Luke Edwards
 License text IDs: ba573393f24555ac0528612ad39665fab5bdcc80330a61096024bbf5f736526d
 
-JavaScript: @rolldown/binding-android-arm64@1.2.3
+JavaScript: @rolldown/binding-android-arm-eabi@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-darwin-arm64@1.2.3
+JavaScript: @rolldown/binding-android-arm64@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-darwin-x64@1.2.3
+JavaScript: @rolldown/binding-darwin-arm64@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-freebsd-x64@1.2.3
+JavaScript: @rolldown/binding-darwin-x64@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-arm-gnueabihf@1.2.3
+JavaScript: @rolldown/binding-freebsd-x64@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-arm64-gnu@1.2.3
+JavaScript: @rolldown/binding-linux-arm-gnueabihf@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-arm64-musl@1.2.3
+JavaScript: @rolldown/binding-linux-arm64-gnu@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-ppc64-gnu@1.2.3
+JavaScript: @rolldown/binding-linux-arm64-musl@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-s390x-gnu@1.2.3
+JavaScript: @rolldown/binding-linux-ppc64-gnu@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-x64-gnu@1.2.3
+JavaScript: @rolldown/binding-linux-s390x-gnu@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-linux-x64-musl@1.2.3
+JavaScript: @rolldown/binding-linux-x64-gnu@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-openharmony-arm64@1.2.3
+JavaScript: @rolldown/binding-linux-x64-musl@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-win32-arm64-msvc@1.2.3
+JavaScript: @rolldown/binding-openharmony-arm64@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
-JavaScript: @rolldown/binding-win32-x64-msvc@1.2.3
+JavaScript: @rolldown/binding-win32-arm64-msvc@1.2.5
+Declared license: MIT
+Upstream authors: VoidZero Inc. & Contributors
+License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
+
+JavaScript: @rolldown/binding-win32-x64-msvc@1.2.5
 Declared license: MIT
 Upstream authors: VoidZero Inc. & Contributors
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
@@ -131,11 +136,11 @@ JavaScript: @sveltejs/adapter-static@3.0.10
 Declared license: MIT
 License text IDs: 3572965e1f08277c2edc0cca242bc4c27a50ec1d5bbe5b0918511e3d2a467178
 
-JavaScript: @sveltejs/kit@2.70.2
+JavaScript: @sveltejs/kit@2.70.3
 Declared license: MIT
 License text IDs: 3572965e1f08277c2edc0cca242bc4c27a50ec1d5bbe5b0918511e3d2a467178
 
-JavaScript: @sveltejs/load-config@0.2.2
+JavaScript: @sveltejs/load-config@0.2.3
 Declared license: MIT
 License text IDs: ada595bb2ec8d71616dde1b956edb8fbad63eadab32b8d9ab9310a1aef08e5c5
 
@@ -208,7 +213,7 @@ Declared license: Apache-2.0 OR MIT
 Upstream authors: Tauri Programme within The Commons Conservancy
 License text IDs: 9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
-JavaScript: @types/bun@1.3.14
+JavaScript: @types/bun@1.4.0
 Declared license: MIT
 Upstream authors: Jarred Sumner, Robobun, Dylan Conway, Ciro Spaciari, Sosuke Suzuki, Alistair Smith
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
@@ -221,11 +226,6 @@ License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0d
 JavaScript: @types/estree@1.0.9
 Declared license: MIT
 Upstream authors: RReverser
-License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
-
-JavaScript: @types/node@26.1.2
-Declared license: MIT
-Upstream authors: Microsoft TypeScript, Alberto Schiabel, Andrew Makarov, Benjamin Toueg, David Junger, Mohsen Azimi, Nikita Galkin, Sebastian Silbermann, Wilco Bakker, Marcin Kopacz, Trivikram Kamat, Junxiao Shi, Ilia Baryshnikov, ExE Boss, Piotr Błażejewicz, Anna Henningsen, Victor Perin, NodeJS Contributors, Linus Unnebäck, wafuwafu13, Matteo Collina, Dmitry Semigradsky, René, Yagiz Nizipli
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
 
 JavaScript: @types/node@26.2.0
@@ -352,7 +352,7 @@ Declared license: Apache-2.0
 Upstream authors: Jesse Beach <splendidnoise@gmail.com>
 License text IDs: c8df456c7ccba74b959087dff494d4ac2a12dfb0400c08b46b2494a08a000567
 
-JavaScript: bun-types@1.3.14
+JavaScript: bun-types@1.4.0
 Declared license: MIT
 License text IDs: 274aae0e20ef5129f395c859ac5922e9f8138ab77eca1f69b93af15ee3f4d279
 
@@ -506,7 +506,7 @@ Declared license: MIT
 Upstream authors: Jon Schlinkert (https://github.com/jonschlinkert)
 License text IDs: d0cd141b0c322fded5dfad1d4645bb2fedfc05b7321fe1009469638190d59ef9
 
-JavaScript: postcss@8.5.25
+JavaScript: postcss@8.5.26
 Declared license: MIT
 Upstream authors: Andrey Sitnik <andrey@sitnik.es>
 License text IDs: 5be1f3465bba68a626777f984878814aaf35e7ef8e9fd314d469bcf887050fb8
@@ -516,7 +516,7 @@ Declared license: MIT
 Upstream authors: Thorsten Lorenz <thlorenz@gmx.de> (thlorenz.com), Thorsten Lorenz <thlorenz@gmx.de> (thlorenz.com), Paul Miller (https://paulmillr.com)
 License text IDs: dffec71d93f273d2af7b54c6c7e7e70b3289c632ec0d7253210ec21ac336d5ac
 
-JavaScript: rolldown@1.2.3
+JavaScript: rolldown@1.2.5
 Declared license: MIT
 License text IDs: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 
@@ -540,12 +540,12 @@ Declared license: BSD-3-Clause
 Upstream authors: Valentin 7rulnik Semirulnik <v7rulnik@gmail.com>, Nick Fitzgerald <nfitzgerald@mozilla.com>, Tobias Koppers <tobias.koppers@googlemail.com>, Duncan Beevers <duncan@dweebd.com>, Stephen Crane <scrane@mozilla.com>, Ryan Seddon <seddon.ryan@gmail.com>, Miles Elam <miles.elam@deem.com>, Mihai Bazon <mihai.bazon@gmail.com>, Michael Ficarra <github.public.email@michael.ficarra.me>, Todd Wolfson <todd@twolfson.com>, Alexander Solovyov <alexander@solovyov.net>, Felix Gnass <fgnass@gmail.com>, Conrad Irwin <conrad.irwin@gmail.com>, usrbincc <usrbincc@yahoo.com>, David Glasser <glasser@davidglasser.net>, Chase Douglas <chase@newrelic.com>, Evan Wallace <evan.exe@gmail.com>, Heather Arthur <fayearthur@gmail.com>, Hugh Kennedy <hughskennedy@gmail.com>, David Glasser <glasser@davidglasser.net>, Simon Lydell <simon.lydell@gmail.com>, Jmeas Smith <jellyes2@gmail.com>, Michael Z Goddard <mzgoddard@gmail.com>, azu <azu@users.noreply.github.com>, John Gozde <john@gozde.ca>, Adam Kirkton <akirkton@truefitinnovation.com>, Chris Montgomery <christopher.montgomery@dowjones.com>, J. Ryan Stinnett <jryans@gmail.com>, Jack Herrington <jherrington@walmartlabs.com>, Chris Truter <jeffpalentine@gmail.com>, Daniel Espeset <daniel@danielespeset.com>, Jamie Wong <jamie.lf.wong@gmail.com>, Eddy Bruël <ejpbruel@mozilla.com>, Hawken Rives <hawkrives@gmail.com>, Gilad Peleg <giladp007@gmail.com>, djchie <djchie.dev@gmail.com>, Gary Ye <garysye@gmail.com>, Nicolas Lalevée <nicolas.lalevee@hibnet.org>
 License text IDs: c9d85a24226fa4dd8c0756961de362cee34f6e9b1d19938bd480239950ad9a93
 
-JavaScript: svelte-check@4.7.5
+JavaScript: svelte-check@4.7.6
 Declared license: MIT
 Upstream authors: The Svelte Community
 License text IDs: ada595bb2ec8d71616dde1b956edb8fbad63eadab32b8d9ab9310a1aef08e5c5
 
-JavaScript: svelte@5.56.8
+JavaScript: svelte@5.56.10
 Declared license: MIT
 License text IDs: 06257f4847b13a49a039efb17b944c141e71b12fd8d231b362d86919067d77a3
 
@@ -574,7 +574,7 @@ Declared license: MIT
 Upstream authors: Daniele Belardi, Ethan Arrowood, Matteo Collina, Matthew Aitken, Robert Nagy, Szymon Marczak, Tomas Della Vedova
 License text IDs: a6db8096b2707bc0102d256917d4d33f298ba36d8c3f25de067a2b5bb379db27
 
-JavaScript: vite@8.2.1
+JavaScript: vite@8.2.2
 Declared license: MIT
 Upstream authors: Evan You
 License text IDs: 387dd7baa307083401a27c58c362c30832f5ba1dba84f10cc22c33401523f45c
@@ -973,7 +973,7 @@ License text IDs: 2efd6a447c8c5d5f27b34282a9b2bfa999b2c56b450cb25e336553da6eb0d1
 Rust: dispatch2@0.3.1
 Declared license: Zlib OR Apache-2.0 OR MIT
 Upstream authors: Mads Marquart <mads@marquart.dk>, Mary <mary@mary.zone>
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: displaydoc@0.2.7
 Declared license: MIT OR Apache-2.0
@@ -1516,7 +1516,7 @@ License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256a
 
 Rust: libappindicator-sys@0.9.0
 Declared license: Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: libappindicator@0.9.0
 Declared license: Apache-2.0 OR MIT
@@ -1603,12 +1603,12 @@ License text IDs: 135bd40d7e81207369801d42a130c337371322df59687bf986fb8216352d71
 Rust: ndk-sys@0.6.0+11769913
 Declared license: MIT OR Apache-2.0
 Upstream authors: The Rust Windowing contributors
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: ndk@0.9.0
 Declared license: MIT OR Apache-2.0
 Upstream authors: The Rust Mobile contributors
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: new_debug_unreachable@1.0.6
 Declared license: MIT
@@ -1637,35 +1637,39 @@ License text IDs: 0be96d891d00e0ae0df75d7f3289b12871c000a1f5ac744f3b570768d4bb27
 
 Rust: objc2-app-kit@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-cloud-kit@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-data@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-foundation@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-graphics@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-image@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-location@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-core-text@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
+
+Rust: objc2-core-video@0.3.2
+Declared license: Zlib OR Apache-2.0 OR MIT
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-encode@4.1.0
 Declared license: MIT
@@ -1675,7 +1679,7 @@ License text IDs: 2c4b2ae80ced16e0ed3134fb816c34ac4a407051322456dd5daf8ab1ffd9d2
 Rust: objc2-exception-helper@0.1.1
 Declared license: Zlib OR Apache-2.0 OR MIT
 Upstream authors: Mads Marquart <mads@marquart.dk>
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-foundation@0.3.2
 Declared license: MIT
@@ -1683,27 +1687,27 @@ License text IDs: 2c4b2ae80ced16e0ed3134fb816c34ac4a407051322456dd5daf8ab1ffd9d2
 
 Rust: objc2-io-surface@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-metal@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-quartz-core@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-ui-kit@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-user-notifications@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2-web-kit@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: objc2@0.6.4
 Declared license: MIT
@@ -1749,6 +1753,11 @@ Rust: parking_lot_core@0.9.12
 Declared license: MIT OR Apache-2.0
 Upstream authors: Amanieu d'Antras <amanieu@gmail.com>
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, c9a75f18b9ab2927829a208fc6aa2cf4e63b8420887ba29cdb265d6619ae82d5
+
+Rust: pastey@0.2.3
+Declared license: MIT OR Apache-2.0
+Upstream authors: Aditya Kumar <git@adityais.dev>, David Tolnay <dtolnay@gmail.com>
+License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, b30df9a48463d1c99c6a66cdee623b1b0832c3811d58a80b338268d71cea190e
 
 Rust: percent-encoding@2.3.2
 Declared license: MIT OR Apache-2.0
@@ -1883,11 +1892,11 @@ License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cc
 
 Rust: r-efi@5.3.0
 Declared license: MIT OR Apache-2.0 OR LGPL-2.1-or-later
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: r-efi@6.0.0
 Declared license: MIT OR Apache-2.0 OR LGPL-2.1-or-later
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: raw-window-handle@0.6.2
 Declared license: MIT OR Apache-2.0 OR Zlib
@@ -2199,6 +2208,12 @@ Declared license: Apache-2.0 OR MIT
 Upstream authors: Tauri Programme within The Commons Conservancy
 License text IDs: 9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
+Rust: tauri-nspanel@2.1.0
+Declared license: MIT OR Apache-2.0
+Locked source: git+https://github.com/ahkohd/tauri-nspanel.git?rev=a3122e894383aa068ec5365a42994e3ac94ba1b6#a3122e894383aa068ec5365a42994e3ac94ba1b6
+Upstream authors: Victor Aremu <me@victorare.mu>
+License text IDs: 35e740d8a0d71739293b136b9f289c6b05f21ff6b0584b9b691dd5de5233d7e8, bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
+
 Rust: tauri-plugin-single-instance@2.4.3
 Declared license: Apache-2.0 OR MIT
 Upstream authors: Tauri Programme within The Commons Conservancy
@@ -2408,27 +2423,27 @@ License text IDs: 09c990d042f0b5c706bfcb87c741ddbf5121a4945fc88858825e3a80cd54b6
 Rust: unic-char-property@0.9.0
 Declared license: MIT/Apache-2.0
 Upstream authors: The UNIC Project Developers
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: unic-char-range@0.9.0
 Declared license: MIT/Apache-2.0
 Upstream authors: The UNIC Project Developers
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: unic-common@0.9.0
 Declared license: MIT/Apache-2.0
 Upstream authors: The UNIC Project Developers
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: unic-ucd-ident@0.9.0
 Declared license: MIT/Apache-2.0
 Upstream authors: The UNIC Project Developers
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: unic-ucd-version@0.9.0
 Declared license: MIT/Apache-2.0
 Upstream authors: The UNIC Project Developers
-License text IDs: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b31
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
 Rust: unicode-ident@1.0.24
 Declared license: (MIT OR Apache-2.0) AND Unicode-3.0
@@ -2946,10 +2961,10 @@ Declared license: MIT
 Upstream authors: Zeeshan Ali Khan <zeeshanak@gnome.org>, turbocooler <turbocooler@cocaine.ninja>
 License text IDs: 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
 
-Vendored asset: Fraunces@variable font
+Vendored asset: Newsreader@1.003 variable font
 Declared license: OFL-1.1
-Upstream authors: The Fraunces Project Authors
-License text IDs: 6732d6cc72c5d09292ff754dc1f39d9ea14918f74e87a17afa3f00a5120c3d48
+Upstream authors: The Newsreader Project Authors
+License text IDs: 865f0949b59fab5925506f80102dff3d12e8666412daf52d212db969d40adc25
 
 LICENSE AND NOTICE TEXTS
 ------------------------
@@ -3031,7 +3046,7 @@ Creator: Person: Daniel Thompson-Yvetot
 ===============================================================================
 License text ID: 06257f4847b13a49a039efb17b944c141e71b12fd8d231b362d86919067d77a3
 Used by:
-  - JavaScript: svelte@5.56.8
+  - JavaScript: svelte@5.56.10
 -------------------------------------------------------------------------------
 Copyright (c) 2016-2025 [Svelte Contributors](https://github.com/sveltejs/svelte/graphs/contributors)
 
@@ -6096,21 +6111,22 @@ according to those terms.
 ===============================================================================
 License text ID: 23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734
 Used by:
-  - JavaScript: @rolldown/binding-android-arm64@1.2.3
-  - JavaScript: @rolldown/binding-darwin-arm64@1.2.3
-  - JavaScript: @rolldown/binding-darwin-x64@1.2.3
-  - JavaScript: @rolldown/binding-freebsd-x64@1.2.3
-  - JavaScript: @rolldown/binding-linux-arm-gnueabihf@1.2.3
-  - JavaScript: @rolldown/binding-linux-arm64-gnu@1.2.3
-  - JavaScript: @rolldown/binding-linux-arm64-musl@1.2.3
-  - JavaScript: @rolldown/binding-linux-ppc64-gnu@1.2.3
-  - JavaScript: @rolldown/binding-linux-s390x-gnu@1.2.3
-  - JavaScript: @rolldown/binding-linux-x64-gnu@1.2.3
-  - JavaScript: @rolldown/binding-linux-x64-musl@1.2.3
-  - JavaScript: @rolldown/binding-openharmony-arm64@1.2.3
-  - JavaScript: @rolldown/binding-win32-arm64-msvc@1.2.3
-  - JavaScript: @rolldown/binding-win32-x64-msvc@1.2.3
-  - JavaScript: rolldown@1.2.3
+  - JavaScript: @rolldown/binding-android-arm-eabi@1.2.5
+  - JavaScript: @rolldown/binding-android-arm64@1.2.5
+  - JavaScript: @rolldown/binding-darwin-arm64@1.2.5
+  - JavaScript: @rolldown/binding-darwin-x64@1.2.5
+  - JavaScript: @rolldown/binding-freebsd-x64@1.2.5
+  - JavaScript: @rolldown/binding-linux-arm-gnueabihf@1.2.5
+  - JavaScript: @rolldown/binding-linux-arm64-gnu@1.2.5
+  - JavaScript: @rolldown/binding-linux-arm64-musl@1.2.5
+  - JavaScript: @rolldown/binding-linux-ppc64-gnu@1.2.5
+  - JavaScript: @rolldown/binding-linux-s390x-gnu@1.2.5
+  - JavaScript: @rolldown/binding-linux-x64-gnu@1.2.5
+  - JavaScript: @rolldown/binding-linux-x64-musl@1.2.5
+  - JavaScript: @rolldown/binding-openharmony-arm64@1.2.5
+  - JavaScript: @rolldown/binding-win32-arm64-msvc@1.2.5
+  - JavaScript: @rolldown/binding-win32-x64-msvc@1.2.5
+  - JavaScript: rolldown@1.2.5
 -------------------------------------------------------------------------------
 MIT License
 
@@ -6175,6 +6191,7 @@ Used by:
   - Rust: once_cell@1.21.4
   - Rust: ordered-stream@0.2.0
   - Rust: parking@2.2.1
+  - Rust: pastey@0.2.3
   - Rust: pin-project-lite@0.2.17
   - Rust: piper@0.2.5
   - Rust: polling@3.11.0
@@ -6449,7 +6466,7 @@ SOFTWARE.
 ===============================================================================
 License text ID: 274aae0e20ef5129f395c859ac5922e9f8138ab77eca1f69b93af15ee3f4d279
 Used by:
-  - JavaScript: bun-types@1.3.14
+  - JavaScript: bun-types@1.4.0
 -------------------------------------------------------------------------------
 MIT License
 
@@ -7458,7 +7475,7 @@ DEALINGS IN THE SOFTWARE.
 License text ID: 3572965e1f08277c2edc0cca242bc4c27a50ec1d5bbe5b0918511e3d2a467178
 Used by:
   - JavaScript: @sveltejs/adapter-static@3.0.10
-  - JavaScript: @sveltejs/kit@2.70.2
+  - JavaScript: @sveltejs/kit@2.70.3
 -------------------------------------------------------------------------------
 Copyright (c) 2020 [these people](https://github.com/sveltejs/kit/graphs/contributors)
 
@@ -7467,6 +7484,33 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+===============================================================================
+License text ID: 35e740d8a0d71739293b136b9f289c6b05f21ff6b0584b9b691dd5de5233d7e8
+Used by:
+  - Rust: tauri-nspanel@2.1.0
+-------------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2023 - Present Victor Aremu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ===============================================================================
 License text ID: 36bb253818ac13761081556ff5c457d626da9df1eb4f56194d9ad3926c418a68
@@ -7556,7 +7600,7 @@ DEALINGS IN THE SOFTWARE.
 ===============================================================================
 License text ID: 387dd7baa307083401a27c58c362c30832f5ba1dba84f10cc22c33401523f45c
 Used by:
-  - JavaScript: vite@8.2.1
+  - JavaScript: vite@8.2.2
 -------------------------------------------------------------------------------
 # Vite core license
 Vite is released under the MIT license:
@@ -9970,10 +10014,9 @@ THE SOFTWARE.
 ===============================================================================
 License text ID: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf
 Used by:
-  - JavaScript: @types/bun@1.3.14
+  - JavaScript: @types/bun@1.4.0
   - JavaScript: @types/cookie@0.6.0
   - JavaScript: @types/estree@1.0.9
-  - JavaScript: @types/node@26.1.2
   - JavaScript: @types/node@26.2.0
   - JavaScript: @types/trusted-types@2.0.7
   - Rust: windows-collections@0.2.0
@@ -11167,35 +11210,9 @@ License text ID: 56a24963c5251611729d1b6cdd6510dd409e7a7a4ddb1955cd319c3a50678b3
 Used by:
   - Rust: adler2@2.0.1
   - Rust: cargo-platform@0.1.9
-  - Rust: dispatch2@0.3.1
-  - Rust: libappindicator-sys@0.9.0
-  - Rust: ndk-sys@0.6.0+11769913
-  - Rust: ndk@0.9.0
-  - Rust: objc2-app-kit@0.3.2
-  - Rust: objc2-cloud-kit@0.3.2
-  - Rust: objc2-core-data@0.3.2
-  - Rust: objc2-core-foundation@0.3.2
-  - Rust: objc2-core-graphics@0.3.2
-  - Rust: objc2-core-image@0.3.2
-  - Rust: objc2-core-location@0.3.2
-  - Rust: objc2-core-text@0.3.2
-  - Rust: objc2-exception-helper@0.1.1
-  - Rust: objc2-io-surface@0.3.2
-  - Rust: objc2-metal@0.3.2
-  - Rust: objc2-quartz-core@0.3.2
-  - Rust: objc2-ui-kit@0.3.2
-  - Rust: objc2-user-notifications@0.3.2
-  - Rust: objc2-web-kit@0.3.2
   - Rust: proc-macro-crate@1.3.1
   - Rust: proc-macro-crate@2.0.2
   - Rust: proc-macro-crate@3.5.0
-  - Rust: r-efi@5.3.0
-  - Rust: r-efi@6.0.0
-  - Rust: unic-char-property@0.9.0
-  - Rust: unic-char-range@0.9.0
-  - Rust: unic-common@0.9.0
-  - Rust: unic-ucd-ident@0.9.0
-  - Rust: unic-ucd-version@0.9.0
 -------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -11467,7 +11484,7 @@ DEALINGS IN THE SOFTWARE.
 ===============================================================================
 License text ID: 5be1f3465bba68a626777f984878814aaf35e7ef8e9fd314d469bcf887050fb8
 Used by:
-  - JavaScript: postcss@8.5.25
+  - JavaScript: postcss@8.5.26
 -------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -12964,105 +12981,6 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 
   This Source Code Form is "Incompatible With Secondary Licenses", as
   defined by the Mozilla Public License, v. 2.0.
-
-===============================================================================
-License text ID: 6732d6cc72c5d09292ff754dc1f39d9ea14918f74e87a17afa3f00a5120c3d48
-Used by:
-  - Vendored asset: Fraunces@variable font
--------------------------------------------------------------------------------
-Copyright 2018 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces)
-
-This Font Software is licensed under the SIL Open Font License, Version 1.1.
-This license is copied below, and is also available with a FAQ at:
-http://scripts.sil.org/OFL
-
-
------------------------------------------------------------
-SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
------------------------------------------------------------
-
-PREAMBLE
-The goals of the Open Font License (OFL) are to stimulate worldwide
-development of collaborative font projects, to support the font creation
-efforts of academic and linguistic communities, and to provide a free and
-open framework in which fonts may be shared and improved in partnership
-with others.
-
-The OFL allows the licensed fonts to be used, studied, modified and
-redistributed freely as long as they are not sold by themselves. The
-fonts, including any derivative works, can be bundled, embedded,
-redistributed and/or sold with any software provided that any reserved
-names are not used by derivative works. The fonts and derivatives,
-however, cannot be released under any other type of license. The
-requirement for fonts to remain under this license does not apply
-to any document created using the fonts or their derivatives.
-
-DEFINITIONS
-"Font Software" refers to the set of files released by the Copyright
-Holder(s) under this license and clearly marked as such. This may
-include source files, build scripts and documentation.
-
-"Reserved Font Name" refers to any names specified as such after the
-copyright statement(s).
-
-"Original Version" refers to the collection of Font Software components as
-distributed by the Copyright Holder(s).
-
-"Modified Version" refers to any derivative made by adding to, deleting,
-or substituting -- in part or in whole -- any of the components of the
-Original Version, by changing formats or by porting the Font Software to a
-new environment.
-
-"Author" refers to any designer, engineer, programmer, technical
-writer or other person who contributed to the Font Software.
-
-PERMISSION & CONDITIONS
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of the Font Software, to use, study, copy, merge, embed, modify,
-redistribute, and sell modified and unmodified copies of the Font
-Software, subject to the following conditions:
-
-1) Neither the Font Software nor any of its individual components,
-in Original or Modified Versions, may be sold by itself.
-
-2) Original or Modified Versions of the Font Software may be bundled,
-redistributed and/or sold with any software, provided that each copy
-contains the above copyright notice and this license. These can be
-included either as stand-alone text files, human-readable headers or
-in the appropriate machine-readable metadata fields within text or
-binary files as long as those fields can be easily viewed by the user.
-
-3) No Modified Version of the Font Software may use the Reserved Font
-Name(s) unless explicit written permission is granted by the corresponding
-Copyright Holder. This restriction only applies to the primary font name as
-presented to the users.
-
-4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
-Software shall not be used to promote, endorse or advertise any
-Modified Version, except to acknowledge the contribution(s) of the
-Copyright Holder(s) and the Author(s) or with their explicit written
-permission.
-
-5) The Font Software, modified or unmodified, in part or in whole,
-must be distributed entirely under this license, and must not be
-distributed under any other license. The requirement for fonts to
-remain under this license does not apply to any document created
-using the Font Software.
-
-TERMINATION
-This license becomes null and void if any of the above conditions are
-not met.
-
-DISCLAIMER
-THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
-OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
-COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
-DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
-OTHER DEALINGS IN THE FONT SOFTWARE.
 
 ===============================================================================
 License text ID: 6742bd3e9c2035522b00ddd9a7c76f09e7ed89491a6750d56db2c062d9251b65
@@ -15093,6 +15011,105 @@ AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ===============================================================================
+License text ID: 865f0949b59fab5925506f80102dff3d12e8666412daf52d212db969d40adc25
+Used by:
+  - Vendored asset: Newsreader@1.003 variable font
+-------------------------------------------------------------------------------
+Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded,
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+
+===============================================================================
 License text ID: 86dd7f026f916daf7511e39951ad8ea8cf55a8db67ae64060dacf829761c18f3
 Used by:
   - Rust: html5ever@0.38.0
@@ -15510,7 +15527,7 @@ THE SOFTWARE.
 ===============================================================================
 License text ID: 95ced5ecf1133fbf41d409b5555c86c344f83f3b019926057ddbc07cfdcc27b3
 Used by:
-  - JavaScript: @oxc-project/types@0.143.0
+  - JavaScript: @oxc-project/types@0.146.0
 -------------------------------------------------------------------------------
 MIT License
 
@@ -16786,8 +16803,8 @@ Apache License
 ===============================================================================
 License text ID: ada595bb2ec8d71616dde1b956edb8fbad63eadab32b8d9ab9310a1aef08e5c5
 Used by:
-  - JavaScript: @sveltejs/load-config@0.2.2
-  - JavaScript: svelte-check@4.7.5
+  - JavaScript: @sveltejs/load-config@0.2.3
+  - JavaScript: svelte-check@4.7.6
 -------------------------------------------------------------------------------
 Copyright (c) 2020-Present [these people](https://github.com/sveltejs/language-tools/graphs/contributors) 
 
@@ -18150,6 +18167,7 @@ Used by:
   - Rust: libc@0.2.189
   - Rust: num_enum@0.7.6
   - Rust: num_enum_derive@0.7.6
+  - Rust: pastey@0.2.3
   - Rust: proc-macro2@1.0.107
   - Rust: quote@1.0.47
   - Rust: ref-cast-impl@1.0.26
@@ -18513,19 +18531,42 @@ Used by:
   - JavaScript: @tauri-apps/cli-win32-ia32-msvc@2.11.4
   - JavaScript: @tauri-apps/cli-win32-x64-msvc@2.11.4
   - JavaScript: @tauri-apps/cli@2.11.4
+  - Rust: dispatch2@0.3.1
   - Rust: fdeflate@0.3.7
   - Rust: field-offset@0.3.6
   - Rust: image@0.25.10
+  - Rust: libappindicator-sys@0.9.0
   - Rust: miniz_oxide@0.8.9
+  - Rust: ndk-sys@0.6.0+11769913
+  - Rust: ndk@0.9.0
   - Rust: num-conv@0.2.2
+  - Rust: objc2-app-kit@0.3.2
+  - Rust: objc2-cloud-kit@0.3.2
+  - Rust: objc2-core-data@0.3.2
+  - Rust: objc2-core-foundation@0.3.2
+  - Rust: objc2-core-graphics@0.3.2
+  - Rust: objc2-core-image@0.3.2
+  - Rust: objc2-core-location@0.3.2
+  - Rust: objc2-core-text@0.3.2
+  - Rust: objc2-core-video@0.3.2
+  - Rust: objc2-exception-helper@0.1.1
+  - Rust: objc2-io-surface@0.3.2
+  - Rust: objc2-metal@0.3.2
+  - Rust: objc2-quartz-core@0.3.2
+  - Rust: objc2-ui-kit@0.3.2
+  - Rust: objc2-user-notifications@0.3.2
+  - Rust: objc2-web-kit@0.3.2
   - Rust: pin-project-lite@0.2.17
   - Rust: portable-atomic-util@0.2.7
   - Rust: portable-atomic@1.15.0
+  - Rust: r-efi@5.3.0
+  - Rust: r-efi@6.0.0
   - Rust: raw-window-handle@0.6.2
   - Rust: sync_wrapper@1.0.2
   - Rust: tauri-build@2.6.3
   - Rust: tauri-codegen@2.6.3
   - Rust: tauri-macros@2.6.3
+  - Rust: tauri-nspanel@2.1.0
   - Rust: tauri-plugin-single-instance@2.4.3
   - Rust: tauri-runtime-wry@2.11.4
   - Rust: tauri-runtime@2.11.3
@@ -18534,6 +18575,11 @@ Used by:
   - Rust: time-core@0.1.9
   - Rust: time-macros@0.2.32
   - Rust: time@0.3.55
+  - Rust: unic-char-property@0.9.0
+  - Rust: unic-char-range@0.9.0
+  - Rust: unic-common@0.9.0
+  - Rust: unic-ucd-ident@0.9.0
+  - Rust: unic-ucd-version@0.9.0
 -------------------------------------------------------------------------------
 Apache License
                            Version 2.0, January 2004

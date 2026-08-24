@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolveCargoPackageMetadata } from "./cargo-package-metadata.js";
 import { resolveBunDependency } from "./sbom-dependencies.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -61,7 +62,13 @@ const components = [];
 const cargoRefsById = new Map([[application.id, rootRef]]);
 for (const pkg of cargoMetadata.packages) {
   if (pkg.id === application.id) continue;
-  const purl = `pkg:cargo/${encodeURIComponent(pkg.name)}@${encodeURIComponent(pkg.version)}`;
+  const metadata = resolveCargoPackageMetadata(pkg);
+  const sourceQualifier = metadata.lockedSource?.startsWith("git+")
+    ? `?vcs_url=${encodeURIComponent(metadata.lockedSource)}`
+    : "";
+  const purl =
+    `pkg:cargo/${encodeURIComponent(pkg.name)}@${encodeURIComponent(pkg.version)}` +
+    sourceQualifier;
   cargoRefsById.set(pkg.id, purl);
   components.push({
     type: "library",
@@ -69,11 +76,16 @@ for (const pkg of cargoMetadata.packages) {
     name: pkg.name,
     version: pkg.version,
     purl,
-    licenses: licenseEntry(pkg.license ?? (pkg.license_file ? `file: ${pkg.license_file}` : null)),
-    externalReferences: pkg.repository
-      ? [{ type: "vcs", url: pkg.repository }]
+    licenses: licenseEntry(metadata.declaredLicense),
+    externalReferences: metadata.repository
+      ? [{ type: "vcs", url: metadata.repository }]
       : undefined,
-    properties: [{ name: "unfocus:lockfile", value: "src-tauri/Cargo.lock" }]
+    properties: [
+      { name: "unfocus:lockfile", value: "src-tauri/Cargo.lock" },
+      ...(metadata.lockedSource
+        ? [{ name: "unfocus:cargo-source", value: metadata.lockedSource }]
+        : [])
+    ]
   });
 }
 
@@ -93,8 +105,6 @@ for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
   const version = entry[0].slice(separator + 1);
   const manifest = installedNodePackages.get(`${name}@${version}`);
   const platformLicense =
-    name.startsWith("@esbuild/") ||
-    name.startsWith("@rollup/") ||
     name.startsWith("@rolldown/binding-") ||
     name === "fsevents"
     ? "MIT"
@@ -104,9 +114,7 @@ for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
         ? "MPL-2.0"
         : name.startsWith("@tauri-apps/cli-")
           ? "Apache-2.0 OR MIT"
-          : name.startsWith("@napi-rs/lzma-")
-            ? "MIT"
-            : null;
+          : null;
   const purl = npmPurl(name, version);
   const integrity = typeof entry[3] === "string" ? entry[3].match(/^sha512-(.+)$/) : null;
   const metadata = entry[2] ?? {};
@@ -147,18 +155,18 @@ for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
   bunPackagesByName.set(name, versions);
 }
 
-const fontRef = "pkg:generic/Fraunces@variable-font";
-const fontPath = join(root, "static/fonts/fraunces.woff2");
+const fontRef = "pkg:generic/Newsreader@1.003";
+const fontPath = join(root, "static/fonts/newsreader.woff2");
 const fontHash = createHash("sha256").update(readFileSync(fontPath)).digest("hex");
 components.push({
   type: "file",
   "bom-ref": fontRef,
-  name: "Fraunces",
-  version: "variable-font",
+  name: "Newsreader",
+  version: "1.003",
   purl: fontRef,
   licenses: [{ license: { id: "OFL-1.1" } }],
   hashes: [{ alg: "SHA-256", content: fontHash }],
-  properties: [{ name: "unfocus:source", value: "static/fonts/fraunces.woff2" }]
+  properties: [{ name: "unfocus:source", value: "static/fonts/newsreader.woff2" }]
 });
 
 components.sort((left, right) => compareText(left["bom-ref"], right["bom-ref"]));

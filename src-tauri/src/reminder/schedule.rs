@@ -1,0 +1,176 @@
+//! Pure wall-clock break-grid scheduling for sync mode.
+//!
+//! Rust has no calendar and must not gain one (`src-tauri/AGENTS.md`), so
+//! everything here is integer arithmetic over Unix seconds. The grid is
+//! anchored to the local-time epoch (`unix_secs + offset_minutes * 60`), not
+//! to local midnight; the two coincide only when `interval_secs` divides
+//! 86400 (true for the default 20-minute work interval, false for e.g. 25
+//! minutes, where the grid slides 900s per day). `rem_euclid` keeps negative
+//! offsets correct, and because only `offset % interval` can affect the
+//! result, callers may store the raw offset without normalising it.
+
+/// The next grid point strictly after `unix_secs`.
+///
+/// Never returns `unix_secs` itself: a break must not re-fire on the grid point
+/// that just triggered it.
+pub(crate) fn next_grid(unix_secs: i64, interval_secs: i64, offset_minutes: i16) -> i64 {
+    let local_seconds = unix_secs + i64::from(offset_minutes) * 60;
+    let phase = local_seconds.rem_euclid(interval_secs);
+    unix_secs + (interval_secs - phase)
+}
+
+/// The next grid point, skipping one that has not been earned.
+///
+/// Applied once on Working entry and then stored, so it never re-runs in steady
+/// state. `interval_secs` is always a whole number of minutes and therefore
+/// even, so the halving cannot truncate.
+pub(crate) fn deadline_with_grace(unix_secs: i64, interval_secs: i64, offset_minutes: i16) -> i64 {
+    let next = next_grid(unix_secs, interval_secs, offset_minutes);
+    if next - unix_secs < interval_secs / 2 {
+        next + interval_secs
+    } else {
+        next
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BASE: i64 = 1_787_220_420; // 2026-08-20T10:07:00Z
+
+    #[test]
+    fn grid_points_match_the_shared_contract_table_across_offset_zones() {
+        // (offset_minutes, interval_secs, expected)
+        //
+        // Mirrored byte-for-byte in `src/lib/break-grid.test.ts`. The grid is
+        // anchored to the local-time epoch, not local midnight; rows
+        // (-720, 1500) and (840, 1500) are the ones here where a
+        // local-midnight anchor would produce a different answer, so they are
+        // what actually pins the local-epoch behavior. Do not remove or
+        // "simplify" them.
+        let cases: &[(i16, i64, i64)] = &[
+            (0, 1200, 1_787_221_200),
+            (0, 1500, 1_787_221_500),
+            (330, 1200, 1_787_220_600),
+            (330, 1500, 1_787_221_200),
+            (345, 1200, 1_787_220_900),
+            (345, 1500, 1_787_221_800),
+            (765, 1200, 1_787_220_900),
+            (765, 1500, 1_787_220_600),
+            (-300, 1200, 1_787_221_200),
+            (-300, 1500, 1_787_221_500),
+            (-720, 1200, 1_787_221_200),
+            (-720, 1500, 1_787_221_200), // discriminates local-epoch from local-midnight
+            (840, 1200, 1_787_221_200),
+            (840, 1500, 1_787_220_600), // discriminates local-epoch from local-midnight
+        ];
+        for &(offset, interval, expected) in cases {
+            assert_eq!(
+                next_grid(BASE, interval, offset),
+                expected,
+                "offset {offset} interval {interval}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_grid_point_is_always_strictly_after_the_observation() {
+        let on_point = next_grid(BASE, 1200, 0);
+        assert_eq!(next_grid(on_point, 1200, 0) - on_point, 1200);
+    }
+
+    #[test]
+    fn a_grid_point_is_never_more_than_one_interval_away() {
+        for interval in [60, 1200, 1500, 3600, 7200] {
+            for offset in [0i16, 330, 345, 765, -300, -720, 840] {
+                let delta = next_grid(BASE, interval, offset) - BASE;
+                assert!(
+                    delta > 0 && delta <= interval,
+                    "interval {interval} offset {offset}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn only_the_offset_remainder_changes_the_grid() {
+        // Storing the raw offset is safe because whole intervals cancel out.
+        for (offset, interval) in [(330i16, 1200i64), (-300, 1200), (765, 1500)] {
+            let whole_intervals = (interval / 60) as i16;
+            assert_eq!(
+                next_grid(BASE, interval, offset),
+                next_grid(BASE, interval, offset + whole_intervals)
+            );
+        }
+    }
+
+    #[test]
+    fn grace_skips_a_grid_point_less_than_half_an_interval_away() {
+        // IST, twenty-minute grid at local :00/:20/:40.
+        // (local start time, expected local break time)
+        let ist = 330i16;
+        let at = |hh: i64, mm: i64| {
+            // 2026-08-20T00:00:00Z is 1787184000.
+            1_787_184_000 + hh * 3600 + mm * 60 - i64::from(ist) * 60
+        };
+        assert_eq!(
+            deadline_with_grace(at(10, 1), 1200, ist),
+            at(10, 20),
+            "10:01 takes 10:20"
+        );
+        assert_eq!(
+            deadline_with_grace(at(10, 11), 1200, ist),
+            at(10, 40),
+            "10:11 skips to 10:40"
+        );
+        assert_eq!(
+            deadline_with_grace(at(10, 19), 1200, ist),
+            at(10, 40),
+            "10:19 skips to 10:40"
+        );
+        assert_eq!(
+            deadline_with_grace(at(10, 21), 1200, ist),
+            at(10, 40),
+            "10:21 takes 10:40"
+        );
+    }
+
+    #[test]
+    fn grace_takes_a_grid_point_exactly_half_an_interval_away() {
+        // The comparison is `<`, so the exact boundary is taken, not skipped.
+        let half_away = next_grid(BASE, 1200, 0) - 600;
+        assert_eq!(deadline_with_grace(half_away, 1200, 0) - half_away, 600);
+    }
+
+    #[test]
+    fn grace_takes_the_grid_point_at_the_zero_margin_boundary_for_a_one_minute_interval() {
+        // Exactly one configuration inside the validated ranges (work
+        // 1..=120 min, break 3..=30 s) sits on the grace boundary: work 1 min
+        // (a 60s interval) with a 30s break, where 60 - 30 == 30 == 60 / 2.
+        // The comparison in `deadline_with_grace` is `<`, so the margin is
+        // zero seconds and the grid point is taken, not skipped. Pinned here
+        // so a later change from `<` to `<=` cannot silently invert it.
+        let offset = 330i16;
+        let grid = next_grid(BASE, 60, offset); // a genuine grid point for interval 60
+        assert_eq!(deadline_with_grace(grid + 30, 60, offset), grid + 60);
+    }
+
+    #[test]
+    fn grid_points_land_on_a_local_minute_that_is_a_multiple_of_the_interval() {
+        // Design Section 5's tidy-times guarantee: for intervals dividing 60
+        // minutes, the grid point's local minute is a multiple of the
+        // interval.
+        for interval in [60i64, 120, 300, 600, 900, 1200, 1800, 3600] {
+            for offset in [0i16, 330, 345, 765, -300, -720, 840] {
+                let next = next_grid(BASE, interval, offset);
+                let local = next + i64::from(offset) * 60;
+                assert_eq!(
+                    local.rem_euclid(3600) % interval,
+                    0,
+                    "interval {interval} offset {offset}"
+                );
+            }
+        }
+    }
+}

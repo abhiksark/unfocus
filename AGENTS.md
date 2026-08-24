@@ -4,7 +4,7 @@ Unfocus is a local-first break and reflection app built with Tauri 2, a Rust
 core, SvelteKit 2, Svelte 5 runes, and Bun. Breaks cover every monitor so the
 eyes can rest far away; reflection is the observe-only Your day strip and break
 outcomes, never gamified and never a timer control surface. Toolchain pins:
-Bun `1.3.5` (`.bun-version`), Rust `1.97.1` (`rust-toolchain.toml`).
+Bun `1.3.5` (`.bun-version`), Rust `1.98.0` (`rust-toolchain.toml`).
 
 This is the repository root project-rules file. Grok loads it automatically
 (along with any matching `AGENTS.md` / `CLAUDE.md` files from the repo root
@@ -35,7 +35,7 @@ implementation rules in the closest child file.
 ```text
 src/              SvelteKit dashboard and break overlay
   routes/         Single page: window label routes dashboard vs overlay
-  lib/            UI, pure helpers, tests, generated scene.svg
+  lib/            UI, pure helpers, tests, break-scene presentation
 src-tauri/        Rust core, tray, windows, probes, reminder scheduler
   src/lib.rs      Composition root, command registration, window events
   src/reminder.rs Pure timer, settings, pause/resume, scheduler thread
@@ -43,8 +43,8 @@ src-tauri/        Rust core, tray, windows, probes, reminder scheduler
   src/probes/     Platform idle/fullscreen probes (Linux X11, macOS)
   src/tray.rs     System tray, status menu, hide-or-exit dashboard policy
   src/diagnostics.rs  Environment, monitors, probe snapshot for developer UI
-scripts/          Generators and repository-integrity gates
-static/           Icon source and vendored Fraunces font
+scripts/          Generators, asset provenance, and repository-integrity gates
+static/           Break-scene delivery asset, icon source, vendored Newsreader font
 .github/          CI, releases, Dependabot, issue templates, SECURITY.md
 plans/            Local working notes only (gitignored; not tracked docs)
 ```
@@ -59,23 +59,28 @@ plans/            Local working notes only (gitignored; not tracked docs)
   parsers synchronized.
 - Reminder defaults: 20-minute work interval, 20-second break. Valid ranges:
   work 1–120 minutes, break 3–30 seconds. Settings live in local app config as
-  `reminder-settings.json` (schema v2; includes bounded pause expiry).
+  `reminder-settings.json` (schema v3; includes bounded pause expiry and
+  opt-in cross-device sync).
 - Local reflection data also lives in app config as a 24-hour hot
   `activity-history.json`, fixed 30-day epoch
   `activity-archive-<key>.json` chunks, and a `break-events.json` ledger.
   Retention is at least 90 days going forward because whole archive chunks age
   out together. Existing installs cannot backfill activity from before this
   retention feature.
-- Pause is a fixed 30-minute local pause. Resume starts a fresh work interval.
+- Pause is a fixed 30-minute local pause. Resume starts a fresh work interval;
+  with cross-device sync enabled it instead rejoins the shared grid, skipping a
+  grid point less than half an interval away.
 - Closing the dashboard hides into the tray when the tray is available; if tray
   setup failed, closing the dashboard exits so a silent unreachable process
   cannot keep running.
 - Dashboard has consumer mode (default) and developer mode (platform signals,
   monitors, raw probe errors). Mode is remembered on device.
 - Consumer mode also has a transient History view in the main window. It shows
-  three local 30-day pages aligned to the saved Day starts preference, requests
-  longer history only when opened, and never changes the reminder timer,
-  probes, or overlays.
+  the newest 90 local days in a compact Monday-aligned active-minutes calendar
+  following the saved Day starts preference. Selecting one day loads its
+  hourly activity and break outcomes. History requests data only when opened
+  or a day is selected, and never changes the reminder timer, probes, or
+  overlays.
 - Tauri commands registered on the main window: `get_diagnostics`,
   `get_today_activity`, `get_activity_range`, `get_break_range`,
   `get_break_summary`,
@@ -106,10 +111,13 @@ plans/            Local working notes only (gitignored; not tracked docs)
   invalid; packaged builds must be measured correctly before any claim.
 - The product is local-first: no telemetry, accounts, cloud dependency, or
   runtime network calls.
-- No mascots or characters. Scene lighting carries state: cool green while
-  resting and amber dawn while returning or complete.
-- `src/lib/scene.svg` and tray PNGs are generated. Edit generators and
-  regenerate; never hand-edit those outputs.
+- No mascots or characters. Each break holds one cool-biased local-time scene
+  palette across every monitor; localized amber light signals returning or
+  complete.
+- `static/break-scene.jpg` is a local 4K delivery derivative of the first-party
+  artwork retained with provenance under `scripts/asset-sources/`; it is not a
+  native-4K source. Tray PNGs remain generated outputs; edit their source and
+  regenerate rather than hand-editing them.
 
 ## Working contract
 

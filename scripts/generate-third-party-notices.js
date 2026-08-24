@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolveCargoPackageMetadata } from "./cargo-package-metadata.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputPath = resolve(root, "THIRD_PARTY_NOTICES.txt");
@@ -84,6 +85,7 @@ const repositoryMitFallbacks = new Map([
 
 for (const record of cargoPackages) {
   const { pkg } = record;
+  const metadata = resolveCargoPackageMetadata(pkg);
   let { files } = record;
   if (files.length === 0 && pkg.repository) {
     const sibling = cargoPackages
@@ -108,7 +110,8 @@ for (const record of cargoPackages) {
     ecosystem: "Rust",
     name: pkg.name,
     version: pkg.version,
-    declared: pkg.license ?? `file: ${pkg.license_file}`,
+    declared: metadata.declaredLicense,
+    source: metadata.lockedSource,
     authors: pkg.authors,
     files
   });
@@ -178,12 +181,6 @@ for (const entry of Object.values(bunLock.packages)) {
   if (files.length === 0 && nodeLicenseFallbacks.has(name)) {
     files = [nodeLicenseFallbacks.get(name)];
   }
-  if (files.length === 0 && name.startsWith("@esbuild/")) {
-    files = licenseFiles(join(root, "node_modules", "esbuild"));
-  }
-  if (files.length === 0 && name.startsWith("@rollup/")) {
-    files = licenseFiles(join(root, "node_modules", "rollup"));
-  }
   if (files.length === 0 && name.startsWith("@rolldown/binding-")) {
     files = licenseFiles(join(root, "node_modules", "rolldown"));
   }
@@ -196,34 +193,25 @@ for (const entry of Object.values(bunLock.packages)) {
   if (files.length === 0 && name.startsWith("@tauri-apps/cli-")) {
     files = licenseFiles(join(root, "node_modules", "@tauri-apps", "cli"));
   }
-  if (files.length === 0 && name.startsWith("@napi-rs/lzma-")) {
-    files = [join(root, "scripts", "license-fallbacks", "napi-lzma-mit.txt")];
-  }
   if (files.length === 0 && name === "fsevents") {
     files = [join(root, "scripts", "license-fallbacks", "fsevents-mit.txt")];
   }
   if (files.length === 0) throw new Error(`no license text found for JavaScript package ${identifier}`);
 
-  const platformFallback = name.startsWith("@esbuild/")
-    ? { license: "MIT", authors: ["Evan Wallace and esbuild contributors"] }
-    : name.startsWith("@rollup/")
-      ? { license: "MIT", authors: ["Lukas Taegert-Atkinson"] }
-      : name.startsWith("@rolldown/binding-")
-        ? { license: "MIT", authors: ["VoidZero Inc. & Contributors"] }
-        : name.startsWith("@typescript/typescript-")
-          ? { license: "Apache-2.0", authors: ["Microsoft Corp."] }
-          : name.startsWith("lightningcss-")
-            ? { license: "MPL-2.0", authors: [] }
-            : name.startsWith("@tauri-apps/cli-")
-              ? { license: "Apache-2.0 OR MIT", authors: ["Tauri Programme within The Commons Conservancy"] }
-              : name.startsWith("@napi-rs/lzma-")
-                ? { license: "MIT", authors: ["Brooooooklyn/lzma contributors"] }
-                : name === "fsevents"
-                  ? {
-                      license: "MIT",
-                      authors: ["Philipp Dunkel", "Ben Noordhuis", "Elan Shankar", "Miroslav Bajtoš", "Paul Miller"]
-                    }
-                  : null;
+  const platformFallback = name.startsWith("@rolldown/binding-")
+    ? { license: "MIT", authors: ["VoidZero Inc. & Contributors"] }
+    : name.startsWith("@typescript/typescript-")
+      ? { license: "Apache-2.0", authors: ["Microsoft Corp."] }
+      : name.startsWith("lightningcss-")
+        ? { license: "MPL-2.0", authors: [] }
+        : name.startsWith("@tauri-apps/cli-")
+          ? { license: "Apache-2.0 OR MIT", authors: ["Tauri Programme within The Commons Conservancy"] }
+          : name === "fsevents"
+            ? {
+                license: "MIT",
+                authors: ["Philipp Dunkel", "Ben Noordhuis", "Elan Shankar", "Miroslav Bajtoš", "Paul Miller"]
+              }
+            : null;
   components.push({
     ecosystem: "JavaScript",
     name,
@@ -242,10 +230,10 @@ for (const entry of Object.values(bunLock.packages)) {
 const fontLicense = join(root, "static", "fonts", "OFL.txt");
 components.push({
   ecosystem: "Vendored asset",
-  name: "Fraunces",
-  version: "variable font",
+  name: "Newsreader",
+  version: "1.003 variable font",
   declared: "OFL-1.1",
-  authors: ["The Fraunces Project Authors"],
+  authors: ["The Newsreader Project Authors"],
   files: [fontLicense]
 });
 
@@ -284,6 +272,7 @@ PACKAGE INVENTORY
 for (const component of components) {
   output += `${component.ecosystem}: ${component.name}@${component.version}\n`;
   output += `Declared license: ${component.declared}\n`;
+  if (component.source?.startsWith("git+")) output += `Locked source: ${component.source}\n`;
   if (component.authors?.length) output += `Upstream authors: ${component.authors.join(", ")}\n`;
   output += `License text IDs: ${component.hashes.join(", ")}\n\n`;
 }

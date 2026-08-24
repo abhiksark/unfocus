@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RUST_VERSION: 1.97.1
+  RUST_VERSION: 1.98.0
 
 jobs:
   quality:
@@ -215,7 +215,7 @@ jobs:
           fi
           bun run debian:verify "${DEBIAN_PACKAGES[0]}" "$VERSION"
           bun run debian:qualify-published "${DEBIAN_PACKAGES[0]}" "$VERSION" "$GITHUB_REPOSITORY"
-          # This upstream desktop alpha has no CLI manual or Debian BTS bug,
+          # This prerelease desktop app has no CLI manual or Debian BTS bug,
           # and release symbols remain available for cross-platform diagnostics.
           lintian --fail-on error \
             --suppress-tags initial-upload-closes-no-bugs,no-manual-page,unstripped-binary-or-object \
