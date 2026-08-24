@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CODESIGN_PATH,
   selectMacOSAppBundle,
   verifyMacOSBundleSignature,
 } from "./verify-macos-bundle-signature.js";
@@ -51,8 +52,8 @@ describe("macOS bundle signature verification", () => {
 
     verifyMacOSBundleSignature({
       artifactPaths: [app],
-      runCodesign(args) {
-        invocations.push(args);
+      runCodesign(command, args) {
+        invocations.push([command, ...args]);
         if (args.includes("--verify")) {
           return { success: true, output: `${app}: valid on disk\n${app}: satisfies its Designated Requirement\n` };
         }
@@ -64,8 +65,8 @@ describe("macOS bundle signature verification", () => {
     });
 
     expect(invocations).toEqual([
-      ["--verify", "--deep", "--strict", "--verbose=2", app],
-      ["-dv", "--verbose=4", app],
+      [CODESIGN_PATH, "--verify", "--deep", "--strict", "--verbose=4", app],
+      [CODESIGN_PATH, "-dv", "--verbose=4", app],
     ]);
   });
 
@@ -75,7 +76,7 @@ describe("macOS bundle signature verification", () => {
     expect(() =>
       verifyMacOSBundleSignature({
         artifactPaths: [app],
-        runCodesign(args) {
+        runCodesign(_command, args) {
           if (args.includes("--verify")) {
             return { success: true, output: "verified\n" };
           }
@@ -94,7 +95,7 @@ describe("macOS bundle signature verification", () => {
     expect(() =>
       verifyMacOSBundleSignature({
         artifactPaths: [app],
-        runCodesign(args) {
+        runCodesign(_command, args) {
           if (args.includes("--verify")) {
             return { success: true, output: "verified\n" };
           }
@@ -113,7 +114,7 @@ describe("macOS bundle signature verification", () => {
     expect(() =>
       verifyMacOSBundleSignature({
         artifactPaths: [app],
-        runCodesign(args) {
+        runCodesign(_command, args) {
           if (args.includes("--verify")) {
             return { success: false, output: "code object is not signed at all\nIn architecture: arm64\n" };
           }

@@ -5,6 +5,8 @@ import { spawnSync } from "node:child_process";
 import { resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+export const CODESIGN_PATH = "/usr/bin/codesign";
+
 function resolveArtifactPaths(encodedPaths) {
   if (!encodedPaths) {
     throw new Error("TAURI_ARTIFACT_PATHS is required");
@@ -39,11 +41,11 @@ export function selectMacOSAppBundle(artifactPaths) {
   return appPath;
 }
 
-export function runCodesign(args) {
-  const result = spawnSync("codesign", args, { encoding: "utf8" });
+export function runCodesign(command, args) {
+  const result = spawnSync(command, args, { encoding: "utf8" });
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
   if (result.error) {
-    throw new Error(`codesign could not run: ${result.error.message}`);
+    throw new Error(`${command} could not run: ${result.error.message}`);
   }
   return {
     success: result.status === 0,
@@ -59,12 +61,12 @@ function requireMatch(output, pattern, message) {
 
 export function verifyMacOSBundleSignature({ artifactPaths, runCodesign: executeCodesign = runCodesign }) {
   const appPath = selectMacOSAppBundle(artifactPaths);
-  const strictVerification = executeCodesign(["--verify", "--deep", "--strict", "--verbose=2", appPath]);
+  const strictVerification = executeCodesign(CODESIGN_PATH, ["--verify", "--deep", "--strict", "--verbose=4", appPath]);
   if (!strictVerification.success) {
     throw new Error(`Strict codesign verification failed for ${appPath}:\n${strictVerification.output.trimEnd()}`);
   }
 
-  const signatureDetails = executeCodesign(["-dv", "--verbose=4", appPath]);
+  const signatureDetails = executeCodesign(CODESIGN_PATH, ["-dv", "--verbose=4", appPath]);
   if (!signatureDetails.success) {
     throw new Error(`codesign signature inspection failed for ${appPath}:\n${signatureDetails.output.trimEnd()}`);
   }
