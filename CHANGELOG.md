@@ -321,7 +321,8 @@ changes are included in and superseded by [0.4.0-alpha.1].
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
-[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.1...HEAD
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.2...HEAD
+[0.6.0-beta.2]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.1...v0.6.0-beta.2
 [0.6.0-beta.1]: https://github.com/abhiksark/unfocus/compare/v0.5.0-alpha.1...v0.6.0-beta.1
 [0.5.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.4.0-alpha.1...v0.5.0-alpha.1
 [0.4.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.3.0-alpha.1...v0.4.0-alpha.1

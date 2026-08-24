@@ -2,18 +2,26 @@
 
 import { existsSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { resolve, sep } from "node:path";
+import { isAbsolute, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const CODESIGN_PATH = "/usr/bin/codesign";
 
-function resolveArtifactPaths(encodedPaths) {
+export function resolveArtifactPaths(encodedPaths) {
   if (!encodedPaths) {
     throw new Error("TAURI_ARTIFACT_PATHS is required");
   }
-  const artifactPaths = JSON.parse(encodedPaths);
+  let artifactPaths;
+  try {
+    artifactPaths = JSON.parse(encodedPaths);
+  } catch {
+    throw new Error("TAURI_ARTIFACT_PATHS must be valid JSON");
+  }
   if (!Array.isArray(artifactPaths)) {
     throw new Error("Tauri artifact paths must be a JSON array");
+  }
+  if (artifactPaths.some((artifactPath) => typeof artifactPath !== "string" || artifactPath.length === 0)) {
+    throw new Error("Tauri artifact paths must contain only non-empty strings");
   }
   return artifactPaths;
 }
@@ -23,21 +31,39 @@ export function selectMacOSAppBundle(artifactPaths) {
     throw new Error("artifact paths must be an array");
   }
 
-  const selected = artifactPaths.filter((artifactPath) => {
-    if (typeof artifactPath !== "string") return false;
+  const normalizedPaths = artifactPaths.map((artifactPath) => {
+    if (typeof artifactPath !== "string" || artifactPath.length === 0) {
+      throw new Error("artifact paths must contain only non-empty strings");
+    }
+    if (!isAbsolute(artifactPath)) {
+      throw new Error(`Tauri artifact path must be absolute: ${artifactPath}`);
+    }
+
     const resolvedPath = resolve(artifactPath);
+    if (!existsSync(resolvedPath)) {
+      throw new Error(`Tauri artifact path does not exist: ${resolvedPath}`);
+    }
+
+    const isAppBundle = resolvedPath.toLowerCase().endsWith(".app");
+    if (isAppBundle && !statSync(resolvedPath).isDirectory()) {
+      throw new Error(`macOS app bundle is not a directory: ${resolvedPath}`);
+    }
+
     const pathParts = resolvedPath.split(sep);
-    return pathParts.includes("bundle") && resolvedPath.toLowerCase().endsWith(".app");
+    if (isAppBundle && !pathParts.includes("bundle")) {
+      throw new Error(`macOS app bundle must be inside a Tauri bundle path: ${resolvedPath}`);
+    }
+
+    return resolvedPath;
   });
+
+  const selected = normalizedPaths.filter((artifactPath) => artifactPath.toLowerCase().endsWith(".app"));
 
   if (selected.length !== 1) {
     throw new Error(`Expected exactly one macOS .app bundle from Tauri, found ${selected.length}`);
   }
 
-  const [appPath] = selected.map((artifactPath) => resolve(artifactPath));
-  if (!statSync(appPath).isDirectory()) {
-    throw new Error(`macOS app bundle is not a directory: ${appPath}`);
-  }
+  const [appPath] = selected;
   return appPath;
 }
 
