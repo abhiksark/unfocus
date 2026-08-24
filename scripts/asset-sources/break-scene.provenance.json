@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "artwork": {
+    "title": "Unfocus break scene",
+    "origin": "first-party",
+    "license": "MIT"
+  },
+  "generation": {
+    "date": "2026-08-24",
+    "method": "OpenAI image generation",
+    "referenceImages": [],
+    "structuredPrompt": "Use case: stylized-concept\nAsset type: preview concept for a full-screen desktop eye-break wallpaper\nPrimary request: a refined illustrated distant landscape for Unfocus, evolving the current ridgeline into a brighter, more natural workday break scene\nScene/backdrop: several smooth organic mountain and valley silhouettes receding into soft mist, one asymmetric focal summit left of center, distant open horizon, subtle atmospheric depth\nStyle/medium: premium matte editorial illustration with softly textured paper-like color fields and hairline contour details; elegant, minimal, contemporary\nComposition/framing: 16:9 wide wallpaper; horizon in lower third; quiet low-detail center and sky for overlay copy; crop-safe for 16:10, 4:3, ultrawide, and portrait\nLighting/mood: calm cool daylight, restorative and awake, understated rather than whimsical\nColor palette: deep evergreen foreground, cool sage and blue-gray distance, warm off-white haze\nConstraints: static composition designed to lose a staring contest; no people, characters, animals, buildings, text, UI, logo, watermark, moon, stars, zigzag polygon mountains, glow effects, halos, full-width gradient bands, saturated colors, or busy micro-detail\nAvoid: generic flat-vector style, childish illustration, fantasy spectacle, sharp geometric peaks, decorative clutter"
+  },
+  "source": {
+    "path": "scripts/asset-sources/break-scene-source.png",
+    "format": "PNG",
+    "width": 1672,
+    "height": 941,
+    "sha256": "5a532a86326afe76b1107825885fccd628c5573dfe8271d966f3ddcc4b600c63"
+  },
+  "derivative": {
+    "path": "static/break-scene.jpg",
+    "description": "4K delivery derivative; the retained source is not native 4K",
+    "date": "2026-08-24",
+    "format": "JPEG",
+    "width": 3840,
+    "height": 2160,
+    "quality": 85,
+    "sha256": "b1803c4b8ff5709eedd2667c31c73b65a35deb575019cbfb8cd77ab7fce77351",
+    "transform": "sips --resampleHeightWidth 2160 3840 --setProperty format jpeg --setProperty formatOptions 85 scripts/asset-sources/break-scene-source.png --out static/break-scene.jpg"
+  }
+}

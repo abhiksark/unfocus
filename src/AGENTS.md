@@ -86,24 +86,36 @@ as `export let` or `$:` reactive statements.
 
 ## Break scene
 
-- `src/lib/scene.svg` is generated with
-  `bun scripts/gen-scene.js > src/lib/scene.svg`. Change the generator and
-  regenerate; never hand-edit the SVG.
-- Use smooth noise-based silhouettes with one asymmetric focal summit, valley
-  mist with radial falloff, and hairline strokes. No zigzag polygons, glow
-  effects, full-width gradient bands, or drop-shadow halos.
-- Full-viewport layers stay static; a repainted full-screen gradient previously
-  reached 217% CPU. Continuous motion is limited to transform/opacity on small
-  layers and stepped with `steps()` so no layer repaints more often than about
-  every two seconds; current layers land between two and five seconds. State
-  changes use one-shot opacity transitions.
-- `prefers-reduced-motion` stops every loop and reduces state fades to 120 ms.
-  `prefers-contrast: more` must keep copy legible over the scene.
-- Derive every animation delay from `--presentation-offset` so all monitors
-  share one visual phase.
+- `static/break-scene.jpg` is the bundled 4K delivery derivative of the
+  first-party source and provenance retained under `scripts/asset-sources/`;
+  the source itself is not native 4K. Update the source, derivative, hashes,
+  and provenance together if the artwork changes.
+- On sufficiently wide screens, preserve the golden-ratio composition: keep
+  the asymmetric summit around the left `38.2%` line, the content optical axis
+  around `61.8%`, and the horizon and return light around the lower `61.8%`
+  line. Use smooth `61.8:38.2` elliptical fields and golden-section Bezier
+  easing, not a literal spiral ornament.
+- Legibility and crop safety override the golden grid. Recenter the interface
+  on constrained and portrait-like viewports, keep the focal summit in frame,
+  and retain a minimum 44 px control target.
+- Select the local-time palette once from the shared run start
+  (`deadlineMs - durationSeconds * 1_000`): dawn is 05:00–09:00, day is
+  09:00–17:00, dusk is 17:00–21:00, and night is 21:00–05:00. Use the device's
+  local hour, hold the result across every monitor for the complete break, and
+  never add a location permission, network lookup, live palette change, or
+  timer dependency.
+- The full-viewport artwork and selected local-time veil stay static. The only
+  scene-state change is one localized amber return light with a one-shot
+  opacity transition; never add continuous full-viewport motion or repainting.
+  A repainted full-screen gradient previously reached 217% CPU.
+- `prefers-reduced-motion` removes reveal motion and reduces the return and
+  dismissal fades to 120 ms. `prefers-contrast: more` strengthens the veil and
+  keeps every copy and control state legible across supported crops.
+- Derive one-shot presentation delays from `--presentation-offset` so all
+  monitors share one visual phase.
 - Fraunces is vendored under `static/fonts/` with the OFL and is used for
   display copy; eyebrows and digits use monospace. Do not add font or asset
-  CDNs.
+  CDNs, runtime downloads, or other network-backed scene assets.
 
 ## Checks
 

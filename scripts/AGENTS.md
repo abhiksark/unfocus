@@ -24,8 +24,13 @@ or release-artifact collection.
 
 ## Generated and locked files
 
-- `src/lib/scene.svg` comes from `scripts/gen-scene.js`; change the generator
-  and regenerate. Never hand-edit the SVG.
+- The credentialed first-party break-scene source lives at
+  `scripts/asset-sources/break-scene-source.png`. Its exact bytes and the local
+  `static/break-scene.jpg` 4K delivery derivative must match the SHA-256 hashes
+  and `sips` transform in
+  `scripts/asset-sources/break-scene.provenance.json`; the source is not native
+  4K. Update the source, derivative, and deterministic provenance record
+  together, and never replace them with a runtime download or CDN asset.
 - Tray PNGs under `src-tauri/icons/tray/` come from
   `src-tauri/icons/tray/unfocus-tray.svg` via `bun run tray:generate`. Never
   hand-edit the PNGs.

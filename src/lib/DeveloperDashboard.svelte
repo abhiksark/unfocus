@@ -111,22 +111,7 @@
   <header>
     <div class="brand-lockup">
       <div class="scene-swatch" class:degraded={health !== "healthy"} aria-hidden="true">
-        <svg viewBox="0 0 56 56">
-          <defs>
-            <linearGradient id="sw-sky" x1="0" y1="0" x2="0" y2="56" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#060f0d" />
-              <stop offset="0.62" stop-color="#0c231d" />
-              <stop offset="1" stop-color="#164434" />
-            </linearGradient>
-            <mask id="sw-moon">
-              <circle cx="41" cy="14" r="6" fill="#fff" />
-              <circle cx="38.8" cy="12.4" r="5.4" fill="#000" />
-            </mask>
-          </defs>
-          <circle cx="41" cy="14" r="6" fill="#d7ecdc" opacity="0.85" mask="url(#sw-moon)" />
-          <path d="M0 40 C6 38 10 24 16 21 C21 18.5 26 30 33 34 C42 39 50 39 56 37 L56 56 L0 56 Z" fill="#23493b" />
-          <path d="M0 47 C9 43.5 18 46 27 47.5 C38 49.5 48 47 56 45 L56 56 L0 56 Z" fill="#0a1c16" />
-        </svg>
+        <span></span>
       </div>
       <div>
         <p class="eyebrow">Developer mode</p>
@@ -402,19 +387,54 @@
   }
 
   .scene-swatch {
+    position: relative;
     flex: 0 0 auto;
     width: 58px;
     height: 58px;
     overflow: hidden;
     border: 1px solid #2c463a;
     border-radius: 15px;
-    background: linear-gradient(180deg, #060f0d 0%, #0c231d 62%, #164434 100%);
+    background:
+      radial-gradient(
+        ellipse 61.8% 38.2% at 61.8% 38.2%,
+        rgba(125, 207, 155, 0.24),
+        transparent 61.8%
+      ),
+      linear-gradient(145deg, #789a8d 0%, #274b3f 61.8%, #07100c 100%);
   }
 
-  .scene-swatch svg {
-    display: block;
-    width: 100%;
-    height: 100%;
+  .scene-swatch::before {
+    position: absolute;
+    right: -9px;
+    bottom: -13px;
+    left: -11px;
+    height: 34px;
+    border-radius: 61.8% 38.2% 0 0 / 100% 100% 0 0;
+    background: #153a2e;
+    content: "";
+    transform: rotate(-5deg);
+  }
+
+  .scene-swatch::after {
+    position: absolute;
+    top: calc(38.2% - 9px);
+    left: calc(61.8% - 9px);
+    width: 18px;
+    height: 18px;
+    border: 1px solid rgba(215, 236, 220, 0.42);
+    border-radius: 50%;
+    content: "";
+  }
+
+  .scene-swatch span {
+    position: absolute;
+    z-index: 1;
+    top: calc(38.2% - 3px);
+    left: calc(61.8% - 3px);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #7dcf9b;
   }
 
   .scene-swatch.degraded {

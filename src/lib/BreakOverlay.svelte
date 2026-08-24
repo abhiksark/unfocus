@@ -12,10 +12,14 @@
     overlayAnnouncement,
     overlayCountdownLabel
   } from "$lib/overlay-a11y";
+  import {
+    BREAK_SCENE_IMAGE_URL,
+    breakScenePeriodForRun,
+    breakScenePhase
+  } from "$lib/break-scene";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { onMount } from "svelte";
-  import scene from "$lib/scene.svg?raw";
+  import { onMount, untrack } from "svelte";
 
   type Props = {
     runId: number;
@@ -38,6 +42,11 @@
   ];
   const initialMonotonicMs = performance.now();
   const initialWallMs = Date.now();
+  // The deadline is shared by every monitor in the run. Reconstructing the
+  // start keeps all displays on one local-time palette across a clock boundary.
+  const scenePeriod = untrack(() =>
+    breakScenePeriodForRun(deadlineMs, durationSeconds)
+  );
   let fallbackClock = $derived(
     createOverlayClock(durationSeconds, deadlineMs, initialWallMs, initialMonotonicMs)
   );
@@ -65,6 +74,7 @@
     Math.min(5, Math.max(2, Math.round(durationSeconds * 0.15)))
   );
   let finalSeconds = $derived(!complete && secondsLeft <= returningThresholdSeconds);
+  let scenePhase = $derived(breakScenePhase({ complete, finalSeconds }));
   let messageIntervalMs = $derived(Math.max(4_000, Math.min(12_000, durationMs / 3)));
   let messageIndex = $derived(Math.floor(elapsedMs / messageIntervalMs) % messages.length);
   let currentMessage = $derived(
@@ -174,11 +184,17 @@
   class:closing={dismissing}
   class:complete
   class:final-seconds={finalSeconds}
+  class:returning={scenePhase === "returning"}
   aria-label={OVERLAY_REGION_LABEL}
+  data-scene-period={scenePeriod}
+  data-scene-phase={scenePhase}
   style={presentationStyle}
 >
   <div class="atmosphere" aria-hidden="true">
-    {@html scene}
+    <img class="break-artwork" src={BREAK_SCENE_IMAGE_URL} alt="" draggable="false" />
+    <div class="scene-veil"></div>
+    <div class="return-light"></div>
+    <div class="copy-veil"></div>
   </div>
 
   <header class="overlay-header" aria-hidden="true">
@@ -258,8 +274,50 @@
     min-width: 320px;
     min-height: 100vh;
     padding: max(24px, 4.8vh) max(28px, 5vw) max(22px, 4.5vh);
-    color: #f0f7f3;
-    background: #060f0d;
+    --scene-tint: linear-gradient(
+      180deg,
+      rgba(41, 77, 67, 0.12) 38.2%,
+      rgba(2, 9, 7, 0.28)
+    );
+    --scene-copy-x: 61.8%;
+    --scene-copy-core: rgba(3, 14, 13, 0.62);
+    --scene-copy-mid: rgba(3, 14, 13, 0.44);
+    color: #f6f3e8;
+    background: #07100c;
+  }
+
+  .break-overlay[data-scene-period="dawn"] {
+    --scene-tint:
+      radial-gradient(
+        ellipse 61.8% 38.2% at 38.2% 61.8%,
+        rgba(166, 190, 183, 0.28),
+        transparent 61.8%
+      ),
+      linear-gradient(180deg, rgba(91, 123, 134, 0.24) 38.2%, rgba(33, 67, 57, 0.34));
+    --scene-copy-core: rgba(3, 14, 13, 0.66);
+    --scene-copy-mid: rgba(3, 14, 13, 0.47);
+  }
+
+  .break-overlay[data-scene-period="dusk"] {
+    --scene-tint:
+      radial-gradient(
+        ellipse 61.8% 38.2% at 38.2% 61.8%,
+        rgba(84, 104, 126, 0.16),
+        transparent 61.8%
+      ),
+      linear-gradient(180deg, rgba(29, 37, 73, 0.26) 38.2%, rgba(8, 29, 38, 0.42));
+    --scene-copy-core: rgba(3, 14, 13, 0.54);
+    --scene-copy-mid: rgba(3, 14, 13, 0.38);
+  }
+
+  .break-overlay[data-scene-period="night"] {
+    --scene-tint: linear-gradient(
+      180deg,
+      rgba(14, 25, 54, 0.38) 38.2%,
+      rgba(3, 15, 17, 0.52)
+    );
+    --scene-copy-core: rgba(3, 14, 13, 0.48);
+    --scene-copy-mid: rgba(3, 14, 13, 0.34);
   }
 
   .break-overlay.closing {
@@ -277,12 +335,12 @@
     animation-delay: calc(0ms - var(--presentation-offset));
   }
 
-  /* The scene is one baked SVG (scripts/gen-scene.js). Full-viewport gradients
-     stay static; continuous motion is stepped ridge drift, mist breathing, and
-     star drift/twinkle — transform/opacity on small elements, each repainting
-     every 2-5 s. */
-
-  .atmosphere :global(.scene) {
+  /* The 4K delivery derivative and full-viewport veil stay static. The return light is the
+     only scene state change, and it fades once around the lower golden point. */
+  .break-artwork,
+  .scene-veil,
+  .return-light,
+  .copy-veil {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -290,77 +348,43 @@
     pointer-events: none;
   }
 
-  .atmosphere :global(.ridge-1) {
-    animation: ridge-drift-far 48s steps(16, end) infinite alternate;
-    animation-delay: calc(0ms - var(--presentation-offset));
+  .break-artwork {
+    object-fit: cover;
+    object-position: 38.2% 50%;
+    transform: translateX(7%) scale(1.14);
   }
 
-  .atmosphere :global(.ridge-2) {
-    animation: ridge-drift-mid 36s steps(12, end) infinite alternate-reverse;
-    animation-delay: calc(0ms - var(--presentation-offset));
+  .scene-veil {
+    background: var(--scene-tint);
   }
 
-  .atmosphere :global(.ridge-3) {
-    animation: ridge-drift-near 28s steps(10, end) infinite alternate;
-    animation-delay: calc(0ms - var(--presentation-offset));
-  }
+  .return-light {
+    --return-light-x: 61.8%;
 
-  .atmosphere :global(.mist) {
-    animation: mist-breathe 21s steps(10, end) infinite alternate;
-    animation-delay: calc(0ms - var(--presentation-offset));
-  }
-
-  /* The sky drifts against the far ridge for depth; each star breathes on its
-     own baked cadence (--tw-dur/--tw-delay from gen-scene.js) around its
-     resting opacity --o. */
-  .atmosphere :global(.stars) {
-    animation: stars-drift 64s steps(16, end) infinite alternate;
-    animation-delay: calc(0ms - var(--presentation-offset));
-    transition: opacity 2.4s ease;
-  }
-
-  .atmosphere :global(.star) {
-    animation: star-twinkle var(--tw-dur) steps(4, end) infinite alternate;
-    animation-delay: calc(var(--tw-delay) - var(--presentation-offset));
-  }
-
-  /* Dawn rises behind the summit as the break ends: cool haze and mist recede,
-     amber gathers at the ridge line. State-driven opacity, not animation. */
-  .atmosphere :global(.dawn),
-  .atmosphere :global(.mist-amber) {
+    background: radial-gradient(
+      ellipse 61.8% 38.2% at var(--return-light-x) 61.8%,
+      rgba(232, 184, 101, 0.48),
+      rgba(196, 128, 52, 0.16) 38.2%,
+      transparent 61.8%
+    );
     opacity: 0;
-    transition: opacity 2.4s ease;
+    transition: opacity 2.4s cubic-bezier(0.382, 0, 0.618, 1);
   }
 
-  .atmosphere :global(.haze) {
-    transition: opacity 2.4s ease;
-  }
-
-  .final-seconds .atmosphere :global(.dawn),
-  .complete .atmosphere :global(.dawn) {
+  .returning .return-light {
     opacity: 1;
   }
 
-  .final-seconds .atmosphere :global(.mist-amber),
-  .complete .atmosphere :global(.mist-amber) {
-    opacity: 0.16;
-  }
-
-  .final-seconds .atmosphere :global(.haze),
-  .complete .atmosphere :global(.haze) {
-    opacity: 0.3;
-  }
-
-  .final-seconds .atmosphere :global(.mist),
-  .complete .atmosphere :global(.mist) {
-    animation: none;
-    opacity: 0;
-  }
-
-  /* Stars fade into the dawn; group opacity multiplies under the twinkle. */
-  .final-seconds .atmosphere :global(.stars),
-  .complete .atmosphere :global(.stars) {
-    opacity: 0.25;
+  .copy-veil {
+    background:
+      linear-gradient(180deg, rgba(2, 9, 7, 0.62) 0 8%, transparent 38.2%),
+      linear-gradient(0deg, rgba(2, 9, 7, 0.66) 0 13%, transparent 38.2%),
+      radial-gradient(
+        ellipse 61.8% 38.2% at var(--scene-copy-x) 50%,
+        var(--scene-copy-core) 0 38.2%,
+        var(--scene-copy-mid) 61.8%,
+        transparent
+      );
   }
 
   .overlay-header {
@@ -381,6 +405,7 @@
     font-size: 0.72rem;
     font-weight: 650;
     letter-spacing: 0.15em;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
     text-transform: uppercase;
   }
 
@@ -396,12 +421,14 @@
     font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.04em;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
   }
 
   .break-content {
     position: relative;
+    left: 11.8vw;
     display: flex;
-    width: min(88vw, 960px);
+    width: min(61.8vw, 960px);
     max-height: 100%;
     min-height: 0;
     flex-direction: column;
@@ -418,7 +445,7 @@
   }
 
   .eyebrow {
-    margin: 0 0 26px;
+    margin: 0 0 21px;
     color: rgba(190, 232, 205, 0.82);
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 0.7rem;
@@ -430,23 +457,23 @@
   .message {
     max-width: 960px;
     margin: 0;
-    color: #e9f3ec;
+    color: #f6f3e8;
     font-family: var(--serif);
-    font-size: clamp(2.4rem, 4.6vw, 4.2rem);
+    font-size: clamp(2.6rem, 4.8vw, 4.8rem);
     font-weight: 380;
     letter-spacing: 0.002em;
     line-height: 1.14;
     text-wrap: balance;
-    text-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+    text-shadow: 0 13px 34px rgba(0, 0, 0, 0.42);
     animation: message-arrive 650ms cubic-bezier(0.22, 1, 0.36, 1);
     animation-delay: calc(0ms - var(--presentation-offset));
     animation-fill-mode: both;
   }
 
   .guidance {
-    max-width: 520px;
-    margin: 20px 0 0;
-    color: rgba(226, 239, 230, 0.76);
+    max-width: 55ch;
+    margin: 21px 0 0;
+    color: rgba(239, 242, 232, 0.82);
     font-size: clamp(0.82rem, 1.05vw, 1rem);
     line-height: 1.55;
   }
@@ -456,12 +483,12 @@
     flex-direction: column;
     align-items: center;
     gap: 10px;
-    margin-top: clamp(26px, 4.5vh, 46px);
+    margin-top: clamp(21px, 3.8vh, 34px);
   }
 
   .timer svg {
-    width: 54px;
-    height: 54px;
+    width: 55px;
+    height: 55px;
     overflow: visible;
     transform: rotate(-90deg);
   }
@@ -472,11 +499,11 @@
   }
 
   .ring-track {
-    stroke: rgba(215, 236, 220, 0.14);
+    stroke: rgba(228, 238, 228, 0.22);
   }
 
   .ring-progress {
-    stroke: #9fd8b4;
+    stroke: #a7d8b5;
     stroke-dasharray: 100;
     stroke-linecap: round;
     transition:
@@ -494,6 +521,7 @@
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.08em;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.72);
     animation: digits-arrive 210ms ease-out;
     animation-delay: calc(0ms - var(--presentation-offset));
     animation-fill-mode: both;
@@ -511,16 +539,16 @@
 
   .skip-button {
     display: inline-flex;
-    min-width: 142px;
-    min-height: 46px;
+    min-width: 144px;
+    min-height: 55px;
     align-items: center;
     justify-content: center;
     gap: var(--s2);
-    border: 1px solid rgba(209, 234, 219, 0.16);
+    border: 1px solid rgba(235, 243, 233, 0.52);
     border-radius: 999px;
-    padding: 11px 20px;
-    color: rgba(237, 247, 241, 0.82);
-    background: rgba(222, 241, 230, 0.075);
+    padding: 13px 21px;
+    color: rgba(246, 247, 238, 0.92);
+    background: rgba(3, 10, 7, 0.34);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.06),
       0 12px 34px rgba(0, 0, 0, 0.16);
@@ -546,9 +574,9 @@
   }
 
   .skip-button:hover {
-    border-color: rgba(209, 234, 219, 0.28);
+    border-color: rgba(246, 248, 239, 0.78);
     color: #ffffff;
-    background: rgba(222, 241, 230, 0.12);
+    background: rgba(6, 18, 12, 0.52);
     transform: translateY(-1px);
   }
 
@@ -567,7 +595,7 @@
   .display-label,
   .action-error,
   .sync-error {
-    margin: 10px 0 0;
+    margin: 13px 0 0;
     color: rgba(228, 240, 232, 0.74);
     font-size: 0.68rem;
     line-height: 1.35;
@@ -587,7 +615,7 @@
   }
 
   .display-label {
-    margin-top: 7px;
+    margin-top: 8px;
   }
 
   .action-error,
@@ -608,11 +636,9 @@
   @keyframes atmosphere-reveal {
     from {
       opacity: 0;
-      transform: scale(1.035);
     }
     to {
       opacity: 1;
-      transform: scale(1);
     }
   }
 
@@ -659,48 +685,6 @@
     to {
       opacity: 1;
       filter: blur(0);
-    }
-  }
-
-  @keyframes ridge-drift-far {
-    to {
-      transform: translateX(10px);
-    }
-  }
-
-  @keyframes ridge-drift-mid {
-    to {
-      transform: translateX(-13px);
-    }
-  }
-
-  @keyframes ridge-drift-near {
-    to {
-      transform: translateX(8px);
-    }
-  }
-
-  @keyframes mist-breathe {
-    from {
-      opacity: 0.05;
-    }
-    to {
-      opacity: 0.13;
-    }
-  }
-
-  @keyframes stars-drift {
-    to {
-      transform: translateX(-9px);
-    }
-  }
-
-  @keyframes star-twinkle {
-    from {
-      opacity: calc(var(--o) * 0.35);
-    }
-    to {
-      opacity: calc(var(--o) * 1.6);
     }
   }
 
@@ -752,12 +736,48 @@
     }
 
     .skip-button {
-      min-height: 40px;
+      min-height: 44px;
       padding-block: 8px;
     }
   }
 
+  @media (max-aspect-ratio: 4 / 3) {
+    .break-artwork {
+      object-position: 38.2% 50%;
+      transform: none;
+    }
+
+    .break-content {
+      left: 0;
+      width: min(88vw, 760px);
+    }
+
+    .return-light {
+      --return-light-x: 50%;
+    }
+
+    .break-overlay {
+      --scene-copy-x: 50%;
+    }
+  }
+
   @media (prefers-contrast: more) {
+    .scene-veil {
+      background: rgba(1, 5, 3, 0.76);
+    }
+
+    .copy-veil {
+      background: none;
+    }
+
+    .return-light {
+      background: radial-gradient(
+        ellipse 61.8% 38.2% at var(--return-light-x) 61.8%,
+        rgba(236, 187, 99, 0.42),
+        transparent 61.8%
+      );
+    }
+
     .message,
     .guidance,
     .timer-digits,
@@ -789,23 +809,13 @@
       transform: none;
     }
 
-    .atmosphere :global(.ridge-1),
-    .atmosphere :global(.ridge-2),
-    .atmosphere :global(.ridge-3),
-    .atmosphere :global(.mist),
-    .atmosphere :global(.stars),
-    .atmosphere :global(.star),
     .message,
     .timer-digits {
       animation: none;
       filter: none;
     }
 
-    .atmosphere :global(.dawn),
-    .atmosphere :global(.mist-amber),
-    .atmosphere :global(.haze),
-    .atmosphere :global(.mist),
-    .atmosphere :global(.stars) {
+    .return-light {
       transition-duration: 120ms;
     }
 
