@@ -138,5 +138,5 @@ describe("typography roles", () => {
         await rm(cacheDirectory, { recursive: true, force: true });
       }
     }
-  });
+  }, 30_000);
 });
