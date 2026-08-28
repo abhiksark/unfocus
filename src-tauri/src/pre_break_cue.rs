@@ -389,8 +389,11 @@ fn create_cue_window(
         .title("Unfocus eye break reminder")
         .position(geometry.x, geometry.y)
         .inner_size(geometry.width, geometry.height)
+        // GTK otherwise promotes a non-resizable WebKit window to its 200 px natural height.
+        // Equal constraints keep the native window fixed at the requested cue size.
+        .min_inner_size(geometry.width, geometry.height)
+        .max_inner_size(geometry.width, geometry.height)
         .decorations(false)
-        .resizable(false)
         .closable(false)
         .focusable(false)
         .always_on_top(true)
@@ -406,10 +409,6 @@ fn create_cue_window(
         })
         .build()
         .map_err(|error| format!("could not build the cue window: {error}"))?;
-    if let Err(error) = window.set_ignore_cursor_events(true) {
-        let _ = window.close();
-        return Err(format!("could not make the cue click-through: {error}"));
-    }
     if cancelled.load(Ordering::Acquire) {
         let _ = window.close();
         return Ok(None);
@@ -426,6 +425,9 @@ fn create_cue_window(
                     if let Some(window) = ready_app.get_webview_window(&ready_label) {
                         if let Err(error) = window.show() {
                             eprintln!("could not reveal pre-break cue: {error}");
+                            let _ = window.close();
+                        } else if let Err(error) = window.set_ignore_cursor_events(true) {
+                            eprintln!("could not make the pre-break cue click-through: {error}");
                             let _ = window.close();
                         }
                     }
