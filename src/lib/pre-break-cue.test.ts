@@ -8,19 +8,28 @@ describe("pre-break cue", () => {
     const deadline = 100_000;
     expect(preBreakCuePresentation(deadline, 89_999)).toEqual({
       stage: "compact",
-      secondsLeft: 11
+      secondsLeft: 11,
+      countdownProgress: 0
     });
     expect(preBreakCuePresentation(deadline, 90_000)).toEqual({
       stage: "countdown",
-      secondsLeft: 10
+      secondsLeft: 10,
+      countdownProgress: 0
+    });
+    expect(preBreakCuePresentation(deadline, 95_000)).toEqual({
+      stage: "countdown",
+      secondsLeft: 5,
+      countdownProgress: 0.5
     });
     expect(preBreakCuePresentation(deadline, 99_999)).toEqual({
       stage: "countdown",
-      secondsLeft: 1
+      secondsLeft: 1,
+      countdownProgress: 0.9999
     });
     expect(preBreakCuePresentation(deadline, 100_000)).toEqual({
       stage: "due",
-      secondsLeft: 0
+      secondsLeft: 0,
+      countdownProgress: 1
     });
   });
 

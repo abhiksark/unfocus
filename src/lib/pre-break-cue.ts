@@ -5,6 +5,7 @@ export type PreBreakCueStage = "compact" | "countdown" | "due";
 export type PreBreakCuePresentation = {
   stage: PreBreakCueStage;
   secondsLeft: number;
+  countdownProgress: number;
 };
 
 export function preBreakCuePresentationFromRemaining(
@@ -12,6 +13,10 @@ export function preBreakCuePresentationFromRemaining(
 ): PreBreakCuePresentation {
   const boundedRemainingMs = Math.max(0, remainingMs);
   const secondsLeft = Math.ceil(boundedRemainingMs / 1_000);
+  const countdownProgress = Math.min(
+    1,
+    Math.max(0, (10_000 - boundedRemainingMs) / 10_000)
+  );
   return {
     stage:
       boundedRemainingMs === 0
@@ -19,7 +24,8 @@ export function preBreakCuePresentationFromRemaining(
         : boundedRemainingMs <= 10_000
           ? "countdown"
           : "compact",
-    secondsLeft
+    secondsLeft,
+    countdownProgress
   };
 }
 
