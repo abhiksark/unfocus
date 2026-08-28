@@ -45,7 +45,7 @@ history to control the reminder timer.
 - Defaults to a 20-minute work interval and a 20-second break, configurable
   from 1–120 minutes and 3–30 seconds
 - Supports a fixed 30-minute pause, immediate breaks, break previews, and early
-  exit with Escape or **End break**
+  exit with Space or **End break**
 - Uses idle and fullscreen signals where supported to avoid interrupting you
   while you are already away or presenting
 - Keeps the timer running if a platform probe is unavailable or fails

@@ -1,3 +1,5 @@
+# .github/ISSUE_TEMPLATE/platform_report.yml
+
 name: Platform report
 description: Report how Unfocus behaves on a platform or monitor setup that has not been qualified
 title: "Platform report: "
@@ -111,7 +113,8 @@ body:
         - label: Tray menu showed live status and Pause / Resume / Take break / Preview / Open / Quit worked.
         - label: The overlay covered every display edge to edge — no gaps, no leftover desktop.
         - label: Every display showed the same countdown at the same moment.
-        - label: Escape dismissed the overlay on every display at once.
+        - label: Space dismissed the overlay on every display at once.
+        - label: Escape remained available as a fallback and dismissed every display at once.
         - label: "**End break** dismissed the overlay on every display at once."
         - label: Idle climbed while idle and reset on input; fullscreen flipped for another app, not for Unfocus overlays.
         - label: Reduce motion stopped every looping scene animation.
