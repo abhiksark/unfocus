@@ -1,3 +1,5 @@
+// src-tauri/src/reminder.rs
+
 mod schedule;
 
 use crate::{
@@ -11,7 +13,8 @@ use crate::{
         show_overlay, show_overlay_if_idle, OverlayController, MAX_OVERLAY_DURATION_SECONDS,
         MIN_OVERLAY_DURATION_SECONDS,
     },
-    probes::{ProbeCache, ProbeSnapshot},
+    pre_break_cue::PreBreakCue,
+    probes::{qualified_x11_session, ProbeCache, ProbeSnapshot},
     tray::{TrayPhase, TraySnapshot, TrayStatus},
 };
 use serde::{Deserialize, Serialize};
@@ -1317,6 +1320,7 @@ pub(crate) fn start_scheduler(
             // clock-injected. `None` on the first iteration, so it never
             // rebases before there is a prior sample to diverge from.
             let mut last_sample: Option<(SystemTime, Duration)> = None;
+            let mut pre_break_cue = PreBreakCue::new(qualified_x11_session());
 
             loop {
                 let request = if control_connected {
@@ -1383,6 +1387,9 @@ pub(crate) fn start_scheduler(
                 // cannot trigger repeated rebases on the next few polls.
                 last_sample = Some((wall_now, now));
 
+                if request.is_some() {
+                    pre_break_cue.cancel(&app, "reminder action requested");
+                }
                 let action_result = request.as_ref().map(|request| {
                     execute_reminder_action(
                         request.action,
@@ -1452,6 +1459,7 @@ pub(crate) fn start_scheduler(
                         overlay_controller.has_active_run(),
                     )
                     .with_action_error(action_health.current());
+                pre_break_cue.reconcile(&app, &snapshot, wall_now);
                 tray_status.publish(snapshot.clone());
 
                 if let Some(request) = request {

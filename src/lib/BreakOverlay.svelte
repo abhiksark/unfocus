@@ -1,3 +1,5 @@
+<!-- src/lib/BreakOverlay.svelte -->
+
 <script lang="ts">
   import {
     anchorFromRemaining,
@@ -204,12 +206,14 @@
   </header>
 
   <section class="break-content" aria-labelledby="break-message">
-    <p class="eyebrow" data-type-role="ui">A moment for your eyes</p>
-    {#key currentMessage}
-      <h1 id="break-message" class="message" data-type-role="reflective-display">
-        {currentMessage}
-      </h1>
-    {/key}
+    <div class="heading-stage">
+      <p class="eyebrow" data-type-role="ui">A moment for your eyes</p>
+      {#key currentMessage}
+        <h1 id="break-message" class="message" data-type-role="reflective-display">
+          {currentMessage}
+        </h1>
+      {/key}
+    </div>
     <p class="guidance" data-type-role="ui">
       {complete
         ? "Notice how your eyes feel before returning."
@@ -335,8 +339,8 @@
     z-index: -1;
     inset: 0;
     overflow: hidden;
-    opacity: 0;
-    animation: atmosphere-reveal 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    opacity: 0.72;
+    animation: atmosphere-reveal 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     animation-delay: calc(0ms - var(--presentation-offset));
   }
 
@@ -398,8 +402,8 @@
     align-items: center;
     justify-content: space-between;
     opacity: 0;
-    animation: chrome-reveal 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    animation-delay: calc(700ms - var(--presentation-offset));
+    animation: chrome-reveal 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(1800ms - var(--presentation-offset));
   }
 
   .wordmark {
@@ -443,10 +447,13 @@
     overflow: auto;
     padding: 8px 0;
     text-align: center;
+  }
+
+  .heading-stage {
     opacity: 0;
-    transform: translate3d(0, 18px, 0) scale(0.985);
-    animation: content-reveal 1.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    animation-delay: calc(180ms - var(--presentation-offset));
+    filter: blur(9px);
+    animation: heading-reveal 500ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(1100ms - var(--presentation-offset));
   }
 
   .eyebrow {
@@ -468,9 +475,6 @@
     line-height: 1.1;
     text-wrap: balance;
     text-shadow: 0 13px 34px rgba(0, 0, 0, 0.42);
-    animation: message-arrive 650ms cubic-bezier(0.22, 1, 0.36, 1);
-    animation-delay: calc(0ms - var(--presentation-offset));
-    animation-fill-mode: both;
   }
 
   .guidance {
@@ -479,6 +483,9 @@
     color: rgba(239, 242, 232, 0.82);
     font-size: clamp(0.82rem, 1.05vw, 1rem);
     line-height: 1.55;
+    opacity: 0;
+    animation: supporting-reveal 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(1550ms - var(--presentation-offset));
   }
 
   .timer {
@@ -487,6 +494,9 @@
     align-items: center;
     gap: 10px;
     margin-top: clamp(21px, 3.8vh, 34px);
+    opacity: 0;
+    animation: supporting-reveal 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(1550ms - var(--presentation-offset));
   }
 
   .timer svg {
@@ -535,8 +545,8 @@
     flex-direction: column;
     align-items: center;
     opacity: 0;
-    animation: chrome-reveal 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    animation-delay: calc(850ms - var(--presentation-offset));
+    animation: chrome-reveal 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(1800ms - var(--presentation-offset));
   }
 
   .skip-button {
@@ -637,45 +647,39 @@
 
   @keyframes atmosphere-reveal {
     from {
-      opacity: 0;
+      opacity: 0.72;
     }
     to {
       opacity: 1;
     }
   }
 
-  @keyframes content-reveal {
+  @keyframes heading-reveal {
     from {
       opacity: 0;
-      transform: translate3d(0, 18px, 0) scale(0.985);
+      filter: blur(9px);
     }
     to {
       opacity: 1;
-      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes supporting-reveal {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
     }
   }
 
   @keyframes chrome-reveal {
     from {
       opacity: 0;
-      transform: translateY(8px);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes message-arrive {
-    from {
-      opacity: 0;
-      filter: blur(9px);
-      transform: translateY(7px);
-    }
-    to {
-      opacity: 1;
-      filter: blur(0);
-      transform: translateY(0);
     }
   }
 
@@ -793,15 +797,15 @@
     .atmosphere,
     .overlay-header,
     .break-content,
+    .heading-stage,
+    .guidance,
+    .timer,
     .overlay-controls {
       opacity: 1;
       animation: none;
     }
 
-    .break-content {
-      transform: none;
-    }
-
+    .heading-stage,
     .message,
     .timer-digits {
       animation: none;

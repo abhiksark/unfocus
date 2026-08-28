@@ -113,6 +113,8 @@ body:
         - label: Tray menu showed live status and Pause / Resume / Take break / Preview / Open / Quit worked.
         - label: The overlay covered every display edge to edge — no gaps, no leftover desktop.
         - label: Every display showed the same countdown at the same moment.
+        - label: On Ubuntu X11, only the primary display showed the pre-break cue, positioned below the top bar.
+        - label: The Ubuntu X11 cue accepted no input, moved no focus or caret, expanded once for the final ten seconds, and handed off without a blank flash.
         - label: Space dismissed the overlay on every display at once.
         - label: Escape remained available as a fallback and dismissed every display at once.
         - label: "**End break** dismissed the overlay on every display at once."
@@ -132,6 +134,7 @@ body:
         - label: Changed primary, scale, or arrangement between runs without mixed deadlines.
         - label: Closed one overlay via the window manager — siblings closed; no immediate replacement run.
         - label: Probe failure or unavailable probe left the timer running (fail-open).
+        - label: Pause, settings changes, manual breaks, monitor removal, fullscreen suppression, and natural idle left no pre-break cue behind.
 
   - type: checkboxes
     id: observed_a11y
@@ -143,6 +146,7 @@ body:
         - label: Screen reader announced break start, End break, and completion without speaking every second.
         - label: Only one display’s screen-reader announcements (not one stream per monitor).
         - label: Reduce motion on before launch and mid-session both stopped loops.
+        - label: On Ubuntu X11, Reduce Motion removed cue expansion and blur while keeping the cue readable.
         - label: Increased contrast / high contrast left copy and focus perceivable.
         - label: ~200% display scaling or large text still left controls reachable and overlay readable.
 

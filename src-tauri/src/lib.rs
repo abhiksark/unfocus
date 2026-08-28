@@ -1,3 +1,5 @@
+// src-tauri/src/lib.rs
+
 mod activity;
 mod activity_archive;
 mod break_ledger;
@@ -8,6 +10,7 @@ mod instance;
 #[cfg(test)]
 mod lifecycle_contract;
 mod overlay;
+mod pre_break_cue;
 mod probes;
 mod reminder;
 mod tray;

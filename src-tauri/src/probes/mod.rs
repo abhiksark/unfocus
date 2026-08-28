@@ -1,3 +1,5 @@
+// src-tauri/src/probes/mod.rs
+
 #[cfg(any(target_os = "linux", test))]
 mod linux;
 #[cfg(any(target_os = "macos", test))]
@@ -57,6 +59,21 @@ pub(crate) fn probe_backend() -> ProbeBackend {
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     {
         ProbeBackend::Unsupported
+    }
+}
+
+pub(crate) fn qualified_x11_session() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        linux::validate_session(
+            std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+            std::env::var("DISPLAY").ok().as_deref(),
+        )
+        .is_ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
     }
 }
 

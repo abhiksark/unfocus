@@ -1,3 +1,5 @@
+<!-- README.md -->
+
 # Unfocus
 
 [![CI](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml)
@@ -30,6 +32,10 @@ interface to watch. When a break is due, Unfocus places the same calm, static
 landscape across every monitor and asks you to focus on something far away. As
 the break ends, a warm amber light signals that it is time to return.
 
+On qualified Ubuntu X11 sessions, a click-through cue appears on the primary
+display one minute before a scheduled break. It shows the final ten-second
+countdown, then stays visible until the full break scene is ready.
+
 The dashboard then reflects the rhythm of your day using presence and break
 outcomes. It does not grade your productivity, gamify consistency, or use that
 history to control the reminder timer.
@@ -39,6 +45,8 @@ history to control the reminder timer.
 ### Breaks that feel like breaks
 
 - Covers every monitor with a synchronized full-screen break
+- Gives scheduled breaks on Ubuntu X11 a visual-only, click-through one-minute
+  cue on the primary display
 - Uses a bundled, first-party landscape that stays still throughout the break
 - Selects one cool-biased palette from local device time and holds it across
   every display; amber light signals that the break is nearly complete
@@ -139,7 +147,7 @@ built.
 
 | Platform | Status | Notes |
 | --- | --- | --- |
-| Linux X11 | **Qualified** | Synchronized multi-monitor overlays, idle detection, fullscreen detection, and AppIndicator tray support. Ubuntu is the primary test environment. |
+| Linux X11 | **Qualified** | Synchronized multi-monitor overlays, idle detection, fullscreen detection, and AppIndicator tray support. Ubuntu X11 also shows a primary-display pre-break cue. Ubuntu is the primary test environment. |
 | macOS 11+ | **Preview** | Idle and fullscreen probes work interactively. Physical multi-monitor acceptance is not complete. |
 | Windows x64 | **Early build** | Idle and fullscreen probes are implemented. Interactive multi-monitor qualification is pending. |
 | Linux Wayland | **Unsupported** | Default packages do not provide Wayland probes. |
