@@ -9,9 +9,10 @@ released versions link to their GitHub release.
 
 ### Added
 
-- Scheduled breaks on Ubuntu X11 now show a click-through cue on the primary
-  display for the final minute. It expands for the last ten seconds and stays
-  visible until the multi-monitor break overlay is ready.
+- Scheduled breaks on Ubuntu X11 now offer an optional click-through heads-up
+  on the primary display. It appears briefly one minute before the break,
+  clears out of the way, returns for the final ten seconds, and stays visible
+  until the painted multi-monitor break overlay is ready.
 
 ### Changed
 

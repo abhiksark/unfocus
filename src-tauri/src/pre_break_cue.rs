@@ -11,10 +11,13 @@ use std::{
 };
 use tauri::{webview::PageLoadEvent, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
-const CUE_LEAD_MILLISECONDS: u64 = 60_000;
-const CUE_WIDTH: f64 = 360.0;
-const CUE_HEIGHT: f64 = 88.0;
-const CUE_TOP_GAP: f64 = 12.0;
+pub(crate) const CUE_LEAD_MILLISECONDS: u64 = 60_000;
+const CUE_WIDTH: f64 = 456.0;
+const CUE_HEIGHT: f64 = 160.0;
+// The card is vertically centered inside the transparent canvas, putting its
+// top edge roughly 92 logical pixels below the work area and outside GNOME's
+// top-centre notification lane.
+const CUE_TOP_GAP: f64 = 48.0;
 const CUE_PAGE_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 const JAVASCRIPT_MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 static CUE_RUN_ID: AtomicU64 = AtomicU64::new(1);
@@ -117,24 +120,30 @@ struct CueReminderState {
     working: bool,
     remaining_ms: Option<u64>,
     revision: u64,
+    enabled: bool,
+    presentation_allowed: bool,
 }
 
-impl From<&TraySnapshot> for CueReminderState {
-    fn from(snapshot: &TraySnapshot) -> Self {
+impl CueReminderState {
+    fn from_snapshot(snapshot: &TraySnapshot, enabled: bool, presentation_allowed: bool) -> Self {
         Self {
             working: snapshot.phase == TrayPhase::Working,
             remaining_ms: snapshot.remaining_milliseconds,
             revision: snapshot.state_revision,
+            enabled,
+            presentation_allowed,
         }
     }
-}
 
-impl CueReminderState {
-    fn should_show(self) -> bool {
+    fn in_lead_window(self) -> bool {
         self.working
             && self
                 .remaining_ms
                 .is_some_and(|remaining| (1..=CUE_LEAD_MILLISECONDS).contains(&remaining))
+    }
+
+    fn should_show(self) -> bool {
+        self.in_lead_window() && self.enabled && self.presentation_allowed
     }
 }
 
@@ -210,15 +219,15 @@ impl CueSlot {
 
 #[derive(Debug)]
 pub(crate) struct PreBreakCue {
-    enabled: bool,
+    platform_enabled: bool,
     attempted_revision: Option<u64>,
     slot: Option<CueSlot>,
 }
 
 impl PreBreakCue {
-    pub(crate) fn new(enabled: bool) -> Self {
+    pub(crate) fn new(platform_enabled: bool) -> Self {
         Self {
-            enabled,
+            platform_enabled,
             attempted_revision: None,
             slot: None,
         }
@@ -228,12 +237,18 @@ impl PreBreakCue {
         &mut self,
         app: &AppHandle,
         snapshot: &TraySnapshot,
+        preference_enabled: bool,
+        presentation_allowed: bool,
         wall_now: SystemTime,
     ) {
         self.poll_creation(app);
         self.clear_absent_window(app);
 
-        let state = CueReminderState::from(snapshot);
+        let state = CueReminderState::from_snapshot(
+            snapshot,
+            self.platform_enabled && preference_enabled,
+            presentation_allowed,
+        );
         let decision = cue_decision(
             state,
             self.attempted_revision,
@@ -242,8 +257,18 @@ impl PreBreakCue {
         );
         match decision {
             CueDecision::None => {}
-            CueDecision::Close => self.close(app, "reminder state changed"),
-            CueDecision::Create if self.enabled => {
+            CueDecision::Close => {
+                // A preference or confirmed presentation-state suppression may
+                // clear again before this deadline. Rearm this revision only
+                // for that case; startup failures still remain one attempt per
+                // revision and cannot spin every scheduler poll.
+                let rearm = state.in_lead_window() && !state.should_show();
+                self.close(app, "reminder state changed");
+                if rearm {
+                    self.attempted_revision = None;
+                }
+            }
+            CueDecision::Create => {
                 self.attempted_revision = Some(state.revision);
                 let Some(remaining_ms) = state.remaining_ms else {
                     return;
@@ -255,7 +280,6 @@ impl PreBreakCue {
                     Err(error) => eprintln!("could not create pre-break cue: {error}"),
                 }
             }
-            CueDecision::Create => {}
         }
     }
 
@@ -423,6 +447,10 @@ fn create_cue_window(
             move || match ready_receiver.recv_timeout(CUE_PAGE_LOAD_TIMEOUT) {
                 Ok(()) if !ready_cancelled.load(Ordering::Acquire) => {
                     if let Some(window) = ready_app.get_webview_window(&ready_label) {
+                        // TAO's Linux implementation requires the native GTK
+                        // window to be mapped before it can apply the input
+                        // region. The window is non-focusable, and a failure to
+                        // make it click-through closes it immediately.
                         if let Err(error) = window.show() {
                             eprintln!("could not reveal pre-break cue: {error}");
                             let _ = window.close();
@@ -464,6 +492,8 @@ mod tests {
             working: true,
             remaining_ms: Some(remaining_ms),
             revision,
+            enabled: true,
+            presentation_allowed: true,
         }
     }
 
@@ -502,6 +532,8 @@ mod tests {
                 working: false,
                 remaining_ms: None,
                 revision: 8,
+                enabled: true,
+                presentation_allowed: true,
             },
             working(59_000, 9),
             working(61_000, 8),
@@ -532,6 +564,8 @@ mod tests {
             working: false,
             remaining_ms: None,
             revision: 31,
+            enabled: true,
+            presentation_allowed: true,
         };
         for _cause in ["pause", "manual break", "suspend past deadline"] {
             assert_eq!(
@@ -546,6 +580,28 @@ mod tests {
         assert_eq!(
             cue_decision(working(60_000, 41), Some(40), Some(40), false),
             CueDecision::Close
+        );
+    }
+
+    #[test]
+    fn preference_and_presentation_suppression_close_an_active_cue() {
+        let mut preference_off = working(30_000, 12);
+        preference_off.enabled = false;
+        assert_eq!(
+            cue_decision(preference_off, Some(12), Some(12), false),
+            CueDecision::Close
+        );
+
+        let mut presentation_blocked = working(30_000, 12);
+        presentation_blocked.presentation_allowed = false;
+        assert_eq!(
+            cue_decision(presentation_blocked, Some(12), Some(12), false),
+            CueDecision::Close
+        );
+        assert_eq!(
+            cue_decision(working(30_000, 12), None, None, false),
+            CueDecision::Create,
+            "the same timer revision can be rearmed after suppression clears"
         );
     }
 
@@ -594,23 +650,23 @@ mod tests {
         assert_eq!(
             cue_geometry(0, 48, 2_560, 1_392, 2.0).unwrap(),
             CueGeometry {
-                x: 460.0,
-                y: 36.0,
-                width: 360.0,
-                height: 88.0,
+                x: 412.0,
+                y: 72.0,
+                width: 456.0,
+                height: 160.0,
             }
         );
         assert_eq!(
             cue_geometry(-1_920, 24, 1_920, 1_056, 1.0).unwrap().x,
-            -1_140.0
+            -1_188.0
         );
         assert_eq!(
             cue_geometry(0, 0, 300, 800, 1.0).unwrap(),
             CueGeometry {
                 x: 0.0,
-                y: 12.0,
+                y: 48.0,
                 width: 300.0,
-                height: 88.0,
+                height: 160.0,
             }
         );
     }

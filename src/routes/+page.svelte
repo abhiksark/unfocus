@@ -68,6 +68,7 @@
   let breakSecondsInput = $state("");
   let syncAcrossDevices = $state(false);
   let gridOffsetMinutes = $state(0);
+  let preBreakCueEnabled = $state(true);
   let settingsLoading = $state(true);
   let settingsSaving = $state(false);
   let settingsError = $state<string | null>(null);
@@ -91,7 +92,8 @@
   const settingsValidation = $derived(
     validateReminderSettings(workMinutesInput, breakSecondsInput, {
       syncAcrossDevices,
-      gridOffsetMinutes
+      gridOffsetMinutes,
+      preBreakCueEnabled
     })
   );
   const workMinutesError = $derived(
@@ -102,6 +104,10 @@
   );
   const reminderPresentation = $derived(
     consumerReminderPresentation(reminderStatus, reminderStatusError)
+  );
+  const preBreakCueAvailable = $derived(
+    report?.probeBackend?.kind === "x11" ||
+      (report?.operatingSystem === "linux" && report.sessionType?.toLowerCase() === "x11")
   );
   const warning = $derived(
     consumerWarning({
@@ -260,6 +266,7 @@
     breakSecondsInput = String(settings.breakSeconds);
     syncAcrossDevices = settings.syncAcrossDevices;
     gridOffsetMinutes = settings.gridOffsetMinutes;
+    preBreakCueEnabled = settings.preBreakCueEnabled;
   }
 
   function toggleSyncAcrossDevices(enabled: boolean) {
@@ -482,6 +489,8 @@
       {breakSecondsInput}
       {syncAcrossDevices}
       {gridOffsetMinutes}
+      {preBreakCueEnabled}
+      {preBreakCueAvailable}
       {settingsLoading}
       {settingsSaving}
       {settingsValidation}
@@ -497,6 +506,7 @@
       onWorkMinutesInput={updateWorkMinutes}
       onBreakSecondsInput={updateBreakSeconds}
       onToggleSync={toggleSyncAcrossDevices}
+      onTogglePreBreakCue={(enabled) => (preBreakCueEnabled = enabled)}
       onSaveSettings={() => void saveReminderSettings()}
       onResetSettings={() => void resetReminderSettings()}
       onOpenDeveloperMode={() => setDashboardMode("developer")}

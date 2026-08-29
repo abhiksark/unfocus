@@ -86,7 +86,7 @@
   const backend = $derived(probeBackend(report));
   const settingsStatus = $derived(
     settingsResult === "saved"
-      ? "Saved locally. A running work countdown restarts from now; an active break keeps its current deadline."
+      ? "Saved locally. Timing changes restart a running work countdown; cue-only changes do not. An active break keeps its current deadline."
       : settingsResult === "reset"
         ? "Defaults restored locally. A running work countdown restarts from now; an active break keeps its current deadline."
         : null

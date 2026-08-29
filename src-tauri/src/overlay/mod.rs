@@ -45,7 +45,8 @@ use std::{
 };
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 use windows::{
-    close_overlay_windows, close_overlay_windows_confirmed, emit_overlay_event, overlay_run_exists,
+    close_overlay_windows, close_overlay_windows_confirmed, emit_overlay_event,
+    mark_overlay_scene_ready, overlay_run_exists,
 };
 
 const OVERLAY_COMMAND_CAPACITY: usize = 256;
@@ -729,6 +730,15 @@ pub(crate) fn close_overlay_test(
 ) -> Result<(), String> {
     authorize_overlay_close_caller(window.label(), run_id)?;
     begin_overlay_close(window.app_handle(), &controller, run_id)
+}
+
+#[tauri::command]
+pub(crate) fn overlay_scene_ready(window: WebviewWindow) -> Result<(), String> {
+    if overlay_run_id_from_label(window.label()).is_none() {
+        return Err("this command is only available to a valid overlay window".into());
+    }
+    mark_overlay_scene_ready(window.label());
+    Ok(())
 }
 
 #[cfg(test)]

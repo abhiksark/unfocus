@@ -17,6 +17,14 @@ describe("overlay staged entrance", () => {
     }
   });
 
+  test("decodes the local scene before releasing hidden native windows", async () => {
+    const source = await Bun.file(new URL("./BreakOverlay.svelte", import.meta.url)).text();
+
+    expect(source).toContain("await artworkElement.decode()");
+    expect(source).toContain('await invoke("overlay_scene_ready")');
+    expect(source).toContain("bind:this={artworkElement}");
+  });
+
   test("reveals content immediately with reduced motion", async () => {
     const source = await Bun.file(new URL("./BreakOverlay.svelte", import.meta.url)).text();
     const reducedMotion = source.split("@media (prefers-reduced-motion: reduce)")[1];

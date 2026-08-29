@@ -13,7 +13,7 @@ use crate::{
         show_overlay, show_overlay_if_idle, OverlayController, MAX_OVERLAY_DURATION_SECONDS,
         MIN_OVERLAY_DURATION_SECONDS,
     },
-    pre_break_cue::PreBreakCue,
+    pre_break_cue::{PreBreakCue, CUE_LEAD_MILLISECONDS},
     probes::{qualified_x11_session, ProbeCache, ProbeSnapshot},
     tray::{TrayPhase, TraySnapshot, TrayStatus},
 };
@@ -46,7 +46,7 @@ const CLOCK_DIVERGENCE_TOLERANCE: Duration = Duration::from_secs(5);
 const REMINDER_CONTROL_CAPACITY: usize = 16;
 const REMINDER_CONTROL_TIMEOUT: Duration = Duration::from_secs(10);
 const SETTINGS_FILE_NAME: &str = "reminder-settings.json";
-const SETTINGS_SCHEMA_VERSION: u32 = 3;
+const SETTINGS_SCHEMA_VERSION: u32 = 4;
 const MIN_GRID_OFFSET_MINUTES: i16 = -720; // UTC-12:00
 const MAX_GRID_OFFSET_MINUTES: i16 = 840; //  UTC+14:00
 
@@ -59,6 +59,7 @@ pub(crate) struct ReminderSettings {
     break_seconds: u64,
     sync_across_devices: bool,
     grid_offset_minutes: i16,
+    pre_break_cue_enabled: bool,
 }
 
 impl ReminderSettings {
@@ -89,6 +90,7 @@ impl ReminderSettings {
             break_seconds,
             sync_across_devices,
             grid_offset_minutes,
+            pre_break_cue_enabled: true,
         })
     }
 
@@ -104,6 +106,18 @@ impl ReminderSettings {
     fn sync_offset(self) -> Option<i16> {
         self.sync_across_devices.then_some(self.grid_offset_minutes)
     }
+
+    fn with_pre_break_cue_enabled(mut self, enabled: bool) -> Self {
+        self.pre_break_cue_enabled = enabled;
+        self
+    }
+
+    fn has_same_schedule(self, other: Self) -> bool {
+        self.work_minutes == other.work_minutes
+            && self.break_seconds == other.break_seconds
+            && self.sync_across_devices == other.sync_across_devices
+            && self.grid_offset_minutes == other.grid_offset_minutes
+    }
 }
 
 impl Default for ReminderSettings {
@@ -113,6 +127,7 @@ impl Default for ReminderSettings {
             break_seconds: DEFAULT_BREAK_SECONDS,
             sync_across_devices: false,
             grid_offset_minutes: 0,
+            pre_break_cue_enabled: true,
         }
     }
 }
@@ -124,6 +139,8 @@ pub(crate) struct ReminderSettingsRequest {
     break_seconds: Value,
     sync_across_devices: bool,
     grid_offset_minutes: Value,
+    #[serde(default = "default_pre_break_cue_enabled")]
+    pre_break_cue_enabled: bool,
 }
 
 impl ReminderSettingsRequest {
@@ -155,6 +172,7 @@ impl ReminderSettingsRequest {
             self.sync_across_devices,
             grid_offset_minutes,
         )
+        .map(|settings| settings.with_pre_break_cue_enabled(self.pre_break_cue_enabled))
     }
 }
 
@@ -194,6 +212,10 @@ fn signed_integer_setting(
     Ok(value)
 }
 
+fn default_pre_break_cue_enabled() -> bool {
+    true
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PersistedReminderSettings {
@@ -206,6 +228,8 @@ struct PersistedReminderSettings {
     sync_across_devices: bool,
     #[serde(default)]
     grid_offset_minutes: i16,
+    #[serde(default)]
+    pre_break_cue_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -226,6 +250,7 @@ impl PersistedReminderSettings {
                 .transpose()?,
             sync_across_devices: state.settings.sync_across_devices,
             grid_offset_minutes: state.settings.grid_offset_minutes,
+            pre_break_cue_enabled: Some(state.settings.pre_break_cue_enabled),
         })
     }
 
@@ -235,12 +260,20 @@ impl PersistedReminderSettings {
             v if (1..SETTINGS_SCHEMA_VERSION).contains(&v) => true,
             v => return Err(format!("unsupported reminder settings version {v}")),
         };
+        let pre_break_cue_enabled = match self.pre_break_cue_enabled {
+            Some(enabled) => enabled,
+            None => {
+                needs_repair = true;
+                default_pre_break_cue_enabled()
+            }
+        };
         let settings = ReminderSettings::try_new(
             self.work_minutes,
             self.break_seconds,
             self.sync_across_devices,
             self.grid_offset_minutes,
-        )?;
+        )?
+        .with_pre_break_cue_enabled(pre_break_cue_enabled);
         let pause_until = self.pause_until_unix_milliseconds.and_then(|milliseconds| {
             let Some(pause_until) = UNIX_EPOCH.checked_add(Duration::from_millis(milliseconds))
             else {
@@ -920,9 +953,12 @@ impl ReminderTimer {
     ) {
         match self.phase {
             ReminderPhase::Working => {
+                let schedule_changed = !self.settings.has_same_schedule(settings);
                 self.settings = settings;
                 self.pending_settings = None;
-                self.enter_working(changed_at, wall_now);
+                if schedule_changed {
+                    self.enter_working(changed_at, wall_now);
+                }
             }
             ReminderPhase::Break => {
                 self.pending_settings = Some(settings);
@@ -1354,7 +1390,10 @@ pub(crate) fn start_scheduler(
                 // Activity segmentation is observe-only: probe failures freeze
                 // classification and never change the pure reminder clock.
                 let probes = probe_cache.snapshot();
-                activity_tracker.observe(epoch_ms(SystemTime::now()), probes.idle_seconds.ok());
+                activity_tracker.observe(
+                    epoch_ms(SystemTime::now()),
+                    probes.idle_seconds.as_ref().ok().copied(),
+                );
 
                 let now = started_at.elapsed();
 
@@ -1459,7 +1498,26 @@ pub(crate) fn start_scheduler(
                         overlay_controller.has_active_run(),
                     )
                     .with_action_error(action_health.current());
-                pre_break_cue.reconcile(&app, &snapshot, wall_now);
+                let cue_in_lead_window = snapshot.phase == TrayPhase::Working
+                    && snapshot.remaining_milliseconds.is_some_and(|remaining| {
+                        (1..=CUE_LEAD_MILLISECONDS).contains(&remaining)
+                    });
+                let cue_presentation_allowed = !cue_in_lead_window
+                    || matches!(
+                        break_presentation(
+                            &probes,
+                            timer.break_duration(),
+                            Some(activity_tracker.presentation_context(epoch_ms(wall_now))),
+                        ),
+                        BreakPresentation::Show
+                    );
+                pre_break_cue.reconcile(
+                    &app,
+                    &snapshot,
+                    timer.settings.pre_break_cue_enabled,
+                    cue_presentation_allowed,
+                    wall_now,
+                );
                 tray_status.publish(snapshot.clone());
 
                 if let Some(request) = request {
@@ -1528,6 +1586,7 @@ mod tests {
             break_seconds,
             sync_across_devices: false,
             grid_offset_minutes: json!(0),
+            pre_break_cue_enabled: true,
         }
     }
 
@@ -1616,17 +1675,18 @@ mod tests {
     }
 
     #[test]
-    fn a_version_one_file_migrates_to_version_three_with_sync_defaults() {
+    fn a_version_one_file_migrates_to_version_four_with_current_defaults() {
         let body = br#"{"version":1,"workMinutes":20,"breakSeconds":20}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
         assert!(needs_repair, "an older version must be rewritten");
         assert!(!state.settings.sync_across_devices);
         assert_eq!(state.settings.grid_offset_minutes, 0);
+        assert!(state.settings.pre_break_cue_enabled);
     }
 
     #[test]
-    fn a_version_two_file_migrates_to_version_three_with_sync_defaults() {
+    fn a_version_two_file_migrates_to_version_four_with_current_defaults() {
         let body = br#"{"version":2,"workMinutes":25,"breakSeconds":15,"pauseUntilUnixMilliseconds":null}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
@@ -1636,21 +1696,32 @@ mod tests {
     }
 
     #[test]
-    fn a_version_three_file_round_trips_without_repair() {
+    fn a_version_three_file_migrates_with_the_cue_enabled() {
         let body = br#"{"version":3,"workMinutes":20,"breakSeconds":20,"pauseUntilUnixMilliseconds":null,"syncAcrossDevices":true,"gridOffsetMinutes":330}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
-        assert!(!needs_repair);
+        assert!(needs_repair);
         assert!(state.settings.sync_across_devices);
         assert_eq!(state.settings.grid_offset_minutes, 330);
+        assert!(state.settings.pre_break_cue_enabled);
+    }
+
+    #[test]
+    fn a_version_four_file_round_trips_without_repair() {
+        let body = br#"{"version":4,"workMinutes":20,"breakSeconds":20,"pauseUntilUnixMilliseconds":null,"syncAcrossDevices":true,"gridOffsetMinutes":330,"preBreakCueEnabled":false}"#;
+        let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
+        let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
+        assert!(!needs_repair);
+        assert!(!state.settings.pre_break_cue_enabled);
         let round_tripped = PersistedReminderSettings::from_state(state).unwrap();
         assert_eq!(round_tripped.version, SETTINGS_SCHEMA_VERSION);
         assert_eq!(round_tripped.grid_offset_minutes, 330);
+        assert_eq!(round_tripped.pre_break_cue_enabled, Some(false));
     }
 
     #[test]
     fn an_unsupported_future_version_fails_to_parse_into_state() {
-        let body = br#"{"version":4,"workMinutes":20,"breakSeconds":20}"#;
+        let body = br#"{"version":5,"workMinutes":20,"breakSeconds":20}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         assert!(persisted.into_state(SystemTime::now()).is_err());
     }
@@ -1688,7 +1759,9 @@ mod tests {
         // starting from defaults on sync_across_devices/grid_offset_minutes
         // would let a reset that never touches those two fields pass by
         // coincidence.
-        let sync_on = ReminderSettings::try_new(45, 12, true, 330).unwrap();
+        let sync_on = ReminderSettings::try_new(45, 12, true, 330)
+            .unwrap()
+            .with_pre_break_cue_enabled(false);
         manager.save(sync_on).unwrap();
         drop(manager);
 
@@ -1705,6 +1778,10 @@ mod tests {
         assert_eq!(
             after_reset.grid_offset_minutes, 0,
             "reset must zero the grid offset"
+        );
+        assert!(
+            after_reset.pre_break_cue_enabled,
+            "reset must restore the default heads-up"
         );
     }
 
@@ -1874,6 +1951,24 @@ mod tests {
                 ReminderSettings::default()
             );
         }
+    }
+
+    #[test]
+    fn changing_only_the_pre_break_cue_does_not_restart_work() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20), UNIX_EPOCH);
+        let changed_at = Duration::from_secs(10 * 60);
+        let before = timer.tray_snapshot(changed_at, UNIX_EPOCH, 0, false);
+
+        timer.apply_settings(
+            settings(20, 20).with_pre_break_cue_enabled(false),
+            changed_at,
+            UNIX_EPOCH,
+        );
+
+        let after = timer.tray_snapshot(changed_at, UNIX_EPOCH, 1, false);
+        assert_eq!(after.remaining_milliseconds, before.remaining_milliseconds);
+        assert_eq!(after.state_revision, before.state_revision);
+        assert!(!timer.settings.pre_break_cue_enabled);
     }
 
     #[test]

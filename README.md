@@ -32,9 +32,10 @@ interface to watch. When a break is due, Unfocus places the same calm, static
 landscape across every monitor and asks you to focus on something far away. As
 the break ends, a warm amber light signals that it is time to return.
 
-On qualified Ubuntu X11 sessions, a click-through cue appears on the primary
-display one minute before a scheduled break. It shows the final ten-second
-countdown, then stays visible until the full break scene is ready.
+On qualified Ubuntu X11 sessions, an optional click-through heads-up appears
+briefly on the primary display one minute before a scheduled break, clears out
+of the way, then returns for the final ten-second countdown. At zero it stays
+visible until the full break scene is ready.
 
 The dashboard then reflects the rhythm of your day using presence and break
 outcomes. It does not grade your productivity, gamify consistency, or use that
@@ -45,8 +46,8 @@ history to control the reminder timer.
 ### Breaks that feel like breaks
 
 - Covers every monitor with a synchronized full-screen break
-- Gives scheduled breaks on Ubuntu X11 a visual-only, click-through one-minute
-  cue on the primary display
+- Gives scheduled breaks on Ubuntu X11 an optional visual-only, click-through
+  heads-up and final ten-second countdown on the primary display
 - Uses a bundled, first-party landscape that stays still throughout the break
 - Selects one cool-biased palette from local device time and holds it across
   every display; amber light signals that the break is nearly complete

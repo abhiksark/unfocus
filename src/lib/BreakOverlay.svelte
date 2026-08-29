@@ -20,6 +20,7 @@
     breakScenePhase
   } from "$lib/break-scene";
   import { isOverlayDismissShortcut } from "$lib/overlay-shortcut";
+  import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount, untrack } from "svelte";
@@ -65,6 +66,7 @@
   let actionError = $state<string | null>(null);
   let syncError = $state<string | null>(null);
   let recoveryTimer: number | undefined;
+  let artworkElement: HTMLImageElement;
 
   let durationMs = $derived(Math.max(1_000, durationSeconds * 1_000));
   let remainingMs = $derived(remainingAt(nativeClock ?? fallbackClock, monotonicNowMs));
@@ -126,6 +128,30 @@
     void closePreview();
   }
 
+  async function waitForArtworkDecode(): Promise<void> {
+    if (typeof artworkElement.decode === "function") {
+      try {
+        await artworkElement.decode();
+      } catch {
+        // A failed local image still has a painted native-color fallback. Do
+        // not let an asset error suppress the break entirely.
+      }
+      return;
+    }
+
+    if (artworkElement.complete) return;
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        artworkElement.removeEventListener("load", finish);
+        artworkElement.removeEventListener("error", finish);
+        resolve();
+      };
+      artworkElement.addEventListener("load", finish, { once: true });
+      artworkElement.addEventListener("error", finish, { once: true });
+      if (artworkElement.complete) finish();
+    });
+  }
+
   onMount(() => {
     let disposed = false;
     const unlisteners: Array<() => void> = [];
@@ -142,6 +168,14 @@
     // Tauri delivers an untargeted listener every emit regardless of the
     // emitting window, so scope the subscription to this window's label.
     const ownLabel = getCurrentWindow().label;
+
+    void waitForArtworkDecode()
+      .then(async () => {
+        if (!disposed) await invoke("overlay_scene_ready");
+      })
+      .catch((value: unknown) => {
+        if (!disposed) syncError = `Native scene readiness unavailable: ${errorMessage(value)}`;
+      });
 
     function register<T>(eventName: string, handler: (payload: T) => void) {
       void listen<T>(eventName, (event) => handler(event.payload), { target: ownLabel })
@@ -194,7 +228,13 @@
   style={presentationStyle}
 >
   <div class="atmosphere" aria-hidden="true">
-    <img class="break-artwork" src={BREAK_SCENE_IMAGE_URL} alt="" draggable="false" />
+    <img
+      bind:this={artworkElement}
+      class="break-artwork"
+      src={BREAK_SCENE_IMAGE_URL}
+      alt=""
+      draggable="false"
+    />
     <div class="scene-veil"></div>
     <div class="return-light"></div>
     <div class="copy-veil"></div>

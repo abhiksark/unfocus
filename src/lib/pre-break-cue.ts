@@ -1,11 +1,15 @@
 // src/lib/pre-break-cue.ts
 
-export type PreBreakCueStage = "compact" | "countdown" | "due";
+export const PRE_BREAK_CUE_LEAD_MS = 60_000;
+export const PRE_BREAK_CUE_HEADS_UP_MS = 4_000;
+export const PRE_BREAK_CUE_COUNTDOWN_MS = 10_000;
+
+export type PreBreakCueStage = "heads-up" | "quiet" | "countdown" | "handoff";
 
 export type PreBreakCuePresentation = {
   stage: PreBreakCueStage;
   secondsLeft: number;
-  countdownProgress: number;
+  visible: boolean;
 };
 
 export function preBreakCuePresentationFromRemaining(
@@ -13,19 +17,22 @@ export function preBreakCuePresentationFromRemaining(
 ): PreBreakCuePresentation {
   const boundedRemainingMs = Math.max(0, remainingMs);
   const secondsLeft = Math.ceil(boundedRemainingMs / 1_000);
-  const countdownProgress = Math.min(
-    1,
-    Math.max(0, (10_000 - boundedRemainingMs) / 10_000)
-  );
+  const headsUpEndsAtMs = PRE_BREAK_CUE_LEAD_MS - PRE_BREAK_CUE_HEADS_UP_MS;
+  const stage: PreBreakCueStage =
+    boundedRemainingMs > PRE_BREAK_CUE_LEAD_MS
+      ? "quiet"
+      : boundedRemainingMs > headsUpEndsAtMs
+        ? "heads-up"
+        : boundedRemainingMs > PRE_BREAK_CUE_COUNTDOWN_MS
+          ? "quiet"
+          : boundedRemainingMs > 0
+            ? "countdown"
+            : "handoff";
+
   return {
-    stage:
-      boundedRemainingMs === 0
-        ? "due"
-        : boundedRemainingMs <= 10_000
-          ? "countdown"
-          : "compact",
+    stage,
     secondsLeft,
-    countdownProgress
+    visible: stage !== "quiet"
   };
 }
 

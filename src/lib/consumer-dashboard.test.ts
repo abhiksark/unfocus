@@ -218,7 +218,8 @@ const settings: ReminderSettings = {
   workMinutes: 20,
   breakSeconds: 20,
   syncAcrossDevices: false,
-  gridOffsetMinutes: 0
+  gridOffsetMinutes: 0,
+  preBreakCueEnabled: true
 };
 
 describe("focusProgress", () => {
@@ -272,7 +273,8 @@ describe("focusProgress", () => {
         workMinutes: 0,
         breakSeconds: 20,
         syncAcrossDevices: false,
-        gridOffsetMinutes: 0
+        gridOffsetMinutes: 0,
+        preBreakCueEnabled: true
       })
     ).toBeNull();
   });
@@ -285,7 +287,8 @@ describe("describeRhythm", () => {
         workMinutes: 20,
         breakSeconds: 20,
         syncAcrossDevices: false,
-        gridOffsetMinutes: 0
+        gridOffsetMinutes: 0,
+        preBreakCueEnabled: true
       })
     ).toBe("20 min focus → 20 sec rest");
 
@@ -294,7 +297,8 @@ describe("describeRhythm", () => {
         workMinutes: 20,
         breakSeconds: 20,
         syncAcrossDevices: true,
-        gridOffsetMinutes: 330
+        gridOffsetMinutes: 330,
+        preBreakCueEnabled: true
       })
     ).toBe("20 min focus → 20 sec rest · synced across devices");
   });

@@ -65,6 +65,8 @@
     breakSecondsInput: string;
     syncAcrossDevices: boolean;
     gridOffsetMinutes: number;
+    preBreakCueEnabled: boolean;
+    preBreakCueAvailable: boolean;
     settingsLoading: boolean;
     settingsSaving: boolean;
     settingsValidation: ReminderSettingsValidation;
@@ -80,6 +82,7 @@
     onWorkMinutesInput: (value: string) => void;
     onBreakSecondsInput: (value: string) => void;
     onToggleSync: (enabled: boolean) => void;
+    onTogglePreBreakCue: (enabled: boolean) => void;
     onSaveSettings: () => void;
     onResetSettings: () => void;
     onOpenDeveloperMode: () => void;
@@ -108,6 +111,8 @@
     breakSecondsInput,
     syncAcrossDevices,
     gridOffsetMinutes,
+    preBreakCueEnabled,
+    preBreakCueAvailable,
     settingsLoading,
     settingsSaving,
     settingsValidation,
@@ -123,6 +128,7 @@
     onWorkMinutesInput,
     onBreakSecondsInput,
     onToggleSync,
+    onTogglePreBreakCue,
     onSaveSettings,
     onResetSettings,
     onOpenDeveloperMode,
@@ -186,9 +192,9 @@
   });
   const settingsConfirmation = $derived(
     settingsResult === "saved"
-      ? "Timing saved."
+      ? "Settings saved."
       : settingsResult === "reset"
-        ? "Default timing restored."
+        ? "Default settings restored."
         : null
   );
   const hasReminderActions = $derived(
@@ -517,8 +523,26 @@
             </div>
           </div>
 
-          <div class="sync-field">
-            <label class="sync-toggle">
+          {#if preBreakCueAvailable}
+            <div class="setting-field">
+              <label class="setting-toggle">
+                <input
+                  type="checkbox"
+                  checked={preBreakCueEnabled}
+                  onchange={(event) => onTogglePreBreakCue(event.currentTarget.checked)}
+                  disabled={settingsLoading || settingsSaving}
+                />
+                Pre-break heads-up
+              </label>
+              <p class="t-micro">
+                Briefly appears one minute before a scheduled break, then returns for the
+                final ten seconds. It never takes focus.
+              </p>
+            </div>
+          {/if}
+
+          <div class="setting-field">
+            <label class="setting-toggle">
               <input
                 type="checkbox"
                 checked={syncAcrossDevices}
@@ -542,7 +566,7 @@
               type="submit"
               disabled={settingsLoading || settingsSaving || !settingsValidation.settings}
             >
-              {settingsSaving ? "Saving…" : "Save timing"}
+              {settingsSaving ? "Saving…" : "Save settings"}
             </button>
             <button
               class="btn-ghost"
@@ -1098,13 +1122,13 @@
     font-size: 0.75rem;
   }
 
-  .sync-field {
+  .setting-field {
     margin-top: 15px;
     padding-top: 15px;
     border-top: 1px solid var(--line);
   }
 
-  .sync-toggle {
+  .setting-toggle {
     display: inline-flex;
     align-items: center;
     gap: var(--s2);
@@ -1113,13 +1137,13 @@
     font-weight: 600;
   }
 
-  .sync-toggle input {
+  .setting-toggle input {
     width: 15px;
     height: 15px;
     accent-color: var(--ink);
   }
 
-  .sync-field .t-micro {
+  .setting-field .t-micro {
     margin: 6px 0 0;
   }
 

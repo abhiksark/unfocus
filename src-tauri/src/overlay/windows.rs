@@ -11,7 +11,8 @@ use super::{
 };
 use serde::Serialize;
 use std::{
-    sync::{mpsc, Mutex},
+    collections::HashMap,
+    sync::{mpsc, LazyLock, Mutex},
     time::{Duration, Instant},
 };
 use tauri::{
@@ -22,6 +23,8 @@ use tauri::{
 static OVERLAY_START_LOCK: Mutex<()> = Mutex::new(());
 const MONITOR_ENUMERATION_TIMEOUT: Duration = Duration::from_secs(5);
 const OVERLAY_WINDOW_READY_TIMEOUT: Duration = Duration::from_secs(5);
+static OVERLAY_SCENE_READINESS: LazyLock<OverlaySceneReadiness> =
+    LazyLock::new(OverlaySceneReadiness::default);
 #[cfg(target_os = "macos")]
 const OVERLAY_CLEANUP_ATTEMPTS: usize = 2;
 #[cfg(target_os = "macos")]
@@ -45,15 +48,65 @@ pub(super) const APPKIT_OPERATION_TIMEOUT: Duration =
 const OVERLAY_ABSENCE_POLL_INTERVAL: Duration =
     Duration::from_millis(OVERLAY_ABSENCE_POLL_INTERVAL_MILLIS);
 
+#[derive(Default)]
+struct OverlaySceneReadiness {
+    senders: Mutex<HashMap<String, mpsc::SyncSender<()>>>,
+}
+
+impl OverlaySceneReadiness {
+    fn register(&self, label: &str, sender: mpsc::SyncSender<()>) -> Result<(), String> {
+        let mut senders = self
+            .senders
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if senders.contains_key(label) {
+            return Err(format!(
+                "overlay {label} already has a pending scene-readiness signal"
+            ));
+        }
+        senders.insert(label.to_owned(), sender);
+        Ok(())
+    }
+
+    fn mark_ready(&self, label: &str) {
+        let sender = self
+            .senders
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(label);
+        if let Some(sender) = sender {
+            let _ = sender.try_send(());
+        }
+    }
+
+    fn clear_prefix(&self, prefix: &str) {
+        self.senders
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|label, _| !label.starts_with(prefix));
+    }
+}
+
+pub(super) fn mark_overlay_scene_ready(label: &str) {
+    OVERLAY_SCENE_READINESS.mark_ready(label);
+}
+
 fn overlay_visible_on_all_workspaces(target_is_macos: bool) -> bool {
     target_is_macos
+}
+
+fn overlay_waits_for_decoded_scene(target_is_linux: bool, initially_visible: bool) -> bool {
+    target_is_linux && !initially_visible
 }
 
 fn overlay_window_config(label: &str) -> WindowConfig {
     WindowConfig {
         label: label.to_owned(),
         url: WebviewUrl::App("index.html".into()),
-        visible: !cfg!(target_os = "macos"),
+        // Linux WebKit windows are warmed while hidden so the cue hands off
+        // directly to a painted scene instead of exposing the native ground.
+        // macOS panels already use the same hidden-then-order path.
+        visible: !cfg!(any(target_os = "linux", target_os = "macos")),
         visible_on_all_workspaces: overlay_visible_on_all_workspaces(cfg!(target_os = "macos")),
         ..Default::default()
     }
@@ -105,6 +158,7 @@ fn rollback_overlay_startup(
     prefix: &str,
     reason: &str,
 ) -> Result<(), String> {
+    OVERLAY_SCENE_READINESS.clear_prefix(prefix);
     rollback_or_retain_cleanup(
         || controller.close_windows(app, Some(prefix), reason),
         || controller.retain_startup_cleanup(run_id, prefix.to_owned()),
@@ -343,6 +397,22 @@ fn start_overlay(
         let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
 
         let window_config = overlay_window_config(label);
+        let waits_for_decoded_scene =
+            overlay_waits_for_decoded_scene(cfg!(target_os = "linux"), window_config.visible);
+        if waits_for_decoded_scene {
+            if let Err(error) = OVERLAY_SCENE_READINESS.register(label, ready_sender.clone()) {
+                return finish_overlay_startup(Err(error), || {
+                    rollback_overlay_startup(
+                        app,
+                        controller,
+                        plan.run_id,
+                        &prefix,
+                        "overlay startup failed",
+                    )
+                })
+                .map(|()| total);
+            }
+        }
         let window_builder = WebviewWindowBuilder::new(app, window_config.label, window_config.url)
             .title("Unfocus eye break")
             .position(
@@ -363,9 +433,11 @@ fn start_overlay(
         let window_builder =
             window_builder.visible_on_all_workspaces(window_config.visible_on_all_workspaces);
         let build_result = window_builder
-            .background_color(tauri::webview::Color(7, 19, 16, 255))
+            // Match BreakOverlay's #07100c fallback if the compositor samples
+            // the native surface between decoded scene frames.
+            .background_color(tauri::webview::Color(7, 16, 12, 255))
             .on_page_load(move |_, payload| {
-                if matches!(payload.event(), PageLoadEvent::Finished) {
+                if !waits_for_decoded_scene && matches!(payload.event(), PageLoadEvent::Finished) {
                     let _ = ready_sender.try_send(());
                 }
             })
@@ -417,8 +489,9 @@ fn start_overlay(
         ready_receivers.push(ready_receiver);
     }
 
-    // Every native panel stays hidden until the complete monitor set has
-    // loaded. A later failure therefore cannot leave an earlier panel visible.
+    // On staged platforms every native panel stays hidden until the complete
+    // monitor set is ready. Linux additionally waits for each local scene to
+    // decode, so a later failure cannot expose an unpainted or partial desk.
     let mut ready_receivers = ready_receivers.into_iter();
     let startup_result = complete_overlay_startup(
         total,
@@ -430,11 +503,11 @@ fn start_overlay(
                 .recv_timeout(OVERLAY_WINDOW_READY_TIMEOUT)
                 .map_err(|error| match error {
                     mpsc::RecvTimeoutError::Timeout => format!(
-                        "overlay {index} of {total} did not finish loading within {} seconds",
+                        "overlay {index} of {total} did not become ready within {} seconds",
                         OVERLAY_WINDOW_READY_TIMEOUT.as_secs()
                     ),
                     mpsc::RecvTimeoutError::Disconnected => {
-                        format!("overlay {index} of {total} closed before it finished loading")
+                        format!("overlay {index} of {total} closed before it became ready")
                     }
                 })
         },
@@ -443,7 +516,16 @@ fn start_overlay(
             {
                 macos::order_overlay_panels(&windows)
             }
-            #[cfg(not(target_os = "macos"))]
+            #[cfg(target_os = "linux")]
+            {
+                for (index, window) in windows.iter().enumerate() {
+                    window.show().map_err(|error| {
+                        format!("could not reveal overlay {index} of {total}: {error}")
+                    })?;
+                }
+                Ok(())
+            }
+            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
             {
                 Ok(())
             }
@@ -458,6 +540,7 @@ fn start_overlay(
             )
         },
     );
+    OVERLAY_SCENE_READINESS.clear_prefix(&prefix);
     startup_result?;
 
     eprintln!(
@@ -519,6 +602,42 @@ pub(crate) fn schedule_automatic_overlay_test(app: &tauri::App, controller: Over
 mod tests {
     use super::*;
     use std::cell::{Cell, RefCell};
+
+    #[test]
+    fn decoded_scene_readiness_releases_only_the_matching_window() {
+        let readiness = OverlaySceneReadiness::default();
+        let (first_sender, first_receiver) = mpsc::sync_channel(1);
+        let (second_sender, second_receiver) = mpsc::sync_channel(1);
+        readiness.register("overlay-1-0", first_sender).unwrap();
+        readiness.register("overlay-1-1", second_sender).unwrap();
+
+        readiness.mark_ready("overlay-1-1");
+
+        assert!(matches!(
+            first_receiver.try_recv(),
+            Err(mpsc::TryRecvError::Empty)
+        ));
+        assert_eq!(second_receiver.try_recv(), Ok(()));
+    }
+
+    #[test]
+    fn clearing_scene_readiness_is_scoped_to_one_run() {
+        let readiness = OverlaySceneReadiness::default();
+        let (first_sender, first_receiver) = mpsc::sync_channel(1);
+        let (second_sender, second_receiver) = mpsc::sync_channel(1);
+        readiness.register("overlay-1-0", first_sender).unwrap();
+        readiness.register("overlay-2-0", second_sender).unwrap();
+
+        readiness.clear_prefix("overlay-1-");
+        readiness.mark_ready("overlay-1-0");
+        readiness.mark_ready("overlay-2-0");
+
+        assert!(matches!(
+            first_receiver.try_recv(),
+            Err(mpsc::TryRecvError::Disconnected)
+        ));
+        assert_eq!(second_receiver.try_recv(), Ok(()));
+    }
 
     #[test]
     fn all_windows_finish_loading_before_the_run_is_ordered() {
@@ -706,13 +825,19 @@ mod tests {
     }
 
     #[test]
-    fn only_macos_overlay_windows_join_all_workspaces() {
+    fn platform_overlay_window_staging_is_explicit() {
         assert!(overlay_visible_on_all_workspaces(true));
         assert!(!overlay_visible_on_all_workspaces(false));
 
+        let config = overlay_window_config("overlay-test");
+        assert_eq!(config.visible_on_all_workspaces, cfg!(target_os = "macos"));
         assert_eq!(
-            overlay_window_config("overlay-test").visible_on_all_workspaces,
-            cfg!(target_os = "macos")
+            config.visible,
+            !cfg!(any(target_os = "linux", target_os = "macos")),
+            "Linux and macOS must warm overlays before revealing them"
         );
+        assert!(overlay_waits_for_decoded_scene(true, false));
+        assert!(!overlay_waits_for_decoded_scene(false, false));
+        assert!(!overlay_waits_for_decoded_scene(true, true));
     }
 }

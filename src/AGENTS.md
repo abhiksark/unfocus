@@ -76,10 +76,14 @@ as `export let` or `$:` reactive statements.
 ## Window routing and native events
 
 - Window labels route rendering:
-  `overlay-<run>-<index>-<count>-<duration>-<deadline>` renders `BreakOverlay`;
-  any other label renders the dashboard.
-- The label is the only channel for overlay parameters. Keep its format and
-  parsing synchronized with the Rust side.
+  `overlay-<run>-<index>-<count>-<duration>-<deadline>` renders `BreakOverlay`,
+  `cue-<run>-<deadline>` renders `PreBreakCue`, and `main` renders the
+  dashboard. Invalid overlay or cue labels render their safe empty/close path.
+- The label is the only channel for overlay and cue parameters. Keep each
+  format and parser synchronized with the Rust side.
+- Before a hidden Linux overlay is revealed, `BreakOverlay` decodes the bundled
+  scene and invokes `overlay_scene_ready`. Do not replace that with page-load
+  readiness; page load does not guarantee a decoded first frame.
 - Overlay events carry a `runId`; filter on it in every handler.
 - An untargeted `listen()` receives events from every run. Pass the current
   window label as `target` so the Rust side can scope delivery.

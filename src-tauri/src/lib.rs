@@ -23,8 +23,8 @@ use instance::handle_secondary_launch;
 #[cfg(debug_assertions)]
 use overlay::schedule_automatic_overlay_test;
 use overlay::{
-    close_overlay_test, overlay_run_id_from_label, show_overlay_test, OverlayCloseEvent,
-    OverlayController,
+    close_overlay_test, overlay_run_id_from_label, overlay_scene_ready, show_overlay_test,
+    OverlayCloseEvent, OverlayController,
 };
 use probes::ProbeCache;
 use reminder::{
@@ -226,6 +226,7 @@ pub fn run() {
             take_break_now,
             show_overlay_test,
             close_overlay_test,
+            overlay_scene_ready,
             open_author_website
         ])
         .run(tauri::generate_context!())

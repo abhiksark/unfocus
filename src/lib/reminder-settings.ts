@@ -15,11 +15,13 @@ export type ReminderSettings = {
   breakSeconds: number;
   syncAcrossDevices: boolean;
   gridOffsetMinutes: number;
+  preBreakCueEnabled: boolean;
 };
 
-export type ReminderSyncPair = {
+export type ReminderOptions = {
   syncAcrossDevices: boolean;
   gridOffsetMinutes: number;
+  preBreakCueEnabled: boolean;
 };
 
 export type ReminderSettingsValidation = {
@@ -58,7 +60,7 @@ function integerField(
 export function validateReminderSettings(
   workMinutes: string,
   breakSeconds: string,
-  sync: ReminderSyncPair
+  options: ReminderOptions
 ): ReminderSettingsValidation {
   const work = integerField(
     workMinutes,
@@ -82,8 +84,9 @@ export function validateReminderSettings(
         : {
             workMinutes: work.value,
             breakSeconds: rest.value,
-            syncAcrossDevices: sync.syncAcrossDevices,
-            gridOffsetMinutes: sync.gridOffsetMinutes
+            syncAcrossDevices: options.syncAcrossDevices,
+            gridOffsetMinutes: options.gridOffsetMinutes,
+            preBreakCueEnabled: options.preBreakCueEnabled
           },
     workMinutesError: work.error,
     breakSecondsError: rest.error
