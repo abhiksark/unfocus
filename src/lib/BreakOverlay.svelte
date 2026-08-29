@@ -17,6 +17,7 @@
     breakScenePeriodForRun,
     breakScenePhase
   } from "$lib/break-scene";
+  import { isOverlayDismissShortcut } from "$lib/overlay-shortcut";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount, untrack } from "svelte";
@@ -96,7 +97,7 @@
     if (recoveryTimer !== undefined) window.clearTimeout(recoveryTimer);
     recoveryTimer = window.setTimeout(() => {
       dismissing = false;
-      actionError ??= "The native window did not close. Press Escape to try again.";
+      actionError ??= "The native window did not close. Press Space to try again.";
     }, 2_500);
   }
 
@@ -118,7 +119,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key !== "Escape") return;
+    if (!isOverlayDismissShortcut(event)) return;
     event.preventDefault();
     void closePreview();
   }
@@ -245,7 +246,7 @@
       </svg>
       End break
     </button>
-    <p class="shortcut">Press <kbd>Esc</kbd> to close</p>
+    <p class="shortcut">Press <kbd>Space</kbd> to close</p>
     <p class="display-label" data-type-role="mono">
       Display {monitorIndex + 1} of {monitorCount}
     </p>

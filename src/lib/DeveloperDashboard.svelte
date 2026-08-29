@@ -1,3 +1,5 @@
+<!-- src/lib/DeveloperDashboard.svelte -->
+
 <script lang="ts">
   import {
     diagnosticsHealth,
@@ -340,7 +342,7 @@
       <h2>Cover every monitor for eight seconds</h2>
       <p>
         Creates one borderless, always-on-top Tauri window per display. The test closes
-        itself; Escape is the safety exit.
+        itself; Space ends it early, and Escape remains the safety fallback.
       </p>
     </div>
     <button

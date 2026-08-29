@@ -3,6 +3,13 @@
 Notable changes to Unfocus are recorded here. Dates use `YYYY-MM-DD`, and
 released versions link to their GitHub release.
 
+## [Unreleased]
+
+### Changed
+
+- Space is now the primary keyboard shortcut for ending a break. Escape remains
+  available as a compatibility and safety fallback.
+
 ## [0.6.0-beta.2] - 2026-08-24
 
 ### Changed
