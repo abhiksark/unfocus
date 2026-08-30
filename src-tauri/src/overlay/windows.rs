@@ -5,6 +5,7 @@ use super::macos;
 use super::{
     labels::{
         next_overlay_run_id, overlay_deadline_ms, overlay_run_id_from_label, plan_overlay_run,
+        OverlayRunPlan,
     },
     lifecycle::{OverlayRunLifecycle, OVERLAY_COMPLETION_GRACE},
     OverlayCloseOrigins, OverlayController,
@@ -133,15 +134,15 @@ where
     finish_overlay_startup(startup_result, rollback)
 }
 
-fn finish_overlay_startup<Rollback>(
-    startup_result: Result<(), String>,
+fn finish_overlay_startup<T, Rollback>(
+    startup_result: Result<T, String>,
     rollback: Rollback,
-) -> Result<(), String>
+) -> Result<T, String>
 where
     Rollback: FnOnce() -> Result<(), String>,
 {
     match startup_result {
-        Ok(()) => Ok(()),
+        Ok(value) => Ok(value),
         Err(startup_error) => match rollback() {
             Ok(()) => Err(startup_error),
             Err(rollback_error) => Err(format!(
@@ -358,6 +359,164 @@ pub(crate) fn show_overlay_if_idle(
     start_overlay(app, controller, duration_seconds, false)
 }
 
+struct BuiltOverlayWindows {
+    windows: Vec<WebviewWindow>,
+    ready_receivers: Vec<mpsc::Receiver<()>>,
+}
+
+fn build_overlay_windows(
+    app: &AppHandle,
+    controller: &OverlayController,
+    monitors: &[tauri::Monitor],
+    plan: &OverlayRunPlan,
+    prefix: &str,
+) -> Result<BuiltOverlayWindows, String> {
+    let total = plan.labels.len();
+    let build_result = (|| {
+        let mut windows = Vec::with_capacity(total);
+        let mut ready_receivers = Vec::with_capacity(total);
+
+        for (index, (monitor, label)) in monitors.iter().zip(plan.labels.iter()).enumerate() {
+            let scale_factor = monitor.scale_factor();
+            let position = monitor.position();
+            let size = monitor.size();
+            let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
+            let window_config = overlay_window_config(label);
+            let waits_for_decoded_scene =
+                overlay_waits_for_decoded_scene(cfg!(target_os = "linux"), window_config.visible);
+            if waits_for_decoded_scene {
+                OVERLAY_SCENE_READINESS.register(label, ready_sender.clone())?;
+            }
+
+            let window_builder =
+                WebviewWindowBuilder::new(app, window_config.label, window_config.url)
+                    .title("Unfocus eye break")
+                    .position(
+                        f64::from(position.x) / scale_factor,
+                        f64::from(position.y) / scale_factor,
+                    )
+                    .inner_size(
+                        f64::from(size.width) / scale_factor,
+                        f64::from(size.height) / scale_factor,
+                    )
+                    .decorations(false)
+                    .resizable(false)
+                    .closable(false)
+                    .always_on_top(true)
+                    .visible(window_config.visible)
+                    .skip_taskbar(true);
+            #[cfg(target_os = "macos")]
+            let window_builder =
+                window_builder.visible_on_all_workspaces(window_config.visible_on_all_workspaces);
+            let window = window_builder
+                // Match BreakOverlay's #07100c fallback if the compositor samples
+                // the native surface between decoded scene frames.
+                .background_color(tauri::webview::Color(7, 16, 12, 255))
+                .on_page_load(move |_, payload| {
+                    if !waits_for_decoded_scene
+                        && matches!(payload.event(), PageLoadEvent::Finished)
+                    {
+                        let _ = ready_sender.try_send(());
+                    }
+                })
+                .build()
+                .map_err(|error| format!("could not create overlay {index} of {total}: {error}"))?;
+
+            #[cfg(target_os = "macos")]
+            macos::configure_overlay_panel(&window).map_err(|error| {
+                format!("could not configure overlay {index} of {total}: {error}")
+            })?;
+
+            windows.push(window);
+            ready_receivers.push(ready_receiver);
+        }
+
+        Ok(BuiltOverlayWindows {
+            windows,
+            ready_receivers,
+        })
+    })();
+
+    // Multi-monitor invariant: any single failure rolls back every window
+    // already opened in this run so the desk is never half-covered.
+    finish_overlay_startup(build_result, || {
+        rollback_overlay_startup(
+            app,
+            controller,
+            plan.run_id,
+            prefix,
+            "overlay startup failed",
+        )
+    })
+}
+
+fn reveal_overlay_windows(windows: &[WebviewWindow]) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::order_overlay_panels(windows)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let total = windows.len();
+        for (index, window) in windows.iter().enumerate() {
+            window
+                .show()
+                .map_err(|error| format!("could not reveal overlay {index} of {total}: {error}"))?;
+        }
+        Ok(())
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _ = windows;
+        Ok(())
+    }
+}
+
+fn await_overlay_startup(
+    app: &AppHandle,
+    controller: &OverlayController,
+    plan: &OverlayRunPlan,
+    prefix: &str,
+    built: BuiltOverlayWindows,
+) -> Result<(), String> {
+    let total = built.windows.len();
+    let mut ready_receivers = built.ready_receivers.into_iter();
+    // On staged platforms every native panel stays hidden until the complete
+    // monitor set is ready. Linux additionally waits for each local scene to
+    // decode, so a later failure cannot expose an unpainted or partial desk.
+    let startup_result = complete_overlay_startup(
+        total,
+        |index| {
+            let ready_receiver = ready_receivers
+                .next()
+                .ok_or_else(|| format!("missing readiness channel for overlay {index}"))?;
+            ready_receiver
+                .recv_timeout(OVERLAY_WINDOW_READY_TIMEOUT)
+                .map_err(|error| match error {
+                    mpsc::RecvTimeoutError::Timeout => format!(
+                        "overlay {index} of {total} did not become ready within {} seconds",
+                        OVERLAY_WINDOW_READY_TIMEOUT.as_secs()
+                    ),
+                    mpsc::RecvTimeoutError::Disconnected => {
+                        format!("overlay {index} of {total} closed before it became ready")
+                    }
+                })
+        },
+        || reveal_overlay_windows(&built.windows),
+        || {
+            rollback_overlay_startup(
+                app,
+                controller,
+                plan.run_id,
+                prefix,
+                "overlay startup failed",
+            )
+        },
+    );
+    OVERLAY_SCENE_READINESS.clear_prefix(prefix);
+    startup_result
+}
+
 fn start_overlay(
     app: &AppHandle,
     controller: &OverlayController,
@@ -387,168 +546,15 @@ fn start_overlay(
     let starts_at = Instant::now();
     let completes_at = starts_at + Duration::from_secs(plan.duration_seconds);
     let closes_at = completes_at + OVERLAY_COMPLETION_GRACE;
-    let mut windows = Vec::with_capacity(total);
-    let mut ready_receivers = Vec::with_capacity(total);
 
-    for (index, (monitor, label)) in monitors.iter().zip(plan.labels.iter()).enumerate() {
-        let scale_factor = monitor.scale_factor();
-        let position = monitor.position();
-        let size = monitor.size();
-        let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
-
-        let window_config = overlay_window_config(label);
-        let waits_for_decoded_scene =
-            overlay_waits_for_decoded_scene(cfg!(target_os = "linux"), window_config.visible);
-        if waits_for_decoded_scene {
-            if let Err(error) = OVERLAY_SCENE_READINESS.register(label, ready_sender.clone()) {
-                return finish_overlay_startup(Err(error), || {
-                    rollback_overlay_startup(
-                        app,
-                        controller,
-                        plan.run_id,
-                        &prefix,
-                        "overlay startup failed",
-                    )
-                })
-                .map(|()| total);
-            }
-        }
-        let window_builder = WebviewWindowBuilder::new(app, window_config.label, window_config.url)
-            .title("Unfocus eye break")
-            .position(
-                f64::from(position.x) / scale_factor,
-                f64::from(position.y) / scale_factor,
-            )
-            .inner_size(
-                f64::from(size.width) / scale_factor,
-                f64::from(size.height) / scale_factor,
-            )
-            .decorations(false)
-            .resizable(false)
-            .closable(false)
-            .always_on_top(true)
-            .visible(window_config.visible)
-            .skip_taskbar(true);
-        #[cfg(target_os = "macos")]
-        let window_builder =
-            window_builder.visible_on_all_workspaces(window_config.visible_on_all_workspaces);
-        let build_result = window_builder
-            // Match BreakOverlay's #07100c fallback if the compositor samples
-            // the native surface between decoded scene frames.
-            .background_color(tauri::webview::Color(7, 16, 12, 255))
-            .on_page_load(move |_, payload| {
-                if !waits_for_decoded_scene && matches!(payload.event(), PageLoadEvent::Finished) {
-                    let _ = ready_sender.try_send(());
-                }
-            })
-            .build();
-
-        // Multi-monitor invariant: any single failure rolls back every window
-        // already opened in this run so the desk is never half-covered.
-        let window = match build_result {
-            Ok(window) => window,
-            Err(error) => {
-                return finish_overlay_startup(
-                    Err(format!(
-                        "could not create overlay {index} of {total}: {error}"
-                    )),
-                    || {
-                        rollback_overlay_startup(
-                            app,
-                            controller,
-                            plan.run_id,
-                            &prefix,
-                            "overlay startup failed",
-                        )
-                    },
-                )
-                .map(|()| total);
-            }
-        };
-
-        #[cfg(target_os = "macos")]
-        if let Err(error) = macos::configure_overlay_panel(&window) {
-            return finish_overlay_startup(
-                Err(format!(
-                    "could not configure overlay {index} of {total}: {error}"
-                )),
-                || {
-                    rollback_overlay_startup(
-                        app,
-                        controller,
-                        plan.run_id,
-                        &prefix,
-                        "overlay startup failed",
-                    )
-                },
-            )
-            .map(|()| total);
-        }
-
-        windows.push(window);
-        ready_receivers.push(ready_receiver);
-    }
-
-    // On staged platforms every native panel stays hidden until the complete
-    // monitor set is ready. Linux additionally waits for each local scene to
-    // decode, so a later failure cannot expose an unpainted or partial desk.
-    let mut ready_receivers = ready_receivers.into_iter();
-    let startup_result = complete_overlay_startup(
-        total,
-        |index| {
-            let ready_receiver = ready_receivers
-                .next()
-                .ok_or_else(|| format!("missing readiness channel for overlay {index}"))?;
-            ready_receiver
-                .recv_timeout(OVERLAY_WINDOW_READY_TIMEOUT)
-                .map_err(|error| match error {
-                    mpsc::RecvTimeoutError::Timeout => format!(
-                        "overlay {index} of {total} did not become ready within {} seconds",
-                        OVERLAY_WINDOW_READY_TIMEOUT.as_secs()
-                    ),
-                    mpsc::RecvTimeoutError::Disconnected => {
-                        format!("overlay {index} of {total} closed before it became ready")
-                    }
-                })
-        },
-        || {
-            #[cfg(target_os = "macos")]
-            {
-                macos::order_overlay_panels(&windows)
-            }
-            #[cfg(target_os = "linux")]
-            {
-                for (index, window) in windows.iter().enumerate() {
-                    window.show().map_err(|error| {
-                        format!("could not reveal overlay {index} of {total}: {error}")
-                    })?;
-                }
-                Ok(())
-            }
-            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-            {
-                Ok(())
-            }
-        },
-        || {
-            rollback_overlay_startup(
-                app,
-                controller,
-                plan.run_id,
-                &prefix,
-                "overlay startup failed",
-            )
-        },
-    );
-    OVERLAY_SCENE_READINESS.clear_prefix(&prefix);
-    startup_result?;
-
+    let built = build_overlay_windows(app, controller, &monitors, &plan, &prefix)?;
+    await_overlay_startup(app, controller, &plan, &prefix, built)?;
     eprintln!(
         "opened overlay run {} on {total} display(s) for {} second(s)",
         plan.run_id, plan.duration_seconds
     );
 
-    if let Err(error) = controller.register(OverlayRunLifecycle {
+    let registration = controller.register(OverlayRunLifecycle {
         run_id: plan.run_id,
         prefix: prefix.clone(),
         completes_at,
@@ -558,18 +564,16 @@ fn start_overlay(
         close_failures: 0,
         completed: false,
         closing_emitted: false,
-    }) {
-        return finish_overlay_startup(Err(error), || {
-            rollback_overlay_startup(
-                app,
-                controller,
-                plan.run_id,
-                &prefix,
-                "overlay lifecycle registration failed",
-            )
-        })
-        .map(|()| total);
-    }
+    });
+    finish_overlay_startup(registration, || {
+        rollback_overlay_startup(
+            app,
+            controller,
+            plan.run_id,
+            &prefix,
+            "overlay lifecycle registration failed",
+        )
+    })?;
 
     Ok(total)
 }
@@ -637,6 +641,19 @@ mod tests {
             Err(mpsc::TryRecvError::Disconnected)
         ));
         assert_eq!(second_receiver.try_recv(), Ok(()));
+    }
+
+    #[test]
+    fn successful_startup_preserves_its_value_without_rollback() {
+        let rollbacks = Cell::new(0);
+
+        let result = finish_overlay_startup(Ok(7_usize), || {
+            rollbacks.set(rollbacks.get() + 1);
+            Ok(())
+        });
+
+        assert_eq!(result, Ok(7));
+        assert_eq!(rollbacks.get(), 0);
     }
 
     #[test]

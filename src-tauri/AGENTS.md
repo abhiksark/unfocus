@@ -190,3 +190,8 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features --l
 
 Run the complete frontend gate from `src/AGENTS.md` as well for shared
 interfaces and overlay behavior.
+
+For the local complexity gate, run `bun run clippy:complexity`. It extends the
+strict Clippy gate with cognitive-complexity and function-length limits from
+`src-tauri/clippy.toml`. It is not a CI requirement, and a warning-free result
+is not a substitute for review and tests.

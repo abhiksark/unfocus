@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked -- -D warnings",
+    "clippy:complexity": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked -- -D warnings -D clippy::cognitive-complexity -D clippy::too-many-lines",
     "check": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json --watch",
     "test": "bun test",
