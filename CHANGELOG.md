@@ -1,3 +1,5 @@
+<!-- CHANGELOG.md -->
+
 # Changelog
 
 Notable changes to Unfocus are recorded here. Dates use `YYYY-MM-DD`, and
@@ -5,8 +7,18 @@ released versions link to their GitHub release.
 
 ## [Unreleased]
 
+### Added
+
+- Scheduled breaks on Ubuntu X11 now offer an optional click-through heads-up
+  on the primary display. It appears briefly one minute before the break,
+  clears out of the way, returns for the final ten seconds, and stays visible
+  until the painted multi-monitor break overlay is ready.
+
 ### Changed
 
+- Break overlays now reveal the static scene, reflective heading, guidance,
+  timer, and controls in a synchronized 2.4-second sequence. Reduced Motion
+  continues to reveal the content immediately.
 - Space is now the primary keyboard shortcut for ending a break. Escape remains
   available as a compatibility and safety fallback.
 

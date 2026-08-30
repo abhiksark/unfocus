@@ -1,3 +1,5 @@
+// src-tauri/src/reminder.rs
+
 mod schedule;
 
 use crate::{
@@ -11,7 +13,8 @@ use crate::{
         show_overlay, show_overlay_if_idle, OverlayController, MAX_OVERLAY_DURATION_SECONDS,
         MIN_OVERLAY_DURATION_SECONDS,
     },
-    probes::{ProbeCache, ProbeSnapshot},
+    pre_break_cue::{PreBreakCue, CUE_LEAD_MILLISECONDS},
+    probes::{qualified_x11_session, ProbeCache, ProbeSnapshot},
     tray::{TrayPhase, TraySnapshot, TrayStatus},
 };
 use serde::{Deserialize, Serialize};
@@ -43,7 +46,7 @@ const CLOCK_DIVERGENCE_TOLERANCE: Duration = Duration::from_secs(5);
 const REMINDER_CONTROL_CAPACITY: usize = 16;
 const REMINDER_CONTROL_TIMEOUT: Duration = Duration::from_secs(10);
 const SETTINGS_FILE_NAME: &str = "reminder-settings.json";
-const SETTINGS_SCHEMA_VERSION: u32 = 3;
+const SETTINGS_SCHEMA_VERSION: u32 = 4;
 const MIN_GRID_OFFSET_MINUTES: i16 = -720; // UTC-12:00
 const MAX_GRID_OFFSET_MINUTES: i16 = 840; //  UTC+14:00
 
@@ -56,6 +59,7 @@ pub(crate) struct ReminderSettings {
     break_seconds: u64,
     sync_across_devices: bool,
     grid_offset_minutes: i16,
+    pre_break_cue_enabled: bool,
 }
 
 impl ReminderSettings {
@@ -86,6 +90,7 @@ impl ReminderSettings {
             break_seconds,
             sync_across_devices,
             grid_offset_minutes,
+            pre_break_cue_enabled: true,
         })
     }
 
@@ -101,6 +106,18 @@ impl ReminderSettings {
     fn sync_offset(self) -> Option<i16> {
         self.sync_across_devices.then_some(self.grid_offset_minutes)
     }
+
+    fn with_pre_break_cue_enabled(mut self, enabled: bool) -> Self {
+        self.pre_break_cue_enabled = enabled;
+        self
+    }
+
+    fn has_same_schedule(self, other: Self) -> bool {
+        self.work_minutes == other.work_minutes
+            && self.break_seconds == other.break_seconds
+            && self.sync_across_devices == other.sync_across_devices
+            && self.grid_offset_minutes == other.grid_offset_minutes
+    }
 }
 
 impl Default for ReminderSettings {
@@ -110,6 +127,7 @@ impl Default for ReminderSettings {
             break_seconds: DEFAULT_BREAK_SECONDS,
             sync_across_devices: false,
             grid_offset_minutes: 0,
+            pre_break_cue_enabled: true,
         }
     }
 }
@@ -121,6 +139,8 @@ pub(crate) struct ReminderSettingsRequest {
     break_seconds: Value,
     sync_across_devices: bool,
     grid_offset_minutes: Value,
+    #[serde(default = "default_pre_break_cue_enabled")]
+    pre_break_cue_enabled: bool,
 }
 
 impl ReminderSettingsRequest {
@@ -152,6 +172,7 @@ impl ReminderSettingsRequest {
             self.sync_across_devices,
             grid_offset_minutes,
         )
+        .map(|settings| settings.with_pre_break_cue_enabled(self.pre_break_cue_enabled))
     }
 }
 
@@ -191,6 +212,10 @@ fn signed_integer_setting(
     Ok(value)
 }
 
+fn default_pre_break_cue_enabled() -> bool {
+    true
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PersistedReminderSettings {
@@ -203,6 +228,8 @@ struct PersistedReminderSettings {
     sync_across_devices: bool,
     #[serde(default)]
     grid_offset_minutes: i16,
+    #[serde(default)]
+    pre_break_cue_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -223,6 +250,7 @@ impl PersistedReminderSettings {
                 .transpose()?,
             sync_across_devices: state.settings.sync_across_devices,
             grid_offset_minutes: state.settings.grid_offset_minutes,
+            pre_break_cue_enabled: Some(state.settings.pre_break_cue_enabled),
         })
     }
 
@@ -232,12 +260,20 @@ impl PersistedReminderSettings {
             v if (1..SETTINGS_SCHEMA_VERSION).contains(&v) => true,
             v => return Err(format!("unsupported reminder settings version {v}")),
         };
+        let pre_break_cue_enabled = match self.pre_break_cue_enabled {
+            Some(enabled) => enabled,
+            None => {
+                needs_repair = true;
+                default_pre_break_cue_enabled()
+            }
+        };
         let settings = ReminderSettings::try_new(
             self.work_minutes,
             self.break_seconds,
             self.sync_across_devices,
             self.grid_offset_minutes,
-        )?;
+        )?
+        .with_pre_break_cue_enabled(pre_break_cue_enabled);
         let pause_until = self.pause_until_unix_milliseconds.and_then(|milliseconds| {
             let Some(pause_until) = UNIX_EPOCH.checked_add(Duration::from_millis(milliseconds))
             else {
@@ -917,9 +953,12 @@ impl ReminderTimer {
     ) {
         match self.phase {
             ReminderPhase::Working => {
+                let schedule_changed = !self.settings.has_same_schedule(settings);
                 self.settings = settings;
                 self.pending_settings = None;
-                self.enter_working(changed_at, wall_now);
+                if schedule_changed {
+                    self.enter_working(changed_at, wall_now);
+                }
             }
             ReminderPhase::Break => {
                 self.pending_settings = Some(settings);
@@ -1276,6 +1315,293 @@ fn present_scheduled_break(
     }
 }
 
+struct ReminderSchedulerContext {
+    app: AppHandle,
+    probe_cache: ProbeCache,
+    activity_tracker: ActivityTrackerHandle,
+    break_ledger: BreakLedgerHandle,
+    overlay_controller: OverlayController,
+    settings_manager: ReminderSettingsManager,
+    tray_status: TrayStatus,
+    receiver: Receiver<ReminderControlRequest>,
+    action_health: ReminderActionHealth,
+    next_attempt_id: Arc<AtomicU64>,
+}
+
+struct ReminderScheduler {
+    context: ReminderSchedulerContext,
+    started_at: Instant,
+    settings_revision: u64,
+    timer: ReminderTimer,
+    control_connected: bool,
+    last_sample: Option<(SystemTime, Duration)>,
+    pre_break_cue: PreBreakCue,
+}
+
+impl ReminderScheduler {
+    fn new(context: ReminderSchedulerContext) -> Self {
+        let initial = context.settings_manager.snapshot();
+        let started_at = initial.changed_at;
+        // Sampled once and reused for the pause check, timer construction,
+        // and the initial snapshot so they all observe the same instant.
+        let wall_now = SystemTime::now();
+        let pause_remaining = initial
+            .pause_until
+            .and_then(|pause_until| pause_until.duration_since(wall_now).ok());
+        let timer = pause_remaining.map_or_else(
+            || ReminderTimer::new(Duration::ZERO, initial.settings, wall_now),
+            |remaining| {
+                ReminderTimer::new_paused(Duration::ZERO, initial.settings, remaining, wall_now)
+            },
+        );
+        context.tray_status.publish(timer.tray_snapshot(
+            Duration::ZERO,
+            wall_now,
+            initial.revision,
+            false,
+        ));
+        Self {
+            context,
+            started_at,
+            settings_revision: initial.revision,
+            timer,
+            control_connected: true,
+            // Loop-local, not on `ReminderTimer`: the timer stays pure and
+            // clock-injected. `None` on the first iteration, so it never
+            // rebases before there is a prior sample to diverge from.
+            last_sample: None,
+            pre_break_cue: PreBreakCue::new(qualified_x11_session()),
+        }
+    }
+
+    fn run(mut self) {
+        loop {
+            self.run_iteration();
+        }
+    }
+
+    fn run_iteration(&mut self) {
+        let request = self.receive_request();
+        // Sampled once per iteration and reused everywhere below so every
+        // timer call in this pass observes the same instant.
+        let wall_now = SystemTime::now();
+        self.apply_latest_settings(wall_now);
+        let probes = self.observe_activity();
+        let now = self.started_at.elapsed();
+        self.rebase_after_clock_discontinuity(now, wall_now);
+
+        if request.is_some() {
+            self.pre_break_cue
+                .cancel(&self.context.app, "reminder action requested");
+        }
+        let action_result = self.execute_request(request.as_ref(), now, wall_now);
+        self.handle_transition(now, wall_now);
+        let snapshot = self.snapshot_and_reconcile_cue(now, wall_now, &probes);
+        self.context.tray_status.publish(snapshot.clone());
+        Self::respond_to_request(request, action_result, snapshot);
+    }
+
+    fn receive_request(&mut self) -> Option<ReminderControlRequest> {
+        if !self.control_connected {
+            std::thread::sleep(REMINDER_POLL_INTERVAL);
+            return None;
+        }
+        match self.context.receiver.recv_timeout(REMINDER_POLL_INTERVAL) {
+            Ok(request) => Some(request),
+            Err(RecvTimeoutError::Timeout) => None,
+            Err(RecvTimeoutError::Disconnected) => {
+                self.control_connected = false;
+                None
+            }
+        }
+    }
+
+    fn apply_latest_settings(&mut self, wall_now: SystemTime) {
+        let latest = self.context.settings_manager.snapshot();
+        if latest.revision == self.settings_revision {
+            return;
+        }
+        self.timer.apply_settings(
+            latest.settings,
+            latest.changed_at.saturating_duration_since(self.started_at),
+            wall_now,
+        );
+        self.settings_revision = latest.revision;
+    }
+
+    fn observe_activity(&self) -> ProbeSnapshot {
+        // Activity segmentation is observe-only: probe failures freeze
+        // classification and never change the pure reminder clock.
+        let probes = self.context.probe_cache.snapshot();
+        self.context.activity_tracker.observe(
+            epoch_ms(SystemTime::now()),
+            probes.idle_seconds.as_ref().ok().copied(),
+        );
+        probes
+    }
+
+    fn rebase_after_clock_discontinuity(&mut self, now: Duration, wall_now: SystemTime) {
+        // Detect an NTP/manual step or a suspend where `Instant` observes it.
+        // Rebase before ticking so a jump cannot fire a stale deadline or
+        // strand Working for the size of a backward step. This mirrors the
+        // pinned test-only lifecycle discontinuity contract.
+        if let Some((prev_wall, prev_mono)) = self.last_sample {
+            let wall_delta_ms = match wall_now.duration_since(prev_wall) {
+                Ok(forward) => i64::try_from(forward.as_millis()).unwrap_or(i64::MAX),
+                Err(backward) => {
+                    -i64::try_from(backward.duration().as_millis()).unwrap_or(i64::MAX)
+                }
+            };
+            let mono_delta_ms =
+                i64::try_from(now.saturating_sub(prev_mono).as_millis()).unwrap_or(i64::MAX);
+            let tolerance_ms =
+                i64::try_from(CLOCK_DIVERGENCE_TOLERANCE.as_millis()).unwrap_or(i64::MAX);
+            if wall_delta_ms.abs_diff(mono_delta_ms) > tolerance_ms.unsigned_abs() {
+                self.timer.rebase_work_deadline(wall_now);
+            }
+        }
+        // Updated every iteration so one jump cannot trigger repeated rebases.
+        self.last_sample = Some((wall_now, now));
+    }
+
+    fn execute_request(
+        &mut self,
+        request: Option<&ReminderControlRequest>,
+        now: Duration,
+        wall_now: SystemTime,
+    ) -> Option<Result<(), String>> {
+        let request = request?;
+        let result = execute_reminder_action(
+            request.action,
+            now,
+            wall_now,
+            &mut self.timer,
+            &self.context.settings_manager,
+            &self.context.app,
+            &self.context.overlay_controller,
+            &self.context.break_ledger,
+        );
+        match &result {
+            Ok(()) => self.context.action_health.clear(request.attempt_id),
+            Err(error) => self
+                .context
+                .action_health
+                .record_failure(request.attempt_id, error.clone()),
+        }
+        Some(result)
+    }
+
+    fn handle_transition(&mut self, now: Duration, wall_now: SystemTime) {
+        match self.timer.tick(now, wall_now) {
+            Some(ReminderTransition::ResumeWorking) => self.clear_expired_pause(),
+            Some(ReminderTransition::StartBreak) => self.start_scheduled_break(now, wall_now),
+            Some(ReminderTransition::EndBreak) | None => {}
+        }
+    }
+
+    fn clear_expired_pause(&self) {
+        if let Err(error) = self.context.settings_manager.clear_pause() {
+            let error =
+                format!("reminder pause expired but its persisted state was not cleared: {error}");
+            eprintln!("{error}");
+            let attempt_id = self
+                .context
+                .next_attempt_id
+                .fetch_add(1, Ordering::Relaxed)
+                .wrapping_add(1);
+            self.context.action_health.record_failure(attempt_id, error);
+        }
+    }
+
+    fn start_scheduled_break(&mut self, now: Duration, wall_now: SystemTime) {
+        let settings = self.timer.settings;
+        let Some(presentation) = present_scheduled_break(
+            &self.context.app,
+            &self.context.probe_cache,
+            &self.context.activity_tracker,
+            &self.context.overlay_controller,
+            self.timer.break_duration(),
+        ) else {
+            return;
+        };
+        let kind = match presentation {
+            BreakPresentation::Show => BreakEventKind::ScheduledShown,
+            BreakPresentation::NaturalIdle => BreakEventKind::NaturalIdle,
+            BreakPresentation::SuppressFullscreen => BreakEventKind::FullscreenSuppress,
+        };
+        self.context.break_ledger.record(
+            kind,
+            settings.work_minutes,
+            settings.break_seconds,
+            epoch_ms(SystemTime::now()),
+        );
+        if presentation == BreakPresentation::NaturalIdle {
+            let credited = self.timer.credit_natural_break(now, wall_now);
+            debug_assert!(credited);
+        }
+    }
+
+    fn snapshot_and_reconcile_cue(
+        &mut self,
+        now: Duration,
+        wall_now: SystemTime,
+        probes: &ProbeSnapshot,
+    ) -> TraySnapshot {
+        let snapshot = self
+            .timer
+            .tray_snapshot(
+                now,
+                wall_now,
+                self.settings_revision,
+                self.context.overlay_controller.has_active_run(),
+            )
+            .with_action_error(self.context.action_health.current());
+        let cue_in_lead_window = snapshot.phase == TrayPhase::Working
+            && snapshot
+                .remaining_milliseconds
+                .is_some_and(|remaining| (1..=CUE_LEAD_MILLISECONDS).contains(&remaining));
+        let cue_presentation_allowed = !cue_in_lead_window
+            || matches!(
+                break_presentation(
+                    probes,
+                    self.timer.break_duration(),
+                    Some(
+                        self.context
+                            .activity_tracker
+                            .presentation_context(epoch_ms(wall_now)),
+                    ),
+                ),
+                BreakPresentation::Show
+            );
+        self.pre_break_cue.reconcile(
+            &self.context.app,
+            &snapshot,
+            self.timer.settings.pre_break_cue_enabled,
+            cue_presentation_allowed,
+            wall_now,
+        );
+        snapshot
+    }
+
+    fn respond_to_request(
+        request: Option<ReminderControlRequest>,
+        action_result: Option<Result<(), String>>,
+        snapshot: TraySnapshot,
+    ) {
+        let Some(request) = request else {
+            return;
+        };
+        let response = action_result
+            .unwrap_or_else(|| Err("reminder action was not processed".to_owned()))
+            .map(|()| snapshot);
+        if let Some(sender) = request.response {
+            let _ = sender.try_send(response);
+        } else if let Err(error) = response {
+            eprintln!("tray reminder action failed: {error}");
+        }
+    }
+}
+
 pub(crate) fn start_scheduler(
     app: AppHandle,
     probe_cache: ProbeCache,
@@ -1286,186 +1612,21 @@ pub(crate) fn start_scheduler(
     tray_status: TrayStatus,
 ) -> io::Result<ReminderControl> {
     let (control, receiver) = ReminderControl::channel(tray_status.clone());
-    let action_health = control.action_health.clone();
-    let next_attempt_id = Arc::clone(&control.next_attempt_id);
+    let context = ReminderSchedulerContext {
+        app,
+        probe_cache,
+        activity_tracker,
+        break_ledger,
+        overlay_controller,
+        settings_manager,
+        tray_status,
+        receiver,
+        action_health: control.action_health.clone(),
+        next_attempt_id: Arc::clone(&control.next_attempt_id),
+    };
     std::thread::Builder::new()
         .name("unfocus-reminders".into())
-        .spawn(move || {
-            let initial = settings_manager.snapshot();
-            let started_at = initial.changed_at;
-            let mut settings_revision = initial.revision;
-            // Sampled once and reused for the pause check, timer construction,
-            // and the initial snapshot so they all observe the same instant.
-            let wall_now = SystemTime::now();
-            let pause_remaining = initial
-                .pause_until
-                .and_then(|pause_until| pause_until.duration_since(wall_now).ok());
-            let mut timer = pause_remaining.map_or_else(
-                || ReminderTimer::new(Duration::ZERO, initial.settings, wall_now),
-                |remaining| {
-                    ReminderTimer::new_paused(Duration::ZERO, initial.settings, remaining, wall_now)
-                },
-            );
-            tray_status.publish(timer.tray_snapshot(
-                Duration::ZERO,
-                wall_now,
-                settings_revision,
-                false,
-            ));
-            let mut control_connected = true;
-            // Loop-local, not on `ReminderTimer`: the timer stays pure and
-            // clock-injected. `None` on the first iteration, so it never
-            // rebases before there is a prior sample to diverge from.
-            let mut last_sample: Option<(SystemTime, Duration)> = None;
-
-            loop {
-                let request = if control_connected {
-                    match receiver.recv_timeout(REMINDER_POLL_INTERVAL) {
-                        Ok(request) => Some(request),
-                        Err(RecvTimeoutError::Timeout) => None,
-                        Err(RecvTimeoutError::Disconnected) => {
-                            control_connected = false;
-                            None
-                        }
-                    }
-                } else {
-                    std::thread::sleep(REMINDER_POLL_INTERVAL);
-                    None
-                };
-
-                // Sampled once per iteration and reused everywhere below so
-                // every timer call in this pass observes the same instant.
-                let wall_now = SystemTime::now();
-
-                let latest = settings_manager.snapshot();
-                if latest.revision != settings_revision {
-                    timer.apply_settings(
-                        latest.settings,
-                        latest.changed_at.saturating_duration_since(started_at),
-                        wall_now,
-                    );
-                    settings_revision = latest.revision;
-                }
-
-                // Activity segmentation is observe-only: probe failures freeze
-                // classification and never change the pure reminder clock.
-                let probes = probe_cache.snapshot();
-                activity_tracker.observe(epoch_ms(SystemTime::now()), probes.idle_seconds.ok());
-
-                let now = started_at.elapsed();
-
-                // Detect a clock discontinuity (an NTP or manual step; a
-                // suspend on platforms where `Instant` observes it — `std`
-                // does not specify that it must) and rebase before evaluating
-                // `now`/`wall_now` below, so a jump never lets a stale wall
-                // deadline fire a surprise break and never strands Working for
-                // the size of a backward step. This mirrors
-                // `lifecycle_contract::discontinuity_observation`, a pinned
-                // test-only contract with no production callers, rather than
-                // calling it — the same relationship `tick` already has with
-                // `stall_observation` below.
-                if let Some((prev_wall, prev_mono)) = last_sample {
-                    let wall_delta_ms = match wall_now.duration_since(prev_wall) {
-                        Ok(forward) => i64::try_from(forward.as_millis()).unwrap_or(i64::MAX),
-                        Err(backward) => {
-                            -i64::try_from(backward.duration().as_millis()).unwrap_or(i64::MAX)
-                        }
-                    };
-                    let mono_delta_ms =
-                        i64::try_from(now.saturating_sub(prev_mono).as_millis()).unwrap_or(i64::MAX);
-                    let tolerance_ms =
-                        i64::try_from(CLOCK_DIVERGENCE_TOLERANCE.as_millis()).unwrap_or(i64::MAX);
-                    if wall_delta_ms.abs_diff(mono_delta_ms) > tolerance_ms.unsigned_abs() {
-                        timer.rebase_work_deadline(wall_now);
-                    }
-                }
-                // Updated every iteration, rebase or not, so a single jump
-                // cannot trigger repeated rebases on the next few polls.
-                last_sample = Some((wall_now, now));
-
-                let action_result = request.as_ref().map(|request| {
-                    execute_reminder_action(
-                        request.action,
-                        now,
-                        wall_now,
-                        &mut timer,
-                        &settings_manager,
-                        &app,
-                        &overlay_controller,
-                        &break_ledger,
-                    )
-                });
-                if let (Some(request), Some(result)) = (&request, &action_result) {
-                    match result {
-                        Ok(()) => action_health.clear(request.attempt_id),
-                        Err(error) => {
-                            action_health.record_failure(request.attempt_id, error.clone())
-                        }
-                    }
-                }
-                let transition = timer.tick(now, wall_now);
-                if transition == Some(ReminderTransition::ResumeWorking) {
-                    if let Err(error) = settings_manager.clear_pause() {
-                        let error = format!(
-                            "reminder pause expired but its persisted state was not cleared: {error}"
-                        );
-                        eprintln!("{error}");
-                        let attempt_id = next_attempt_id
-                            .fetch_add(1, Ordering::Relaxed)
-                            .wrapping_add(1);
-                        action_health.record_failure(attempt_id, error);
-                    }
-                } else if transition == Some(ReminderTransition::StartBreak) {
-                    let settings = timer.settings;
-                    if let Some(presentation) = present_scheduled_break(
-                        &app,
-                        &probe_cache,
-                        &activity_tracker,
-                        &overlay_controller,
-                        timer.break_duration(),
-                    ) {
-                        let kind = match presentation {
-                            BreakPresentation::Show => BreakEventKind::ScheduledShown,
-                            BreakPresentation::NaturalIdle => BreakEventKind::NaturalIdle,
-                            BreakPresentation::SuppressFullscreen => {
-                                BreakEventKind::FullscreenSuppress
-                            }
-                        };
-                        break_ledger.record(
-                            kind,
-                            settings.work_minutes,
-                            settings.break_seconds,
-                            epoch_ms(SystemTime::now()),
-                        );
-                        if presentation == BreakPresentation::NaturalIdle {
-                            let credited = timer.credit_natural_break(now, wall_now);
-                            debug_assert!(credited);
-                        }
-                    }
-                }
-
-                let snapshot = timer
-                    .tray_snapshot(
-                        now,
-                        wall_now,
-                        settings_revision,
-                        overlay_controller.has_active_run(),
-                    )
-                    .with_action_error(action_health.current());
-                tray_status.publish(snapshot.clone());
-
-                if let Some(request) = request {
-                    let response = action_result
-                        .unwrap_or_else(|| Err("reminder action was not processed".to_owned()))
-                        .map(|()| snapshot);
-                    if let Some(sender) = request.response {
-                        let _ = sender.try_send(response);
-                    } else if let Err(error) = response {
-                        eprintln!("tray reminder action failed: {error}");
-                    }
-                }
-            }
-        })?;
+        .spawn(move || ReminderScheduler::new(context).run())?;
     Ok(control)
 }
 
@@ -1520,6 +1681,7 @@ mod tests {
             break_seconds,
             sync_across_devices: false,
             grid_offset_minutes: json!(0),
+            pre_break_cue_enabled: true,
         }
     }
 
@@ -1608,17 +1770,18 @@ mod tests {
     }
 
     #[test]
-    fn a_version_one_file_migrates_to_version_three_with_sync_defaults() {
+    fn a_version_one_file_migrates_to_version_four_with_current_defaults() {
         let body = br#"{"version":1,"workMinutes":20,"breakSeconds":20}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
         assert!(needs_repair, "an older version must be rewritten");
         assert!(!state.settings.sync_across_devices);
         assert_eq!(state.settings.grid_offset_minutes, 0);
+        assert!(state.settings.pre_break_cue_enabled);
     }
 
     #[test]
-    fn a_version_two_file_migrates_to_version_three_with_sync_defaults() {
+    fn a_version_two_file_migrates_to_version_four_with_current_defaults() {
         let body = br#"{"version":2,"workMinutes":25,"breakSeconds":15,"pauseUntilUnixMilliseconds":null}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
@@ -1628,21 +1791,32 @@ mod tests {
     }
 
     #[test]
-    fn a_version_three_file_round_trips_without_repair() {
+    fn a_version_three_file_migrates_with_the_cue_enabled() {
         let body = br#"{"version":3,"workMinutes":20,"breakSeconds":20,"pauseUntilUnixMilliseconds":null,"syncAcrossDevices":true,"gridOffsetMinutes":330}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
-        assert!(!needs_repair);
+        assert!(needs_repair);
         assert!(state.settings.sync_across_devices);
         assert_eq!(state.settings.grid_offset_minutes, 330);
+        assert!(state.settings.pre_break_cue_enabled);
+    }
+
+    #[test]
+    fn a_version_four_file_round_trips_without_repair() {
+        let body = br#"{"version":4,"workMinutes":20,"breakSeconds":20,"pauseUntilUnixMilliseconds":null,"syncAcrossDevices":true,"gridOffsetMinutes":330,"preBreakCueEnabled":false}"#;
+        let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
+        let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
+        assert!(!needs_repair);
+        assert!(!state.settings.pre_break_cue_enabled);
         let round_tripped = PersistedReminderSettings::from_state(state).unwrap();
         assert_eq!(round_tripped.version, SETTINGS_SCHEMA_VERSION);
         assert_eq!(round_tripped.grid_offset_minutes, 330);
+        assert_eq!(round_tripped.pre_break_cue_enabled, Some(false));
     }
 
     #[test]
     fn an_unsupported_future_version_fails_to_parse_into_state() {
-        let body = br#"{"version":4,"workMinutes":20,"breakSeconds":20}"#;
+        let body = br#"{"version":5,"workMinutes":20,"breakSeconds":20}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         assert!(persisted.into_state(SystemTime::now()).is_err());
     }
@@ -1680,7 +1854,9 @@ mod tests {
         // starting from defaults on sync_across_devices/grid_offset_minutes
         // would let a reset that never touches those two fields pass by
         // coincidence.
-        let sync_on = ReminderSettings::try_new(45, 12, true, 330).unwrap();
+        let sync_on = ReminderSettings::try_new(45, 12, true, 330)
+            .unwrap()
+            .with_pre_break_cue_enabled(false);
         manager.save(sync_on).unwrap();
         drop(manager);
 
@@ -1697,6 +1873,10 @@ mod tests {
         assert_eq!(
             after_reset.grid_offset_minutes, 0,
             "reset must zero the grid offset"
+        );
+        assert!(
+            after_reset.pre_break_cue_enabled,
+            "reset must restore the default heads-up"
         );
     }
 
@@ -1866,6 +2046,24 @@ mod tests {
                 ReminderSettings::default()
             );
         }
+    }
+
+    #[test]
+    fn changing_only_the_pre_break_cue_does_not_restart_work() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20), UNIX_EPOCH);
+        let changed_at = Duration::from_secs(10 * 60);
+        let before = timer.tray_snapshot(changed_at, UNIX_EPOCH, 0, false);
+
+        timer.apply_settings(
+            settings(20, 20).with_pre_break_cue_enabled(false),
+            changed_at,
+            UNIX_EPOCH,
+        );
+
+        let after = timer.tray_snapshot(changed_at, UNIX_EPOCH, 1, false);
+        assert_eq!(after.remaining_milliseconds, before.remaining_milliseconds);
+        assert_eq!(after.state_revision, before.state_revision);
+        assert!(!timer.settings.pre_break_cue_enabled);
     }
 
     #[test]

@@ -1,8 +1,11 @@
+<!-- src/routes/+page.svelte -->
+
 <script lang="ts">
   import BreakOverlay from "$lib/BreakOverlay.svelte";
   import ConsumerDashboard from "$lib/ConsumerDashboard.svelte";
   import DeveloperDashboard from "$lib/DeveloperDashboard.svelte";
   import HistoryView from "$lib/HistoryView.svelte";
+  import PreBreakCue from "$lib/PreBreakCue.svelte";
   import { deviceGridOffsetMinutes } from "$lib/break-grid";
   import {
     consumerReminderPresentation,
@@ -40,6 +43,11 @@
 
   const windowRoute = parseWindowLabel(getCurrentWindow().label);
   const overlayParameters = windowRoute.kind === "overlay" ? windowRoute.parameters : null;
+  const cueParameters = windowRoute.kind === "cue" ? windowRoute.parameters : null;
+  document.documentElement.classList.toggle(
+    "cue-window",
+    windowRoute.kind === "cue" || windowRoute.kind === "invalid-cue"
+  );
 
   let dashboardMode = $state<DashboardMode>("consumer");
   let dashboardView = $state<"dashboard" | "history">("dashboard");
@@ -60,6 +68,7 @@
   let breakSecondsInput = $state("");
   let syncAcrossDevices = $state(false);
   let gridOffsetMinutes = $state(0);
+  let preBreakCueEnabled = $state(true);
   let settingsLoading = $state(true);
   let settingsSaving = $state(false);
   let settingsError = $state<string | null>(null);
@@ -83,7 +92,8 @@
   const settingsValidation = $derived(
     validateReminderSettings(workMinutesInput, breakSecondsInput, {
       syncAcrossDevices,
-      gridOffsetMinutes
+      gridOffsetMinutes,
+      preBreakCueEnabled
     })
   );
   const workMinutesError = $derived(
@@ -94,6 +104,10 @@
   );
   const reminderPresentation = $derived(
     consumerReminderPresentation(reminderStatus, reminderStatusError)
+  );
+  const preBreakCueAvailable = $derived(
+    report?.probeBackend?.kind === "x11" ||
+      (report?.operatingSystem === "linux" && report.sessionType?.toLowerCase() === "x11")
   );
   const warning = $derived(
     consumerWarning({
@@ -252,6 +266,7 @@
     breakSecondsInput = String(settings.breakSeconds);
     syncAcrossDevices = settings.syncAcrossDevices;
     gridOffsetMinutes = settings.gridOffsetMinutes;
+    preBreakCueEnabled = settings.preBreakCueEnabled;
   }
 
   function toggleSyncAcrossDevices(enabled: boolean) {
@@ -396,7 +411,11 @@
 
 <svelte:window onkeydown={handleSafeModeKeydown} />
 
-{#if overlayParameters}
+{#if cueParameters}
+  <PreBreakCue deadlineMs={cueParameters.deadlineMs} />
+{:else if windowRoute.kind === "invalid-cue"}
+  <main class="invalid-cue" aria-hidden="true"></main>
+{:else if overlayParameters}
   <BreakOverlay
     runId={overlayParameters.runId}
     monitorIndex={overlayParameters.monitorIndex}
@@ -470,6 +489,8 @@
       {breakSecondsInput}
       {syncAcrossDevices}
       {gridOffsetMinutes}
+      {preBreakCueEnabled}
+      {preBreakCueAvailable}
       {settingsLoading}
       {settingsSaving}
       {settingsValidation}
@@ -485,6 +506,7 @@
       onWorkMinutesInput={updateWorkMinutes}
       onBreakSecondsInput={updateBreakSeconds}
       onToggleSync={toggleSyncAcrossDevices}
+      onTogglePreBreakCue={(enabled) => (preBreakCueEnabled = enabled)}
       onSaveSettings={() => void saveReminderSettings()}
       onResetSettings={() => void resetReminderSettings()}
       onOpenDeveloperMode={() => setDashboardMode("developer")}
@@ -559,6 +581,21 @@
     min-width: 320px;
     min-height: 100vh;
     background: var(--bg);
+  }
+
+  :global(html.cue-window),
+  :global(html.cue-window body) {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  .invalid-cue {
+    width: 100vw;
+    height: 100vh;
+    background: transparent;
+    pointer-events: none;
   }
 
   .view-shell {

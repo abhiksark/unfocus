@@ -153,8 +153,9 @@ orchestration, OS probes, timing, and diagnostics.
 - Create one borderless, always-on-top, skip-taskbar overlay per monitor.
 - Compute the deadline in Rust and encode it in the window label so every
   display derives presentation from the same clock.
-- If any monitor window fails to build or finish loading, tear down the whole
-  run immediately. Never leave a partial multi-monitor cover.
+- If any monitor window fails to build or become ready, tear down the whole
+  run immediately. Linux windows stay hidden until their bundled scene has
+  decoded; never leave an unpainted or partial multi-monitor cover.
 - Closing one overlay closes its siblings; closing one through the window
   manager (or losing a display that hosted an overlay) must never strand the
   rest. Unexpected window loss ends the entire run so the desk is never
@@ -189,3 +190,8 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features --l
 
 Run the complete frontend gate from `src/AGENTS.md` as well for shared
 interfaces and overlay behavior.
+
+For the local complexity gate, run `bun run clippy:complexity`. It extends the
+strict Clippy gate with cognitive-complexity and function-length limits from
+`src-tauri/clippy.toml`. It is not a CI requirement, and a warning-free result
+is not a substitute for review and tests.

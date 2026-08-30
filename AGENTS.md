@@ -53,14 +53,14 @@ plans/            Local working notes only (gitignored; not tracked docs)
 
 - One desktop process. `tauri-plugin-single-instance` activates the existing
   main window on a secondary launch; it does not start another tray or timer.
-- Window labels route the frontend: `main` is the dashboard; labels of the form
-  `overlay-<run>-<index>-<count>-<duration>-<deadline>` render `BreakOverlay`.
-  The label is the only channel for overlay parameters; keep Rust and TypeScript
-  parsers synchronized.
+- Window labels route the frontend: `main` is the dashboard;
+  `overlay-<run>-<index>-<count>-<duration>-<deadline>` renders `BreakOverlay`;
+  `cue-<run>-<deadline>` renders `PreBreakCue`. Labels are the only channel for
+  overlay and cue parameters; keep Rust and TypeScript parsers synchronized.
 - Reminder defaults: 20-minute work interval, 20-second break. Valid ranges:
   work 1–120 minutes, break 3–30 seconds. Settings live in local app config as
-  `reminder-settings.json` (schema v3; includes bounded pause expiry and
-  opt-in cross-device sync).
+  `reminder-settings.json` (schema v4; includes bounded pause expiry,
+  opt-in cross-device sync, and the Ubuntu X11 pre-break heads-up preference).
 - Local reflection data also lives in app config as a 24-hour hot
   `activity-history.json`, fixed 30-day epoch
   `activity-archive-<key>.json` chunks, and a `break-events.json` ledger.
@@ -87,8 +87,12 @@ plans/            Local working notes only (gitignored; not tracked docs)
   `get_reminder_settings`, `get_reminder_status`, `save_reminder_settings`,
   `reset_reminder_settings`, `pause_reminders`, `resume_reminders`,
   `take_break_now`, `show_overlay_test`, `close_overlay_test`,
-  `open_author_website`. Overlay windows only get the minimal event/window
-  permissions in `capabilities/overlay.json`.
+  `open_author_website`. Valid overlay labels can also call
+  `overlay_scene_ready` to release hidden Linux windows after the local scene
+  decodes; valid cue labels can call `set_pre_break_cue_visibility` to make the
+  native window follow the heads-up, quiet, countdown, and handoff stages.
+  Overlay windows only get the minimal event/window permissions in
+  `capabilities/overlay.json`; cue windows have no capability permissions.
 - `open_author_website` hands a hard-coded address to the desktop's default
   browser through `xdg-open` / `open` / `cmd /C start`. The address is a
   constant, never a parameter, so the dashboard cannot ask the host to open
