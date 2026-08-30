@@ -26,6 +26,7 @@ use overlay::{
     close_overlay_test, overlay_run_id_from_label, overlay_scene_ready, show_overlay_test,
     OverlayCloseEvent, OverlayController,
 };
+use pre_break_cue::set_pre_break_cue_visibility;
 use probes::ProbeCache;
 use reminder::{
     get_reminder_settings, get_reminder_status, pause_reminders, reset_reminder_settings,
@@ -227,6 +228,7 @@ pub fn run() {
             show_overlay_test,
             close_overlay_test,
             overlay_scene_ready,
+            set_pre_break_cue_visibility,
             open_author_website
         ])
         .run(tauri::generate_context!())

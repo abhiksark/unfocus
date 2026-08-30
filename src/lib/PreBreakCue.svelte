@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { preBreakCuePresentationFromRemaining } from "$lib/pre-break-cue";
+  import { invoke } from "@tauri-apps/api/core";
   import { onMount, untrack } from "svelte";
 
   type Props = { deadlineMs: number };
@@ -14,6 +15,14 @@
     Math.max(0, initialRemainingMs - (monotonicNowMs - monotonicStartedAtMs))
   );
   let presentation = $derived(preBreakCuePresentationFromRemaining(remainingMs));
+  let nativeVisible = $derived(presentation.visible);
+
+  $effect(() => {
+    const visible = nativeVisible;
+    void invoke("set_pre_break_cue_visibility", { visible }).catch((error: unknown) =>
+      console.error("Could not update pre-break cue visibility", error)
+    );
+  });
 
   onMount(() => {
     const timer = window.setInterval(() => (monotonicNowMs = performance.now()), 100);
@@ -22,42 +31,43 @@
 </script>
 
 <main class="cue-surface" aria-hidden="true">
-  <div
-    class="cue-card"
-    class:visible={presentation.visible}
-    class:imminent={presentation.stage === "countdown" || presentation.stage === "handoff"}
-  >
-    {#key presentation.stage}
-      <div class="cue-content">
-        <span class="cue-symbol" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M3.25 12s3.1-5.25 8.75-5.25S20.75 12 20.75 12 17.65 17.25 12 17.25 3.25 12 3.25 12Z"></path>
-            <circle cx="12" cy="12" r="2.4"></circle>
-          </svg>
-        </span>
-        {#if presentation.stage === "heads-up" || presentation.stage === "quiet"}
-          <span class="cue-copy">
-            <strong class="cue-title">Eye break in 1 minute</strong>
-            <span class="cue-support">Finish your thought.</span>
+  {#if presentation.visible}
+    <div
+      class="cue-card"
+      class:imminent={presentation.stage === "countdown" || presentation.stage === "handoff"}
+    >
+      {#key presentation.stage}
+        <div class="cue-content">
+          <span class="cue-symbol" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M3.25 12s3.1-5.25 8.75-5.25S20.75 12 20.75 12 17.65 17.25 12 17.25 3.25 12 3.25 12Z"></path>
+              <circle cx="12" cy="12" r="2.4"></circle>
+            </svg>
           </span>
-        {:else if presentation.stage === "countdown"}
-          <span class="cue-copy">
-            <strong class="cue-title">Eye break</strong>
-            <span class="cue-support">Finish your thought.</span>
-          </span>
-          <span class="cue-count">
-            <span>in</span>
-            <strong data-type-role="mono">{presentation.secondsLeft}</strong>
-          </span>
-        {:else if presentation.stage === "handoff"}
-          <span class="cue-copy">
-            <strong class="cue-title look-away" data-type-role="display">Look away</strong>
-            <span class="cue-support">Rest your focus beyond the screen.</span>
-          </span>
-        {/if}
-      </div>
-    {/key}
-  </div>
+          {#if presentation.stage === "heads-up" || presentation.stage === "quiet"}
+            <span class="cue-copy">
+              <strong class="cue-title">Eye break in 1 minute</strong>
+              <span class="cue-support">Finish your thought.</span>
+            </span>
+          {:else if presentation.stage === "countdown"}
+            <span class="cue-copy">
+              <strong class="cue-title">Eye break</strong>
+              <span class="cue-support">Finish your thought.</span>
+            </span>
+            <span class="cue-count">
+              <span>in</span>
+              <strong data-type-role="mono">{presentation.secondsLeft}</strong>
+            </span>
+          {:else if presentation.stage === "handoff"}
+            <span class="cue-copy">
+              <strong class="cue-title look-away" data-type-role="display">Look away</strong>
+              <span class="cue-support">Rest your focus beyond the screen.</span>
+            </span>
+          {/if}
+        </div>
+      {/key}
+    </div>
+  {/if}
 </main>
 
 <style>
@@ -74,28 +84,23 @@
 
   .cue-card {
     display: flex;
-    width: min(352px, calc(100vw - 40px));
-    height: min(72px, calc(100vh - 40px));
+    width: min(336px, calc(100vw - 40px));
+    height: min(68px, calc(100vh - 40px));
     min-height: 52px;
     align-items: center;
     border: 1px solid rgba(255, 255, 255, 0.13);
-    border-radius: var(--r-button);
-    padding: 0 18px;
+    border-radius: 24px;
+    padding: 0 var(--s4);
     color: var(--ink);
     background: rgba(10, 15, 12, 0.97);
     box-shadow:
       0 12px 28px rgba(0, 0, 0, 0.24),
       inset 0 1px rgba(255, 255, 255, 0.06);
     font-family: var(--sans);
-    opacity: 0;
+    animation: cue-card-arrive 160ms ease both;
     transition:
-      opacity 160ms ease,
       border-color 180ms ease,
       background-color 180ms ease;
-  }
-
-  .cue-card.visible {
-    opacity: 1;
   }
 
   .cue-card.imminent {
@@ -114,8 +119,8 @@
 
   .cue-symbol {
     display: grid;
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     flex: 0 0 auto;
     place-items: center;
     border-radius: var(--r-button);
@@ -127,8 +132,8 @@
   }
 
   .cue-symbol svg {
-    width: 19px;
-    height: 19px;
+    width: 18px;
+    height: 18px;
     fill: none;
     stroke: currentColor;
     stroke-linecap: round;
@@ -146,7 +151,7 @@
     min-width: 0;
     flex: 1;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     line-height: 1.05;
   }
 
@@ -197,6 +202,15 @@
     line-height: 1;
   }
 
+  @keyframes cue-card-arrive {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
   @keyframes cue-content-arrive {
     from {
       opacity: 0;
@@ -231,11 +245,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .cue-card,
-    .cue-card.visible {
-      transform: none;
+    .cue-card {
+      animation: cue-card-arrive 120ms linear both;
       transition:
-        opacity 120ms linear,
         border-color 120ms linear,
         background-color 120ms linear;
     }

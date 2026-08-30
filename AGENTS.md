@@ -89,8 +89,10 @@ plans/            Local working notes only (gitignored; not tracked docs)
   `take_break_now`, `show_overlay_test`, `close_overlay_test`,
   `open_author_website`. Valid overlay labels can also call
   `overlay_scene_ready` to release hidden Linux windows after the local scene
-  decodes. Overlay windows only get the minimal event/window permissions in
-  `capabilities/overlay.json`.
+  decodes; valid cue labels can call `set_pre_break_cue_visibility` to make the
+  native window follow the heads-up, quiet, countdown, and handoff stages.
+  Overlay windows only get the minimal event/window permissions in
+  `capabilities/overlay.json`; cue windows have no capability permissions.
 - `open_author_website` hands a hard-coded address to the desktop's default
   browser through `xdg-open` / `open` / `cmd /C start`. The address is a
   constant, never a parameter, so the dashboard cannot ask the host to open

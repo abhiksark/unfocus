@@ -48,10 +48,15 @@ describe("pre-break cue", () => {
     });
   });
 
-  test("uses one fixed card without a progress rail, expanding shell, or blur", async () => {
+  test("uses one fixed premium-hybrid card without a progress rail, expanding shell, or blur", async () => {
     const source = await Bun.file(new URL("./PreBreakCue.svelte", import.meta.url)).text();
 
-    expect(source).toContain("width: min(352px, calc(100vw - 40px))");
+    expect(source).toContain("width: min(336px, calc(100vw - 40px))");
+    expect(source).toContain("height: min(68px, calc(100vh - 40px))");
+    expect(source).toContain("border-radius: 24px");
+    expect(source).toContain("{#if presentation.visible}");
+    expect(source).toContain('invoke("set_pre_break_cue_visibility", { visible })');
+    expect(source).toContain("animation: cue-card-arrive 160ms ease both");
     expect(source).not.toContain("cue-progress");
     expect(source).not.toContain("class:countdown");
     expect(source).not.toMatch(/^\s+filter:/m);
@@ -61,8 +66,8 @@ describe("pre-break cue", () => {
     const source = await Bun.file(new URL("./PreBreakCue.svelte", import.meta.url)).text();
     const reducedMotion = source.split("@media (prefers-reduced-motion: reduce)")[1];
 
-    expect(reducedMotion).toContain("opacity 120ms linear");
-    expect(reducedMotion).toContain("transform: none");
+    expect(reducedMotion).toContain("animation: cue-card-arrive 120ms linear both");
+    expect(reducedMotion).toContain("border-color 120ms linear");
     expect(reducedMotion).not.toContain("blur");
   });
 });

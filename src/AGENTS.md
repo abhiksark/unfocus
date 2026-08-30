@@ -84,6 +84,9 @@ as `export let` or `$:` reactive statements.
 - Before a hidden Linux overlay is revealed, `BreakOverlay` decodes the bundled
   scene and invokes `overlay_scene_ready`. Do not replace that with page-load
   readiness; page load does not guarantee a decoded first frame.
+- `PreBreakCue` invokes `set_pre_break_cue_visibility` only when its visible
+  stage changes. Keep the native cue hidden during the quiet interval; CSS-only
+  transparency can leave a stale card in WebKitGTK's X11 surface.
 - Overlay events carry a `runId`; filter on it in every handler.
 - An untargeted `listen()` receives events from every run. Pass the current
   window label as `target` so the Rust side can scope delivery.

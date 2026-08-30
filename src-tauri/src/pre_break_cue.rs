@@ -9,7 +9,9 @@ use std::{
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tauri::{webview::PageLoadEvent, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    webview::PageLoadEvent, AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
 
 pub(crate) const CUE_LEAD_MILLISECONDS: u64 = 60_000;
 const CUE_WIDTH: f64 = 456.0;
@@ -83,6 +85,35 @@ fn cue_parameters_from_label(label: &str) -> Option<(u64, u64)> {
         return None;
     }
     Some((run_id, deadline_ms))
+}
+
+#[tauri::command]
+pub(crate) fn set_pre_break_cue_visibility(
+    window: WebviewWindow,
+    visible: bool,
+) -> Result<(), String> {
+    if cue_parameters_from_label(window.label()).is_none() {
+        return Err("this command is only available to a valid pre-break cue window".into());
+    }
+    if !visible {
+        return window
+            .hide()
+            .map_err(|error| format!("could not hide pre-break cue: {error}"));
+    }
+
+    // TAO's Linux implementation requires the native GTK window to be mapped
+    // before it can apply the input region. A click-through failure closes the
+    // cue immediately rather than leaving an invisible input blocker.
+    window
+        .show()
+        .map_err(|error| format!("could not reveal pre-break cue: {error}"))?;
+    if let Err(error) = window.set_ignore_cursor_events(true) {
+        let _ = window.close();
+        return Err(format!(
+            "could not make the pre-break cue click-through: {error}"
+        ));
+    }
+    Ok(())
 }
 
 fn next_cue_run_id() -> u64 {
@@ -446,19 +477,8 @@ fn create_cue_window(
         .spawn(
             move || match ready_receiver.recv_timeout(CUE_PAGE_LOAD_TIMEOUT) {
                 Ok(()) if !ready_cancelled.load(Ordering::Acquire) => {
-                    if let Some(window) = ready_app.get_webview_window(&ready_label) {
-                        // TAO's Linux implementation requires the native GTK
-                        // window to be mapped before it can apply the input
-                        // region. The window is non-focusable, and a failure to
-                        // make it click-through closes it immediately.
-                        if let Err(error) = window.show() {
-                            eprintln!("could not reveal pre-break cue: {error}");
-                            let _ = window.close();
-                        } else if let Err(error) = window.set_ignore_cursor_events(true) {
-                            eprintln!("could not make the pre-break cue click-through: {error}");
-                            let _ = window.close();
-                        }
-                    }
+                    // The cue page owns native visibility so GTK does not retain
+                    // a stale transparent frame during the quiet interval.
                 }
                 Ok(()) => {
                     if let Some(window) = ready_app.get_webview_window(&ready_label) {
