@@ -64,14 +64,14 @@ export function validateReminderSettings(
 ): ReminderSettingsValidation {
   const work = integerField(
     workMinutes,
-    "Work duration",
+    "Focus duration",
     MIN_WORK_MINUTES,
     MAX_WORK_MINUTES,
     "minutes"
   );
   const rest = integerField(
     breakSeconds,
-    "Break duration",
+    "Rest duration",
     MIN_BREAK_SECONDS,
     MAX_BREAK_SECONDS,
     "seconds"

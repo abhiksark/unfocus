@@ -18,7 +18,7 @@ export type HistoryLoadResult = "applied" | "failed" | "stale";
 
 export function createHistoryCalendarLoader(
   fetcher: Pick<HistoryPageFetcher, "getActivityRange">,
-  apply: (calendar: HistoryCalendar) => void,
+  apply: (calendar: HistoryCalendar, request: HistoryCalendarRequest) => void,
   fail: (error: unknown) => void
 ): (request: HistoryCalendarRequest) => Promise<HistoryLoadResult> {
   let generation = 0;
@@ -32,7 +32,7 @@ export function createHistoryCalendarLoader(
         )
       );
       if (loadGeneration !== generation) return "stale";
-      apply(materializeHistoryCalendar(request, dailyBuckets));
+      apply(materializeHistoryCalendar(request, dailyBuckets), request);
       return "applied";
     } catch (error) {
       if (loadGeneration !== generation) return "stale";

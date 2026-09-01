@@ -5,6 +5,7 @@ import {
   type ActivityRangeBucket,
   type BreakHistoryEvent,
   type HistoryCalendar,
+  type HistoryCalendarRequest,
   type HistoryDay
 } from "./history";
 import {
@@ -41,7 +42,10 @@ describe("history calendar loading", () => {
     const request = buildHistoryCalendarRequest(Date.parse("2026-08-16T10:30:00Z"), 0);
     const starts = request.pages.map((page) => page.startMs);
     const calls: number[][] = [];
-    const applied: HistoryCalendar[] = [];
+    const applied: Array<{
+      calendar: HistoryCalendar;
+      request: HistoryCalendarRequest;
+    }> = [];
     const load = createHistoryCalendarLoader(
       {
         getActivityRange: async ({ boundaries }) => {
@@ -51,8 +55,8 @@ describe("history calendar loading", () => {
           return buckets(boundaries.length - 1, (pageIndex + 1) * 1_000);
         }
       },
-      (calendar) => {
-        applied.push(calendar);
+      (calendar, appliedRequest) => {
+        applied.push({ calendar, request: appliedRequest });
       },
       () => {
         throw new Error("calendar load must not fail");
@@ -62,9 +66,48 @@ describe("history calendar loading", () => {
     await expect(load(request)).resolves.toBe("applied");
     expect(calls).toHaveLength(3);
     expect(calls.every((boundaries) => boundaries.length === 31)).toBe(true);
-    expect(applied[0].days).toHaveLength(90);
-    expect(applied[0].days[0].totals.activeMs).toBe(3_000);
-    expect(applied[0].days[89].totals.activeMs).toBe(1_000);
+    expect(applied[0].request).toBe(request);
+    expect(applied[0].calendar.days).toHaveLength(90);
+    expect(applied[0].calendar.days[0].totals.activeMs).toBe(3_000);
+    expect(applied[0].calendar.days[89].totals.activeMs).toBe(1_000);
+  });
+
+  test("applies only the newest calendar with its matching request", async () => {
+    const older = buildHistoryCalendarRequest(Date.parse("2026-08-16T10:30:00Z"), 0);
+    const newer = buildHistoryCalendarRequest(Date.parse("2026-08-16T10:31:00Z"), 0);
+    const pending: Array<{
+      boundaries: number[];
+      result: Deferred<ActivityRangeBucket[]>;
+    }> = [];
+    const applied: HistoryCalendarRequest[] = [];
+    const load = createHistoryCalendarLoader(
+      {
+        getActivityRange: ({ boundaries }) => {
+          const result = deferred<ActivityRangeBucket[]>();
+          pending.push({ boundaries, result });
+          return result.promise;
+        }
+      },
+      (_calendar, request) => applied.push(request),
+      () => {
+        throw new Error("calendar load must not fail");
+      }
+    );
+
+    const olderLoad = load(older);
+    const newerLoad = load(newer);
+    expect(pending).toHaveLength(6);
+
+    for (const request of pending.slice(3)) {
+      request.result.resolve(buckets(request.boundaries.length - 1, 2_000));
+    }
+    await expect(newerLoad).resolves.toBe("applied");
+
+    for (const request of pending.slice(0, 3)) {
+      request.result.resolve(buckets(request.boundaries.length - 1, 1_000));
+    }
+    await expect(olderLoad).resolves.toBe("stale");
+    expect(applied).toEqual([newer]);
   });
 
   test("reports a failure without applying a partial calendar", async () => {

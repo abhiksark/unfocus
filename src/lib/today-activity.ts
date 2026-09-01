@@ -27,6 +27,7 @@ export type TodayActivity = {
 
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
+const INITIAL_SUMMARY_SECONDS = SECONDS_PER_MINUTE;
 
 /** Compact duration for dashboard stats (e.g. "4h 12m", "47m", "<1m"). */
 export function formatActivityDuration(totalSeconds: number): string {
@@ -97,6 +98,21 @@ export function isActivityWindowEmpty(
   activity: Pick<TodayActivity, "activeSeconds" | "afkSeconds">
 ): boolean {
   return activity.activeSeconds <= 0 && activity.afkSeconds <= 0;
+}
+
+/**
+ * A fresh local history needs one classified minute before its totals and
+ * mostly-empty 24-hour strip become useful. Probe failures stay distinct and
+ * must never be presented as ordinary startup.
+ */
+export function isActivityWindowStarting(
+  activity: Pick<TodayActivity, "activeSeconds" | "afkSeconds" | "probeAvailable">
+): boolean {
+  const { activeSeconds, afkSeconds, probeAvailable } = activity;
+  if (!probeAvailable) return false;
+  if (!Number.isFinite(activeSeconds) || !Number.isFinite(afkSeconds)) return false;
+  if (activeSeconds < 0 || afkSeconds < 0) return false;
+  return activeSeconds + afkSeconds < INITIAL_SUMMARY_SECONDS;
 }
 
 /**

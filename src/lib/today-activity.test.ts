@@ -5,6 +5,7 @@ import {
   deepBlockCaption,
   formatActivityDuration,
   isActivityWindowEmpty,
+  isActivityWindowStarting,
   stripActiveHeight,
   stripAfkHeight,
   stripAriaLabel,
@@ -81,6 +82,23 @@ describe("today activity presentation", () => {
   test("detects an empty classified window", () => {
     expect(isActivityWindowEmpty(sample({ activeSeconds: 0, afkSeconds: 0 }))).toBe(true);
     expect(isActivityWindowEmpty(sample({ activeSeconds: 1, afkSeconds: 0 }))).toBe(false);
+  });
+
+  test("keeps the first classified minute in a distinct startup state", () => {
+    expect(
+      isActivityWindowStarting(sample({ activeSeconds: 20, afkSeconds: 39 }))
+    ).toBe(true);
+    expect(
+      isActivityWindowStarting(sample({ activeSeconds: 20, afkSeconds: 40 }))
+    ).toBe(false);
+    expect(
+      isActivityWindowStarting(
+        sample({ activeSeconds: 0, afkSeconds: 0, probeAvailable: false })
+      )
+    ).toBe(false);
+    expect(
+      isActivityWindowStarting(sample({ activeSeconds: Number.NaN, afkSeconds: 0 }))
+    ).toBe(false);
   });
 
   test("builds a calm strip aria label", () => {

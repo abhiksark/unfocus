@@ -59,6 +59,15 @@ describe("reminder settings", () => {
     expect(validation.workMinutesError ?? validation.breakSecondsError).not.toBeNull();
   });
 
+  test("uses the displayed field names in validation feedback", () => {
+    expect(validateReminderSettings("", "20", defaultOptions).workMinutesError).toBe(
+      "Enter a focus duration."
+    );
+    expect(validateReminderSettings("20", "2", defaultOptions).breakSecondsError).toBe(
+      "Rest duration must be between 3 and 30 seconds."
+    );
+  });
+
   test("canonicalizes leading zeroes after a valid save", () => {
     expect(validateReminderSettings("020", "08", defaultOptions).settings).toEqual({
       workMinutes: 20,

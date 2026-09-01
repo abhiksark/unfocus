@@ -38,6 +38,15 @@ function dayTotal(summary: BreakSummary): number {
   );
 }
 
+function weekTotal(summary: BreakSummary): number {
+  return (
+    summary.weekScheduledShown +
+    summary.weekNaturalIdle +
+    summary.weekManualTakeBreak +
+    summary.weekFullscreenSuppress
+  );
+}
+
 /** True when the last-day window has no ledger events. */
 export function isBreakDayEmpty(summary: BreakSummary): boolean {
   return dayTotal(summary) === 0;
@@ -51,27 +60,27 @@ export function breakOutcomeStats(summary: BreakSummary): BreakOutcomeStat[] {
   return [
     {
       kind: "scheduledShown",
-      label: "Shown",
+      label: "Scheduled",
       count: summary.scheduledShown,
-      hint: "Scheduled break covered the desk"
+      hint: "A scheduled break covered every display"
     },
     {
       kind: "naturalIdle",
-      label: "Natural",
+      label: "Already away",
       count: summary.naturalIdle,
-      hint: "Already away when a break was due"
+      hint: "You were already away when a break was due"
     },
     {
       kind: "manualTakeBreak",
-      label: "Manual",
+      label: "Started by you",
       count: summary.manualTakeBreak,
       hint: "You started a break yourself"
     },
     {
       kind: "fullscreenSuppress",
-      label: "Held",
+      label: "Held for fullscreen",
       count: summary.fullscreenSuppress,
-      hint: "Held back while a window was fullscreen"
+      hint: "A break waited while an app was fullscreen"
     }
   ];
 }
@@ -83,21 +92,20 @@ export function breakOutcomeStats(summary: BreakSummary): BreakOutcomeStat[] {
  */
 export function breakSummaryCaption(summary: BreakSummary): string {
   if (isBreakDayEmpty(summary)) {
-    return "No break outcomes in the last day yet.";
+    return weekTotal(summary) === 0
+      ? "No break outcomes in the last seven days."
+      : "No break outcomes in the last day.";
   }
-  return "Local counts for this device · observe only";
+  return "Stored only on this device.";
 }
 
 /**
- * Quieter week line. Avoids competing with day totals.
+ * Quieter week line. Avoids competing with day totals and stays absent when
+ * the empty day caption already describes the complete seven-day window.
  */
 export function weekBreakCaption(summary: BreakSummary): string {
-  const total =
-    summary.weekScheduledShown +
-    summary.weekNaturalIdle +
-    summary.weekManualTakeBreak +
-    summary.weekFullscreenSuppress;
-  if (total === 0) return "No outcomes in the last seven days.";
+  const total = weekTotal(summary);
+  if (total === 0) return "";
   if (total === 1) return "1 outcome in the last seven days.";
   return `${total} outcomes in the last seven days.`;
 }

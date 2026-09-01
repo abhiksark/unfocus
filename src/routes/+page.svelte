@@ -242,6 +242,7 @@
     reminderStatusError = null;
     reminderActionError = null;
     reminderActionResult = null;
+    settingsResult = null;
     try {
       const updated = await invoke<ReminderStatus>(command);
       reminderRefreshGeneration += 1;
@@ -269,11 +270,37 @@
     preBreakCueEnabled = settings.preBreakCueEnabled;
   }
 
-  function toggleSyncAcrossDevices(enabled: boolean) {
+  function finishSettingsUpdate(result: Exclude<SettingsResult, null>): void {
+    settingsResult = result;
+    timingEditorExpanded = false;
+    void tick().then(() => {
+      const trigger = document.getElementById("timing-editor-trigger");
+      trigger?.focus({ preventScroll: true });
+      window.requestAnimationFrame(() => {
+        if (trigger?.isConnected) {
+          trigger.scrollIntoView({ block: "center", behavior: "auto" });
+        }
+      });
+    });
+  }
+
+  function toggleTimingEditor(): void {
+    const expanding = !timingEditorExpanded;
+    timingEditorExpanded = expanding;
+    if (expanding) settingsResult = null;
+  }
+
+  function toggleSyncAcrossDevices(enabled: boolean): void {
+    settingsResult = null;
     syncAcrossDevices = enabled;
     if (enabled) {
       gridOffsetMinutes = deviceGridOffsetMinutes(new Date());
     }
+  }
+
+  function togglePreBreakCue(enabled: boolean): void {
+    settingsResult = null;
+    preBreakCueEnabled = enabled;
   }
 
   async function loadReminderSettings() {
@@ -302,9 +329,8 @@
     try {
       const saved = await invoke<ReminderSettings>("save_reminder_settings", { settings });
       useSettings(saved);
-      settingsResult = "saved";
       settingsErrorContext = null;
-      timingEditorExpanded = false;
+      finishSettingsUpdate("saved");
     } catch (value) {
       settingsError = `Could not save reminder settings: ${errorMessage(value)}`;
       settingsErrorContext = "save";
@@ -324,9 +350,8 @@
     try {
       const defaults = await invoke<ReminderSettings>("reset_reminder_settings");
       useSettings(defaults);
-      settingsResult = "reset";
       settingsErrorContext = null;
-      timingEditorExpanded = false;
+      finishSettingsUpdate("reset");
     } catch (value) {
       settingsError = `Could not reset reminder settings: ${errorMessage(value)}`;
       settingsErrorContext = "reset";
@@ -502,11 +527,11 @@
       onTakeBreak={() => void runReminderAction("take_break_now")}
       onPauseAction={runPauseAction}
       onPreview={() => void runOverlayTest()}
-      onToggleTimingEditor={() => (timingEditorExpanded = !timingEditorExpanded)}
+      onToggleTimingEditor={toggleTimingEditor}
       onWorkMinutesInput={updateWorkMinutes}
       onBreakSecondsInput={updateBreakSeconds}
       onToggleSync={toggleSyncAcrossDevices}
-      onTogglePreBreakCue={(enabled) => (preBreakCueEnabled = enabled)}
+      onTogglePreBreakCue={togglePreBreakCue}
       onSaveSettings={() => void saveReminderSettings()}
       onResetSettings={() => void resetReminderSettings()}
       onOpenDeveloperMode={() => setDashboardMode("developer")}

@@ -40,6 +40,27 @@ export function historyActivityLevel(totals: {
   return 4;
 }
 
+/**
+ * True when a selected day has neither classified presence nor break outcomes.
+ * Daily totals and hourly detail are separate bounded reads, so inspect both.
+ */
+export function historyDayIsEmpty(day: {
+  totals: { isBlank: boolean };
+  breakCounts: Array<{ count: number }>;
+  hourSlots: Array<{ activeMs: number; afkMs: number }>;
+}): boolean {
+  const hasHourlyPresence = day.hourSlots.some(
+    ({ activeMs, afkMs }) =>
+      (Number.isFinite(activeMs) && activeMs > 0) ||
+      (Number.isFinite(afkMs) && afkMs > 0)
+  );
+  return (
+    day.totals.isBlank &&
+    !hasHourlyPresence &&
+    !day.breakCounts.some(({ count }) => Number.isFinite(count) && count > 0)
+  );
+}
+
 export type HistoryBreakCount = {
   kind: BreakOutcomeKind;
   label: string;
@@ -150,6 +171,17 @@ export function initialHistoryDateKey(days: HistoryCalendarDay[]): string | null
   return days.at(-1)?.dateKey ?? null;
 }
 
+/** Keep the current selection after refresh when it remains in the retained range. */
+export function historyDateKeyAfterRefresh(
+  days: HistoryCalendarDay[],
+  selectedDateKey: string | null
+): string | null {
+  if (selectedDateKey && days.some((day) => day.dateKey === selectedDateKey)) {
+    return selectedDateKey;
+  }
+  return initialHistoryDateKey(days);
+}
+
 export function historyActivationUsesKeyboard(detail: number): boolean {
   return detail === 0;
 }
@@ -158,10 +190,11 @@ export function historyCalendarNeedsRefresh(
   active: boolean,
   calendarRequested: boolean,
   request: HistoryCalendarRequest,
-  nowMs: number
+  nowMs: number,
+  wasActive = active
 ): boolean {
   if (!active) return false;
-  if (!calendarRequested) return true;
+  if (!wasActive || !calendarRequested) return true;
   const anchorMs = request.pages[0]?.endMs;
   return (
     anchorMs === undefined ||
