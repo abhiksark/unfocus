@@ -188,15 +188,17 @@ describe("consumer warnings", () => {
         warningInput({ reminderActionError: "raw", diagnosticsError: "diagnostics raw" })
       )?.kind
     ).toBe("reminder-action");
-    expect(
-      consumerWarning(
-        warningInput({
-          settingsError: "raw",
-          settingsErrorContext: "save",
-          diagnosticsError: "diagnostics raw"
-        })
-      )?.kind
-    ).toBe("settings");
+    const settingsWarning = consumerWarning(
+      warningInput({
+        settingsError: "raw",
+        settingsErrorContext: "save",
+        diagnosticsError: "diagnostics raw"
+      })
+    );
+    expect(settingsWarning?.kind).toBe("settings");
+    expect(settingsWarning?.message).toBe(
+      "Your previous rhythm was retained. You can try again."
+    );
   });
 
   test("distinguishes settings load failure without exposing its raw error", () => {

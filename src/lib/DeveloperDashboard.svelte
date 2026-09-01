@@ -244,7 +244,7 @@
     >
       <div class="duration-fields">
         <div class="duration-field">
-          <label for="developer-work-duration">Work duration</label>
+          <label for="developer-work-duration">Focus duration</label>
           <div class="duration-input" class:invalid={workMinutesError}>
             <input
               id="developer-work-duration"
@@ -267,7 +267,7 @@
           {/if}
         </div>
         <div class="duration-field">
-          <label for="developer-break-duration">Break duration</label>
+          <label for="developer-break-duration">Rest duration</label>
           <div class="duration-input" class:invalid={breakSecondsError}>
             <input
               id="developer-break-duration"

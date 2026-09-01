@@ -3,6 +3,7 @@ import {
   historyActivationUsesKeyboard,
   historyActivityLevel,
   historyCalendarNeedsRefresh,
+  historyDayIsEmpty,
   historyEscapeAction,
   historyHourDetailLabel,
   initialHistoryDateKey,
@@ -386,10 +387,10 @@ console.log(JSON.stringify({
     );
 
     expect(page.breakCounts).toEqual([
-      { kind: "scheduledShown", label: "Shown", count: 2 },
-      { kind: "naturalIdle", label: "Natural", count: 1 },
-      { kind: "manualTakeBreak", label: "Manual", count: 1 },
-      { kind: "fullscreenSuppress", label: "Held", count: 1 }
+      { kind: "scheduledShown", label: "Scheduled", count: 2 },
+      { kind: "naturalIdle", label: "Already away", count: 1 },
+      { kind: "manualTakeBreak", label: "Started by you", count: 1 },
+      { kind: "fullscreenSuppress", label: "Held for fullscreen", count: 1 }
     ]);
     expect(page.day0.scheduledShown).toBe(1);
     expect(page.day0.fullscreenSuppress).toBe(1);
@@ -613,6 +614,27 @@ describe("history activity calendar", () => {
     expect(historyActivityLevel({ activeMs: 5 * 60 * 60_000, afkMs: 0 })).toBe(4);
   });
 
+  test("treats a day as empty only when presence and break outcomes are both absent", () => {
+    expect(
+      historyDayIsEmpty({
+        totals: { isBlank: true },
+        breakCounts: [{ count: 0 }, { count: 0 }]
+      })
+    ).toBe(true);
+    expect(
+      historyDayIsEmpty({
+        totals: { isBlank: false },
+        breakCounts: [{ count: 0 }]
+      })
+    ).toBe(false);
+    expect(
+      historyDayIsEmpty({
+        totals: { isBlank: true },
+        breakCounts: [{ count: 1 }]
+      })
+    ).toBe(false);
+  });
+
   test("materializes exactly 90 chronological days in Monday-aligned week columns", () => {
     const result = runInTimezone<{
       dayCount: number;
@@ -744,7 +766,7 @@ console.log(JSON.stringify(mod.historyMonthMarkers(calendar).map((marker) => ({
     expect(moveHistoryHourFocus(23, "ArrowRight", 24)).toBe(23);
   });
 
-  test("refreshes a mounted calendar only after its logical day changes", () => {
+  test("refreshes a mounted calendar when it reopens or its logical day changes", () => {
     const result = runInTimezone<boolean[]>(
       "UTC",
       `
@@ -756,12 +778,19 @@ console.log(JSON.stringify([
   mod.historyCalendarNeedsRefresh(false, false, request, Date.parse("2026-08-17T10:00:00Z")),
   mod.historyCalendarNeedsRefresh(true, false, request, Date.parse("2026-08-17T10:00:00Z")),
   mod.historyCalendarNeedsRefresh(true, true, request, Date.parse("2026-08-18T03:59:59Z")),
-  mod.historyCalendarNeedsRefresh(true, true, request, Date.parse("2026-08-18T04:00:00Z"))
+  mod.historyCalendarNeedsRefresh(true, true, request, Date.parse("2026-08-18T04:00:00Z")),
+  mod.historyCalendarNeedsRefresh(
+    true,
+    true,
+    request,
+    Date.parse("2026-08-17T10:00:00Z"),
+    false
+  )
 ]));
 `
     );
 
-    expect(result).toEqual([false, true, false, true]);
+    expect(result).toEqual([false, true, false, true, true]);
   });
 
   test("describes exact hourly activity durations", () => {

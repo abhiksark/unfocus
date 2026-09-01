@@ -21,7 +21,7 @@ badges, accounts, or mascots competing for your attention.
 [Report a bug](https://github.com/abhiksark/unfocus/issues/new?template=bug_report.yml) ·
 [Request a feature](https://github.com/abhiksark/unfocus/issues/new?template=feature_request.yml)
 
-![The Unfocus dashboard with the focus countdown, Your day activity, and break outcomes](.github/media/dashboard.png)
+![The Unfocus dashboard with the live reminder and Your day activity strip](.github/media/dashboard.png)
 
 [Watch how Unfocus works in 45 seconds](.github/media/how-unfocus-works.mp4)
 

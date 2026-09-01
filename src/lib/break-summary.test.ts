@@ -26,10 +26,18 @@ function sample(partial: Partial<BreakSummary> = {}): BreakSummary {
 }
 
 describe("break summary presentation", () => {
-  test("describes empty windows without gamification", () => {
+  test("describes empty windows once without gamification", () => {
     expect(isBreakDayEmpty(sample())).toBe(true);
-    expect(breakSummaryCaption(sample())).toBe("No break outcomes in the last day yet.");
-    expect(weekBreakCaption(sample())).toBe("No outcomes in the last seven days.");
+    expect(breakSummaryCaption(sample())).toBe(
+      "No break outcomes in the last seven days."
+    );
+    expect(weekBreakCaption(sample())).toBe("");
+  });
+
+  test("distinguishes an empty day when the week has outcomes", () => {
+    const summary = sample({ weekScheduledShown: 2 });
+    expect(breakSummaryCaption(summary)).toBe("No break outcomes in the last day.");
+    expect(weekBreakCaption(summary)).toBe("2 outcomes in the last seven days.");
   });
 
   test("does not re-list counts when the day has outcomes", () => {
@@ -40,9 +48,7 @@ describe("break summary presentation", () => {
       fullscreenSuppress: 3
     });
     expect(isBreakDayEmpty(summary)).toBe(false);
-    expect(breakSummaryCaption(summary)).toBe(
-      "Local counts for this device · observe only"
-    );
+    expect(breakSummaryCaption(summary)).toBe("Stored only on this device.");
     expect(breakSummaryCaption(summary)).not.toMatch(/\d+ rests? shown/);
   });
 
@@ -51,10 +57,10 @@ describe("break summary presentation", () => {
       sample({ scheduledShown: 2, naturalIdle: 0, manualTakeBreak: 1, fullscreenSuppress: 0 })
     );
     expect(stats.map((stat) => stat.label)).toEqual([
-      "Shown",
-      "Natural",
-      "Manual",
-      "Held"
+      "Scheduled",
+      "Already away",
+      "Started by you",
+      "Held for fullscreen"
     ]);
     expect(stats.find((stat) => stat.kind === "scheduledShown")?.count).toBe(2);
     expect(stats.find((stat) => stat.kind === "naturalIdle")?.count).toBe(0);

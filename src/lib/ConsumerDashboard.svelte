@@ -35,6 +35,7 @@
     deepBlockCaption,
     formatActivityDuration,
     isActivityWindowEmpty,
+    isActivityWindowStarting,
     stripActiveHeight,
     stripAfkHeight,
     stripAriaLabel,
@@ -221,6 +222,9 @@
   const activityEmpty = $derived(
     todayActivity ? isActivityWindowEmpty(todayActivity) : false
   );
+  const activityStarting = $derived(
+    todayActivity ? isActivityWindowStarting(todayActivity) : false
+  );
   const breakStats = $derived(breakSummary ? breakOutcomeStats(breakSummary) : []);
   const breakDayEmpty = $derived(breakSummary ? isBreakDayEmpty(breakSummary) : false);
   const breakCaption = $derived(
@@ -286,166 +290,27 @@
     {/if}
   </section>
 
-  <hr class="rule" />
+  {#if warning}
+    <section class="warn" role="status" aria-labelledby="warning-title">
+      <h2 id="warning-title" class="t-label">{warning.heading}</h2>
+      <p class="t-micro">{warning.message}</p>
+      <button class="btn-text" type="button" onclick={onOpenDeveloperMode}>
+        View details
+      </button>
+    </section>
+  {/if}
 
-  <section class="section" aria-labelledby="today-title">
-    <div class="section-head">
-      <h2 id="today-title" class="t-title">Your day</h2>
-      <div class="head-aside">
-        <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
-        <button
-          id="view-history-trigger"
-          class="btn-text"
-          type="button"
-          onclick={onViewHistory}
-        >
-          View history
-        </button>
-        <label class="day-start t-micro">
-          Day starts
-          <select
-            class="day-start-select"
-            data-type-role="mono"
-            value={dayStartHour}
-            onchange={(event) =>
-              onDayStartChange(Number((event.currentTarget as HTMLSelectElement).value))}
-          >
-            {#each dayStartOptions() as option (option.hour)}
-              <option value={option.hour}>{option.label}</option>
-            {/each}
-          </select>
-        </label>
-      </div>
-    </div>
-
-    {#if todayActivity}
-      <div class="stats" role="group" aria-label="Activity totals for the rolling window">
-        <div class="stat" class:is-zero={todayActivity.activeSeconds <= 0}>
-          <span class="num">{formatActivityDuration(todayActivity.activeSeconds)}</span>
-          <span class="t-micro">Active</span>
-        </div>
-        <div class="stat" class:is-zero={todayActivity.afkSeconds <= 0}>
-          <span class="num">{formatActivityDuration(todayActivity.afkSeconds)}</span>
-          <span class="t-micro">Away</span>
-        </div>
-        <div class="stat" class:is-zero={todayActivity.longestActiveSeconds <= 0}>
-          <span class="num">{formatActivityDuration(todayActivity.longestActiveSeconds)}</span>
-          <span class="t-micro">Longest stretch</span>
-        </div>
-        <div class="stat" class:is-zero={todayActivity.deepBlockCount <= 0}>
-          <span class="num">{todayActivity.deepBlockCount}</span>
-          <span class="t-micro">Deep work</span>
-          <span class="t-micro"
-            >{deepBlockCaption(
-              todayActivity.deepBlockCount,
-              todayActivity.deepBlockMinSeconds
-            )}</span
-          >
-        </div>
-      </div>
-
-      <div class="strip-frame">
-        <div class="strip-lines" aria-hidden="true">
-          {#each axisTicks as tick (tick.timestampMs)}
-            <span
-              class="strip-line"
-              class:is-day-start={tick.isDayStart}
-              style={`left: ${tick.positionPercent}%`}
-            ></span>
-          {/each}
-        </div>
-        <div class="strip" role="img" aria-label={activityStripLabel}>
-          {#each todayActivity.strip as bucket, index (index)}
-            <div class="strip-bucket" aria-hidden="true">
-              <span
-                class="strip-afk"
-                style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
-              ></span>
-              <span
-                class="strip-active"
-                style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
-              ></span>
-            </div>
-          {/each}
-        </div>
-      </div>
-
-      <div class="strip-axis" data-type-role="mono" aria-hidden="true">
-        {#each axisTicks as tick (tick.timestampMs)}
-          {#if tick.showLabel}
-            <span
-              class="strip-axis-hour"
-              class:is-day-start={tick.isDayStart}
-              style={`left: ${tick.positionPercent}%`}>{tick.label}</span
-            >
-          {/if}
-        {/each}
-        <span class="strip-axis-now">now</span>
-      </div>
-      <ul class="legend" aria-hidden="true">
-        <li><span class="legend-swatch legend-active"></span> Active</li>
-        <li><span class="legend-swatch legend-afk"></span> Away</li>
-      </ul>
-
-      {#if activityEmpty}
-        <p class="t-micro" role="status">
-          No active or away time classified in this window yet.
-        </p>
-      {/if}
-      <p class="t-micro">{activityFootnote(todayActivity.afkThresholdSeconds)}</p>
-    {:else if todayActivityError}
-      <p class="t-micro is-error" role="status">{todayErrorCaption(todayActivityError)}</p>
-    {:else}
-      <p class="t-micro" role="status">{todayLoadingCaption()}</p>
-    {/if}
-  </section>
-
-  <hr class="rule" />
-
-  <section class="section" aria-labelledby="break-history-title">
-    <div class="section-head">
-      <h2 id="break-history-title" class="t-title">Breaks</h2>
-      {#if breakSummary}
-        <p class="t-micro">{breakSummary.windowLabel}</p>
-      {/if}
-    </div>
-
-    {#if breakSummary}
-      <div
-        class="stats"
-        class:is-empty={breakDayEmpty}
-        role="group"
-        aria-label="Break outcome counts for the last day"
-      >
-        {#each breakStats as stat (stat.kind)}
-          <div class="stat" class:is-zero={stat.count <= 0} title={stat.hint}>
-            <span class="num" aria-label={`${stat.count} ${stat.label.toLowerCase()}. ${stat.hint}`}
-              >{stat.count}</span
-            >
-            <span class="t-micro">{stat.label}</span>
-          </div>
-        {/each}
-      </div>
-      <p class="t-micro">{breakCaption}</p>
-      <p class="t-micro">{weekCaption}</p>
-    {:else if breakSummaryError}
-      <p class="t-micro is-error" role="status">{breakErrorCaption(breakSummaryError)}</p>
-    {:else}
-      <p class="t-micro" role="status">{breakLoadingCaption()}</p>
-    {/if}
-  </section>
-
-  <hr class="rule" />
-
-  <section class="foot" aria-labelledby="rhythm-title">
+  <section class="rhythm" aria-labelledby="rhythm-title">
     <div>
       <h2 id="rhythm-title" class="t-label">Your rhythm</h2>
       <p class="t-micro">{rhythm}</p>
     </div>
-    <div class="foot-actions">
+    <div class="rhythm-actions">
       <button
+        id="timing-editor-trigger"
         class="btn-text"
         type="button"
+        aria-label={timingEditorExpanded ? "Close timing editor" : "Edit timing"}
         aria-expanded={timingEditorExpanded}
         aria-controls="timing-editor"
         onclick={onToggleTimingEditor}
@@ -462,11 +327,17 @@
       <div id="timing-editor" class="timing-editor">
         <form
           novalidate
+          aria-busy={settingsSaving}
+          aria-describedby="timing-editor-intro"
           onsubmit={(event) => {
             event.preventDefault();
             onSaveSettings();
           }}
         >
+          <p id="timing-editor-intro" class="t-micro timing-editor-intro">
+            Changes take effect after you save.
+          </p>
+
           <div class="duration-fields">
             <div class="duration-field">
               <label for="consumer-work-duration">Focus duration</label>
@@ -529,12 +400,13 @@
                 <input
                   type="checkbox"
                   checked={preBreakCueEnabled}
+                  aria-describedby="consumer-cue-help"
                   onchange={(event) => onTogglePreBreakCue(event.currentTarget.checked)}
                   disabled={settingsLoading || settingsSaving}
                 />
                 Pre-break heads-up
               </label>
-              <p class="t-micro">
+              <p id="consumer-cue-help" class="t-micro">
                 Briefly appears one minute before a scheduled break, then returns for the
                 final ten seconds. It never takes focus.
               </p>
@@ -546,17 +418,26 @@
               <input
                 type="checkbox"
                 checked={syncAcrossDevices}
+                aria-describedby={syncAcrossDevices
+                  ? "consumer-sync-help consumer-sync-preview"
+                  : "consumer-sync-help"}
                 onchange={(event) => onToggleSync(event.currentTarget.checked)}
                 disabled={settingsLoading || settingsSaving}
               />
               Sync breaks across devices
             </label>
-            <p class="t-micro">
+            <p id="consumer-sync-help" class="t-micro">
               Breaks land on the clock instead of counting from when you started, so every
               device with the same settings rests together. Nothing is sent over the network.
             </p>
             {#if syncAcrossDevices}
-              <p class="t-micro">{syncPreview}</p>
+              <p
+                id="consumer-sync-preview"
+                class="t-micro sync-preview"
+                data-type-role="mono"
+              >
+                This device · {syncPreview}
+              </p>
             {/if}
           </div>
 
@@ -591,7 +472,7 @@
 
         <details class="advanced">
           <summary>Advanced</summary>
-          <p>Open technical health details and native probe controls.</p>
+          <p>Review technical health details and native probe controls.</p>
           <button class="btn-ghost" type="button" onclick={onOpenDeveloperMode}>
             Open developer mode
           </button>
@@ -603,15 +484,170 @@
     </div>
   </section>
 
-  {#if warning}
-    <section class="warn" role="status" aria-labelledby="warning-title">
-      <h2 id="warning-title" class="t-label">{warning.heading}</h2>
-      <p class="t-micro">{warning.message}</p>
-      <button class="btn-text" type="button" onclick={onOpenDeveloperMode}>
-        View details
+  <hr class="rule" />
+
+  <section class="section" aria-labelledby="today-title">
+    <div class="section-head">
+      <h2 id="today-title" class="t-title">Your day</h2>
+      <button
+        id="view-history-trigger"
+        class="btn-text"
+        type="button"
+        onclick={onViewHistory}
+      >
+        View history
       </button>
-    </section>
-  {/if}
+    </div>
+    <div class="section-context">
+      <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
+      <label class="day-start t-micro">
+        Day starts
+        <select
+          class="day-start-select"
+          data-type-role="mono"
+          value={dayStartHour}
+          onchange={(event) =>
+            onDayStartChange(Number((event.currentTarget as HTMLSelectElement).value))}
+        >
+          {#each dayStartOptions() as option (option.hour)}
+            <option value={option.hour}>{option.label}</option>
+          {/each}
+        </select>
+      </label>
+    </div>
+
+    {#if todayActivity}
+      {#if activityStarting}
+        <div class="activity-starting" role="status">
+          <p class="t-label">Building your day</p>
+          <p class="t-micro">
+            Your first activity summary appears after one minute of local presence samples.
+          </p>
+        </div>
+        <p class="t-micro activity-note">
+          Keyboard and mouse presence only · nothing is keylogged
+        </p>
+      {:else}
+        <div class="stats" role="group" aria-label="Activity totals for the rolling window">
+          <div class="stat" class:is-zero={todayActivity.activeSeconds <= 0}>
+            <span class="num">{formatActivityDuration(todayActivity.activeSeconds)}</span>
+            <span class="t-micro">Active</span>
+          </div>
+          <div class="stat" class:is-zero={todayActivity.afkSeconds <= 0}>
+            <span class="num">{formatActivityDuration(todayActivity.afkSeconds)}</span>
+            <span class="t-micro">Away</span>
+          </div>
+          <div class="stat" class:is-zero={todayActivity.longestActiveSeconds <= 0}>
+            <span class="num">{formatActivityDuration(todayActivity.longestActiveSeconds)}</span>
+            <span class="t-micro">Longest stretch</span>
+          </div>
+          <div class="stat" class:is-zero={todayActivity.deepBlockCount <= 0}>
+            <span class="num">{todayActivity.deepBlockCount}</span>
+            <span class="t-micro">Deep work</span>
+            <span class="t-micro"
+              >{deepBlockCaption(
+                todayActivity.deepBlockCount,
+                todayActivity.deepBlockMinSeconds
+              )}</span
+            >
+          </div>
+        </div>
+
+        <div class="strip-frame">
+          <div class="strip-lines" aria-hidden="true">
+            {#each axisTicks as tick (tick.timestampMs)}
+              <span
+                class="strip-line"
+                class:is-day-start={tick.isDayStart}
+                style={`left: ${tick.positionPercent}%`}
+              ></span>
+            {/each}
+          </div>
+          <div class="strip" role="img" aria-label={activityStripLabel}>
+            {#each todayActivity.strip as bucket, index (index)}
+              <div class="strip-bucket" aria-hidden="true">
+                <span
+                  class="strip-afk"
+                  style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
+                ></span>
+                <span
+                  class="strip-active"
+                  style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
+                ></span>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <div class="strip-axis" data-type-role="mono" aria-hidden="true">
+          {#each axisTicks as tick (tick.timestampMs)}
+            {#if tick.showLabel}
+              <span
+                class="strip-axis-hour"
+                class:is-day-start={tick.isDayStart}
+                style={`left: ${tick.positionPercent}%`}>{tick.label}</span
+              >
+            {/if}
+          {/each}
+          <span class="strip-axis-now">now</span>
+        </div>
+        <ul class="legend" aria-hidden="true">
+          <li><span class="legend-swatch legend-active"></span> Active</li>
+          <li><span class="legend-swatch legend-afk"></span> Away</li>
+        </ul>
+
+        {#if activityEmpty}
+          <p class="t-micro" role="status">
+            No active or away time classified in this window yet.
+          </p>
+        {/if}
+        <p class="t-micro activity-note">
+          {activityFootnote(todayActivity.afkThresholdSeconds)}
+        </p>
+      {/if}
+    {:else if todayActivityError}
+      <p class="t-micro is-error" role="status">{todayErrorCaption(todayActivityError)}</p>
+    {:else}
+      <p class="t-micro" role="status">{todayLoadingCaption()}</p>
+    {/if}
+  </section>
+
+  <hr class="rule" />
+
+  <section class="section" aria-labelledby="break-history-title">
+    <div class="section-head">
+      <h2 id="break-history-title" class="t-title">Breaks</h2>
+      {#if breakSummary}
+        <p class="t-micro">{breakSummary.windowLabel}</p>
+      {/if}
+    </div>
+
+    {#if breakSummary}
+      <div
+        class="stats"
+        class:is-empty={breakDayEmpty}
+        role="group"
+        aria-label="Break outcome counts for the last day"
+      >
+        {#each breakStats as stat (stat.kind)}
+          <div class="stat" class:is-zero={stat.count <= 0} title={stat.hint}>
+            <span class="num" aria-label={`${stat.count} ${stat.label.toLowerCase()}. ${stat.hint}`}
+              >{stat.count}</span
+            >
+            <span class="t-micro">{stat.label}</span>
+          </div>
+        {/each}
+      </div>
+      <p class="t-micro">{breakCaption}</p>
+      {#if weekCaption}
+        <p class="t-micro">{weekCaption}</p>
+      {/if}
+    {:else if breakSummaryError}
+      <p class="t-micro is-error" role="status">{breakErrorCaption(breakSummaryError)}</p>
+    {:else}
+      <p class="t-micro" role="status">{breakLoadingCaption()}</p>
+    {/if}
+  </section>
 
   <hr class="rule" />
 
@@ -789,6 +825,11 @@
     color: var(--ink);
   }
 
+  .btn-primary:active:not(:disabled),
+  .btn-ghost:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
   .btn-text {
     padding: 6px 2px;
     color: var(--ink-2);
@@ -960,22 +1001,25 @@
     color: var(--ink-2);
   }
 
-  .head-aside {
+  .section-context {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: var(--s1) var(--s3);
+    justify-content: space-between;
+    gap: var(--s2) var(--s4);
   }
 
   .day-start {
     display: inline-flex;
-    align-items: baseline;
+    min-height: 30px;
+    align-items: center;
     gap: var(--s1);
     color: var(--ink-3);
   }
 
   .day-start-select {
     appearance: none;
+    min-height: 30px;
     border: 1px solid var(--line);
     border-radius: var(--r-control);
     background: transparent;
@@ -993,6 +1037,22 @@
   .day-start-select:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+  }
+
+  .activity-starting {
+    display: flex;
+    max-width: 65ch;
+    flex-direction: column;
+    gap: var(--s1);
+    padding: var(--s2) 0;
+  }
+
+  .activity-starting .t-label {
+    color: var(--ink);
+  }
+
+  .activity-note {
+    max-width: 72ch;
   }
 
   .legend {
@@ -1034,14 +1094,14 @@
     color: #ffc4c4;
   }
 
-  .foot {
+  .rhythm {
     display: grid;
     align-items: baseline;
     gap: var(--s3) var(--s4);
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .foot-actions {
+  .rhythm-actions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--s4);
@@ -1060,10 +1120,19 @@
     color: var(--warn);
   }
 
+  .warn .t-micro {
+    max-width: 65ch;
+  }
+
   .timing-editor {
     grid-column: 1 / -1;
     border-top: 1px solid var(--line);
     padding-top: var(--s4);
+  }
+
+  .timing-editor-intro {
+    max-width: 65ch;
+    margin-bottom: var(--s3);
   }
 
   .duration-fields {
@@ -1095,6 +1164,10 @@
 
   .duration-input.invalid {
     border-color: #c16a6a;
+  }
+
+  .duration-input.invalid:focus-within {
+    box-shadow: 0 0 0 3px rgba(193, 106, 106, 0.18);
   }
 
   .duration-input input {
@@ -1130,21 +1203,67 @@
 
   .setting-toggle {
     display: inline-flex;
+    min-height: 40px;
     align-items: center;
     gap: var(--s2);
+    padding: var(--s1) 0;
     color: var(--ink);
     font-size: 0.78rem;
     font-weight: 600;
+    cursor: pointer;
   }
 
   .setting-toggle input {
-    width: 15px;
-    height: 15px;
-    accent-color: var(--ink);
+    appearance: none;
+    display: grid;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    place-content: center;
+    margin: 0;
+    border: 1px solid var(--line-2);
+    color: var(--bg);
+    background: #0c130f;
+    cursor: pointer;
+  }
+
+  .setting-toggle input::before {
+    width: 9px;
+    height: 5px;
+    border-bottom: 2px solid currentColor;
+    border-left: 2px solid currentColor;
+    content: "";
+    transform: translateY(-1px) rotate(-45deg) scale(0);
+  }
+
+  .setting-toggle input:checked {
+    border-color: var(--ink-2);
+    background: var(--ink);
+  }
+
+  .setting-toggle input:checked::before {
+    transform: translateY(-1px) rotate(-45deg) scale(1);
+  }
+
+  .setting-toggle input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .setting-toggle input:disabled {
+    cursor: not-allowed;
+    opacity: 0.52;
   }
 
   .setting-field .t-micro {
+    max-width: 65ch;
     margin: 6px 0 0;
+  }
+
+  .sync-preview {
+    border-left: 2px solid var(--line-2);
+    padding-left: var(--s2);
+    color: var(--ink-2);
   }
 
   .settings-actions {
@@ -1167,14 +1286,40 @@
   }
 
   .advanced summary {
+    display: inline-flex;
     width: fit-content;
+    min-height: 40px;
+    align-items: center;
     cursor: pointer;
     color: var(--ink);
     font-size: 0.78rem;
     font-weight: 600;
   }
 
+  .advanced summary::marker {
+    content: "";
+  }
+
+  .advanced summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .advanced summary::after {
+    width: 6px;
+    height: 6px;
+    margin-left: 10px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    content: "";
+    transform: translateY(-2px) rotate(45deg);
+  }
+
+  .advanced[open] summary::after {
+    transform: translateY(2px) rotate(225deg);
+  }
+
   .advanced p {
+    max-width: 65ch;
     margin: 9px 0;
     font-size: 0.75rem;
   }
@@ -1209,7 +1354,7 @@
   }
 
   @media (max-width: 520px) {
-    .foot {
+    .rhythm {
       grid-template-columns: 1fr;
     }
 

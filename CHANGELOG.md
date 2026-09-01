@@ -16,6 +16,14 @@ released versions link to their GitHub release.
 
 ### Changed
 
+- The consumer dashboard now keeps reminder timing and warnings beside the
+  live reminder state, gives new local history a compact first-minute state,
+  separates day context from navigation, and uses clearer break-outcome labels
+  with larger settings targets, visible toggle states, and save/reset feedback
+  that stays in view.
+- History now refreshes whenever it reopens, replaces blank day details with a
+  calm empty state, shows only break outcome types that occurred, and keeps a
+  stationary pointer from obscuring the selected day on entry.
 - Break overlays now reveal the static scene, reflective heading, guidance,
   timer, and controls in a synchronized 2.4-second sequence. Reduced Motion
   continues to reveal the content immediately.

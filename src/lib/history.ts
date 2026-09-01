@@ -40,6 +40,17 @@ export function historyActivityLevel(totals: {
   return 4;
 }
 
+/** True when a selected day has neither classified presence nor break outcomes. */
+export function historyDayIsEmpty(day: {
+  totals: { isBlank: boolean };
+  breakCounts: Array<{ count: number }>;
+}): boolean {
+  return (
+    day.totals.isBlank &&
+    !day.breakCounts.some(({ count }) => Number.isFinite(count) && count > 0)
+  );
+}
+
 export type HistoryBreakCount = {
   kind: BreakOutcomeKind;
   label: string;
@@ -158,10 +169,11 @@ export function historyCalendarNeedsRefresh(
   active: boolean,
   calendarRequested: boolean,
   request: HistoryCalendarRequest,
-  nowMs: number
+  nowMs: number,
+  wasActive = active
 ): boolean {
   if (!active) return false;
-  if (!calendarRequested) return true;
+  if (!wasActive || !calendarRequested) return true;
   const anchorMs = request.pages[0]?.endMs;
   return (
     anchorMs === undefined ||

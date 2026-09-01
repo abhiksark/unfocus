@@ -266,7 +266,7 @@ export function consumerWarning(input: ConsumerWarningInput): ConsumerWarning | 
     return {
       kind: "settings",
       heading: "Your timing change wasn’t saved",
-      message: "Your previous rhythm was retained. Check the timing fields and try again."
+      message: "Your previous rhythm was retained. You can try again."
     };
   }
   if (input.overlayError) {
