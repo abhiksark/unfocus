@@ -13,10 +13,17 @@ mod overlay;
 mod pre_break_cue;
 mod probes;
 mod reminder;
+mod storage_recovery;
 mod tray;
 
-use activity::{get_activity_range, get_today_activity, ActivityTrackerHandle};
-use break_ledger::{get_break_range, get_break_summary, BreakLedgerHandle};
+use activity::{
+    get_activity_range, get_today_activity, retry_activity_history, start_new_activity_history,
+    ActivityTrackerHandle,
+};
+use break_ledger::{
+    get_break_range, get_break_summary, retry_break_ledger, start_new_break_ledger,
+    BreakLedgerHandle,
+};
 use diagnostics::get_diagnostics;
 #[cfg(desktop)]
 use instance::handle_secondary_launch;
@@ -30,8 +37,8 @@ use pre_break_cue::set_pre_break_cue_visibility;
 use probes::ProbeCache;
 use reminder::{
     get_reminder_settings, get_reminder_status, pause_reminders, reset_reminder_settings,
-    resume_reminders, save_reminder_settings, start_scheduler as start_reminder_scheduler,
-    take_break_now, ReminderSettingsManager,
+    resume_reminders, retry_reminder_settings, save_reminder_settings,
+    start_scheduler as start_reminder_scheduler, take_break_now, ReminderSettingsManager,
 };
 use std::io;
 use tauri::Manager;
@@ -112,16 +119,10 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
     let config_dir = app.path().app_config_dir()?;
-    let settings_manager = ReminderSettingsManager::load(&config_dir)?;
+    let settings_manager = ReminderSettingsManager::initialize(&config_dir);
     let probe_cache = ProbeCache::start()?;
-    let activity_tracker = ActivityTrackerHandle::load(&config_dir).unwrap_or_else(|error| {
-        eprintln!("could not load activity history: {error}; starting empty");
-        ActivityTrackerHandle::default()
-    });
-    let break_ledger = BreakLedgerHandle::load(&config_dir).unwrap_or_else(|error| {
-        eprintln!("could not load break event ledger: {error}; starting empty");
-        BreakLedgerHandle::default()
-    });
+    let activity_tracker = ActivityTrackerHandle::initialize(&config_dir);
+    let break_ledger = BreakLedgerHandle::initialize(&config_dir);
     let overlay_controller = OverlayController::start(app.handle().clone())?;
     let tray_status = TrayStatus::default();
     if !app.manage(settings_manager.clone()) {
@@ -159,7 +160,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         return Err(io::Error::other("tray runtime was already managed").into());
     }
     #[cfg(debug_assertions)]
-    schedule_automatic_overlay_test(app, overlay_controller);
+    schedule_automatic_overlay_test(app, overlay_controller, tray_status);
     Ok(())
 }
 
@@ -226,9 +227,14 @@ pub fn run() {
             get_diagnostics,
             get_today_activity,
             get_activity_range,
+            retry_activity_history,
+            start_new_activity_history,
             get_break_range,
             get_break_summary,
+            retry_break_ledger,
+            start_new_break_ledger,
             get_reminder_settings,
+            retry_reminder_settings,
             get_reminder_status,
             save_reminder_settings,
             reset_reminder_settings,

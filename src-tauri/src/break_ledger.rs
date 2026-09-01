@@ -3,9 +3,14 @@
 //! Observe-only for the timer: write failures never stop reminders. No
 //! keylogging, window titles, or telemetry.
 
+use crate::storage_recovery::{
+    canonical_bytes_unchanged, create_new_file_with_permissions, existing_file_permissions,
+    quarantine_invalid_hard_link, replace_file_atomically, LoadFailure, LocalSnapshot,
+    StorageDiagnostic, StorageFailureCategory, StorageLoadHealth,
+};
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{self, Write},
     path::{Path, PathBuf},
     sync::{
@@ -31,6 +36,8 @@ const MILLIS_PER_SECOND: u64 = 1_000;
 const MAX_RANGE_MS: u64 = 31 * 24 * 60 * 60 * MILLIS_PER_SECOND;
 
 static LEDGER_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+static TEST_LEDGER_PERSIST_FAILURE: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 #[cfg(test)]
 struct TestPersistBarrier {
@@ -41,6 +48,8 @@ struct TestPersistBarrier {
 
 #[cfg(test)]
 static TEST_PERSIST_BARRIER: Mutex<Option<TestPersistBarrier>> = Mutex::new(None);
+#[cfg(test)]
+static TEST_WORKER_START_FAILURES: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -94,8 +103,15 @@ pub(crate) struct BreakRangeRecord {
 }
 
 #[derive(Debug)]
-struct BreakLedgerState {
+struct BreakLedgerRuntime {
     events: Vec<BreakEvent>,
+    persistence: Arc<PersistenceWorker>,
+}
+
+#[derive(Debug)]
+enum BreakLedgerStorageState {
+    Available(BreakLedgerRuntime),
+    Unavailable(LoadFailure),
 }
 
 #[derive(Debug)]
@@ -121,52 +137,52 @@ impl Drop for PersistenceWorker {
 
 #[derive(Debug, Clone)]
 pub(crate) struct BreakLedgerHandle {
-    inner: Arc<Mutex<BreakLedgerState>>,
-    persistence: Arc<PersistenceWorker>,
-}
-
-impl Default for BreakLedgerHandle {
-    fn default() -> Self {
-        Self::start(PathBuf::from(LEDGER_FILE_NAME), Vec::new())
-    }
+    inner: Arc<Mutex<BreakLedgerStorageState>>,
+    path: Arc<PathBuf>,
+    recovery: Arc<Mutex<()>>,
 }
 
 impl BreakLedgerHandle {
-    pub(crate) fn load(config_dir: &Path) -> io::Result<Self> {
+    pub(crate) fn initialize(config_dir: &Path) -> Self {
+        Self::initialize_at(config_dir, epoch_ms(SystemTime::now()))
+    }
+
+    fn initialize_at(config_dir: &Path, now_ms: u64) -> Self {
         let path = config_dir.join(LEDGER_FILE_NAME);
-        let now_ms = epoch_ms(SystemTime::now());
-        let events = load_or_repair_ledger(&path, now_ms)?;
-        Ok(Self::start(path, events))
+        let state = match load_ledger_runtime(&path, now_ms) {
+            Ok(runtime) => BreakLedgerStorageState::Available(runtime),
+            Err(failure) => BreakLedgerStorageState::Unavailable(failure),
+        };
+        Self {
+            inner: Arc::new(Mutex::new(state)),
+            path: Arc::new(path),
+            recovery: Arc::new(Mutex::new(())),
+        }
+    }
+
+    #[cfg(test)]
+    fn load(config_dir: &Path) -> io::Result<Self> {
+        let handle = Self::initialize(config_dir);
+        if handle.is_available() {
+            Ok(handle)
+        } else {
+            Err(io::Error::other("break ledger unavailable"))
+        }
     }
 
     #[cfg(test)]
     fn new_with_path(path: PathBuf) -> Self {
-        Self::start(path, Vec::new())
-    }
-
-    fn start(path: PathBuf, events: Vec<BreakEvent>) -> Self {
-        let (sender, receiver) = mpsc::channel();
-        let worker_events = events.clone();
-        let path_display = path.display().to_string();
-        let join = thread::Builder::new()
-            .name("break-ledger-persistence".into())
-            .spawn(move || persistence_worker(path, worker_events, receiver))
-            .map_err(|error| {
-                eprintln!(
-                    "could not start break ledger persistence worker for {path_display}: {error}"
-                );
-                error
-            })
-            .ok();
-
+        let runtime = start_persistence_worker(path.clone(), Vec::new()).expect("worker starts");
         Self {
-            inner: Arc::new(Mutex::new(BreakLedgerState { events })),
-            persistence: Arc::new(PersistenceWorker { sender, join }),
+            inner: Arc::new(Mutex::new(BreakLedgerStorageState::Available(runtime))),
+            path: Arc::new(path),
+            recovery: Arc::new(Mutex::new(())),
         }
     }
 
-    /// Append one outcome in memory and queue it for persistence.
-    /// Persistence failures are logged; memory still updates.
+    /// Append one outcome in memory and queue it for persistence. While the
+    /// canonical ledger is unavailable, outcomes are deliberately not
+    /// invented in memory and no worker exists to write another file.
     pub(crate) fn record(
         &self,
         kind: BreakEventKind,
@@ -174,7 +190,10 @@ impl BreakLedgerHandle {
         break_seconds: u64,
         now_ms: u64,
     ) {
-        let Ok(mut state) = self.inner.lock() else {
+        let Ok(mut storage) = self.inner.lock() else {
+            return;
+        };
+        let BreakLedgerStorageState::Available(runtime) = &mut *storage else {
             return;
         };
         let event = BreakEvent {
@@ -183,26 +202,170 @@ impl BreakLedgerHandle {
             work_minutes,
             break_seconds,
         };
-        state.events.push(event.clone());
-        prune_events(&mut state.events, now_ms);
-        let queued = self
+        runtime.events.push(event.clone());
+        prune_events(&mut runtime.events, now_ms);
+        let queued = runtime
             .persistence
             .sender
             .send(PersistenceMessage::Record(event))
             .is_ok();
-        drop(state);
+        drop(storage);
         if !queued {
             eprintln!("could not queue break event for persistence; keeping it in memory");
         }
     }
 
-    pub(crate) fn summary(&self, now_ms: u64) -> BreakLedgerSummary {
-        let events = self
+    pub(crate) fn snapshot(&self, now_ms: u64) -> LocalSnapshot<BreakLedgerSummary> {
+        let Ok(storage) = self.inner.lock() else {
+            return LocalSnapshot::unavailable(StorageFailureCategory::Read);
+        };
+        match &*storage {
+            BreakLedgerStorageState::Available(runtime) => {
+                LocalSnapshot::available(summarize_events(&runtime.events, now_ms))
+            }
+            BreakLedgerStorageState::Unavailable(failure) => {
+                LocalSnapshot::unavailable(failure.category)
+            }
+        }
+    }
+
+    pub(crate) fn diagnostics(&self) -> StorageDiagnostic {
+        let Ok(storage) = self.inner.lock() else {
+            return LoadFailure::read("break ledger state lock is poisoned").diagnostic();
+        };
+        match &*storage {
+            BreakLedgerStorageState::Available(_) => StorageDiagnostic::available(),
+            BreakLedgerStorageState::Unavailable(failure) => failure.diagnostic(),
+        }
+    }
+
+    pub(crate) fn retry_load(&self, now_ms: u64) -> StorageLoadHealth {
+        let Ok(_recovery) = self.recovery.lock() else {
+            return StorageLoadHealth::unavailable(StorageFailureCategory::Read);
+        };
+        if self.is_available() {
+            return StorageLoadHealth::available();
+        }
+        self.retry_load_locked(now_ms)
+    }
+
+    pub(crate) fn start_new_after_invalid(&self, now_ms: u64) -> Result<StorageLoadHealth, String> {
+        let _recovery = self
+            .recovery
+            .lock()
+            .map_err(|_| "break history recovery is unavailable".to_owned())?;
+        if self.failure_category()? != StorageFailureCategory::Invalid {
+            return Err("start-new is only available for invalid break history".into());
+        }
+
+        let contents = fs::read(&*self.path).map_err(|error| {
+            self.publish_failure(LoadFailure::read(format!(
+                "could not re-read {} before recovery: {error}",
+                self.path.display()
+            )));
+            "break history could not be read; retry is still available".to_owned()
+        })?;
+
+        if ledger_from_bytes(&contents, now_ms).is_ok() {
+            return Ok(self.retry_load_locked(now_ms));
+        }
+
+        quarantine_invalid_hard_link(&self.path, &contents).map_err(|error| {
+            self.publish_failure(LoadFailure::invalid(format!(
+                "could not preserve invalid {}: {error}",
+                self.path.display()
+            )));
+            "invalid break history could not be preserved".to_owned()
+        })?;
+        let empty = PersistedBreakLedger {
+            version: LEDGER_SCHEMA_VERSION,
+            events: Vec::new(),
+        };
+        let temp_path = prepare_ledger_file(&self.path, &empty).map_err(|error| {
+            self.publish_failure(LoadFailure::invalid(format!(
+                "invalid {} was preserved, but a new ledger could not be prepared: {error}",
+                self.path.display()
+            )));
+            "a new break history could not be started".to_owned()
+        })?;
+        let unchanged = match canonical_bytes_unchanged(&self.path, &contents) {
+            Ok(unchanged) => unchanged,
+            Err(error) => {
+                let _ = fs::remove_file(&temp_path);
+                self.publish_failure(LoadFailure::read(format!(
+                    "could not complete the final canonical recheck for {}: {error}",
+                    self.path.display()
+                )));
+                return Err(
+                    "break history could not be rechecked; retry is still available".into(),
+                );
+            }
+        };
+        if !unchanged {
+            let _ = fs::remove_file(&temp_path);
+            return Err(
+                "break history changed while recovery was being prepared; retry to load it"
+                    .to_owned(),
+            );
+        }
+        let runtime =
+            start_persistence_worker((*self.path).clone(), Vec::new()).map_err(|_error| {
+                let _ = fs::remove_file(&temp_path);
+                "break history persistence could not start".to_owned()
+            })?;
+        let mut storage = self.inner.lock().map_err(|_| {
+            let _ = fs::remove_file(&temp_path);
+            "break history recovery is unavailable".to_owned()
+        })?;
+        if let Err(error) = replace_file_atomically(&temp_path, &self.path) {
+            let _ = fs::remove_file(&temp_path);
+            return Err(format!("a new break history could not be started: {error}"));
+        }
+        *storage = BreakLedgerStorageState::Available(runtime);
+        Ok(StorageLoadHealth::available())
+    }
+
+    fn retry_load_locked(&self, now_ms: u64) -> StorageLoadHealth {
+        match load_ledger_runtime(&self.path, now_ms) {
+            Ok(runtime) => {
+                if let Ok(mut storage) = self.inner.lock() {
+                    *storage = BreakLedgerStorageState::Available(runtime);
+                    StorageLoadHealth::available()
+                } else {
+                    StorageLoadHealth::unavailable(StorageFailureCategory::Read)
+                }
+            }
+            Err(failure) => {
+                let health = failure.health();
+                self.publish_failure(failure);
+                health
+            }
+        }
+    }
+
+    fn is_available(&self) -> bool {
+        self.inner
+            .lock()
+            .is_ok_and(|storage| matches!(&*storage, BreakLedgerStorageState::Available(_)))
+    }
+
+    fn failure_category(&self) -> Result<StorageFailureCategory, String> {
+        let storage = self
             .inner
             .lock()
-            .map(|state| state.events.clone())
-            .unwrap_or_default();
-        summarize_events(&events, now_ms)
+            .map_err(|_| "break history recovery is unavailable".to_owned())?;
+        match &*storage {
+            BreakLedgerStorageState::Available(_) => {
+                Err("break history is already available".into())
+            }
+            BreakLedgerStorageState::Unavailable(failure) => Ok(failure.category),
+        }
+    }
+
+    fn publish_failure(&self, failure: LoadFailure) {
+        if let Ok(mut storage) = self.inner.lock() {
+            *storage = BreakLedgerStorageState::Unavailable(failure);
+        }
     }
 
     pub(crate) fn range(
@@ -219,13 +382,44 @@ impl BreakLedgerHandle {
             ));
         }
 
-        let events = self
+        let storage = self
             .inner
             .lock()
-            .map(|state| state.events.clone())
-            .unwrap_or_default();
-        Ok(events_in_range(&events, start_ms, end_ms))
+            .map_err(|_| "break history is unavailable".to_owned())?;
+        let BreakLedgerStorageState::Available(runtime) = &*storage else {
+            return Err("break history is unavailable".into());
+        };
+        Ok(events_in_range(&runtime.events, start_ms, end_ms))
     }
+}
+
+fn start_persistence_worker(
+    path: PathBuf,
+    events: Vec<BreakEvent>,
+) -> io::Result<BreakLedgerRuntime> {
+    #[cfg(test)]
+    if TEST_WORKER_START_FAILURES.lock().is_ok_and(|mut targets| {
+        targets
+            .iter()
+            .position(|target| target == &path)
+            .map(|index| targets.remove(index))
+            .is_some()
+    }) {
+        return Err(io::Error::other("injected worker startup failure"));
+    }
+
+    let (sender, receiver) = mpsc::channel();
+    let worker_events = events.clone();
+    let join = thread::Builder::new()
+        .name("break-ledger-persistence".into())
+        .spawn(move || persistence_worker(path, worker_events, receiver))?;
+    Ok(BreakLedgerRuntime {
+        events,
+        persistence: Arc::new(PersistenceWorker {
+            sender,
+            join: Some(join),
+        }),
+    })
 }
 
 fn persistence_worker(
@@ -373,25 +567,38 @@ fn events_from_persisted(ledger: PersistedBreakLedger, now_ms: u64) -> Result<Ve
     Ok(events)
 }
 
-fn load_or_repair_ledger(path: &Path, now_ms: u64) -> io::Result<Vec<BreakEvent>> {
+fn ledger_from_bytes(contents: &[u8], now_ms: u64) -> Result<Vec<BreakEvent>, LoadFailure> {
+    let ledger = serde_json::from_slice::<PersistedBreakLedger>(contents).map_err(|error| {
+        LoadFailure::invalid(format!("break ledger content is malformed: {error}"))
+    })?;
+    events_from_persisted(ledger, now_ms)
+        .map_err(|()| LoadFailure::invalid("break ledger content is unsupported or invalid"))
+}
+
+fn load_ledger(path: &Path, now_ms: u64) -> Result<Vec<BreakEvent>, LoadFailure> {
     match fs::read(path) {
-        Ok(contents) => {
-            let parsed = serde_json::from_slice::<PersistedBreakLedger>(&contents)
-                .ok()
-                .and_then(|ledger| events_from_persisted(ledger, now_ms).ok());
-            if let Some(events) = parsed {
-                return Ok(events);
-            }
-            let empty = PersistedBreakLedger {
-                version: LEDGER_SCHEMA_VERSION,
-                events: Vec::new(),
-            };
-            persist_ledger(path, &empty)?;
-            Ok(Vec::new())
-        }
+        Ok(contents) => ledger_from_bytes(&contents, now_ms),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(error) => Err(error),
+        Err(error) => Err(LoadFailure::read(format!(
+            "could not read {}: {error}",
+            path.display()
+        ))),
     }
+}
+
+fn load_ledger_runtime(path: &Path, now_ms: u64) -> Result<BreakLedgerRuntime, LoadFailure> {
+    let events = load_ledger(path, now_ms)?;
+    start_persistence_worker(path.to_path_buf(), events).map_err(|error| {
+        LoadFailure::read(format!(
+            "could not start persistence for {}: {error}",
+            path.display()
+        ))
+    })
+}
+
+#[cfg(test)]
+fn load_or_repair_ledger(path: &Path, now_ms: u64) -> Result<Vec<BreakEvent>, LoadFailure> {
+    load_ledger(path, now_ms)
 }
 
 fn create_ledger_temp_file(path: &Path) -> io::Result<(PathBuf, File)> {
@@ -405,15 +612,12 @@ fn create_ledger_temp_file(path: &Path) -> io::Result<(PathBuf, File)> {
         .file_name()
         .map(|name| name.to_string_lossy())
         .unwrap_or_else(|| "break-events".into());
+    let permissions = existing_file_permissions(path)?;
 
     for _ in 0..100 {
         let id = LEDGER_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let temp_path = parent.join(format!(".{name}.{}.{id}.tmp", std::process::id()));
-        match OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp_path)
-        {
+        match create_new_file_with_permissions(&temp_path, permissions.as_ref()) {
             Ok(file) => return Ok((temp_path, file)),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(error),
@@ -426,25 +630,19 @@ fn create_ledger_temp_file(path: &Path) -> io::Result<(PathBuf, File)> {
     ))
 }
 
-#[cfg(not(target_os = "windows"))]
-fn replace_ledger_file(temp_path: &Path, path: &Path) -> io::Result<()> {
-    fs::rename(temp_path, path)
-}
-
-#[cfg(target_os = "windows")]
-fn replace_ledger_file(temp_path: &Path, path: &Path) -> io::Result<()> {
-    match fs::rename(temp_path, path) {
-        Ok(()) => Ok(()),
-        Err(_error) if path.exists() => {
-            fs::copy(temp_path, path)?;
-            OpenOptions::new().write(true).open(path)?.sync_all()?;
-            fs::remove_file(temp_path)
+fn prepare_ledger_file(path: &Path, ledger: &PersistedBreakLedger) -> io::Result<PathBuf> {
+    #[cfg(test)]
+    if TEST_LEDGER_PERSIST_FAILURE.lock().is_ok_and(|mut target| {
+        if target.as_deref() == Some(path) {
+            target.take();
+            true
+        } else {
+            false
         }
-        Err(error) => Err(error),
+    }) {
+        return Err(io::Error::other("injected break ledger write failure"));
     }
-}
 
-fn persist_ledger(path: &Path, ledger: &PersistedBreakLedger) -> io::Result<()> {
     #[cfg(test)]
     {
         let barrier = TEST_PERSIST_BARRIER.lock().ok().and_then(|mut slot| {
@@ -479,7 +677,12 @@ fn persist_ledger(path: &Path, ledger: &PersistedBreakLedger) -> io::Result<()> 
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
-    if let Err(error) = replace_ledger_file(&temp_path, path) {
+    Ok(temp_path)
+}
+
+fn persist_ledger(path: &Path, ledger: &PersistedBreakLedger) -> io::Result<()> {
+    let temp_path = prepare_ledger_file(path, ledger)?;
+    if let Err(error) = replace_file_atomically(&temp_path, path) {
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
@@ -490,9 +693,35 @@ fn persist_ledger(path: &Path, ledger: &PersistedBreakLedger) -> io::Result<()> 
 pub(crate) fn get_break_summary(
     window: tauri::WebviewWindow,
     ledger: tauri::State<'_, BreakLedgerHandle>,
-) -> Result<BreakLedgerSummary, String> {
+) -> Result<LocalSnapshot<BreakLedgerSummary>, String> {
     crate::authorize_main_caller(window.label())?;
-    Ok(ledger.summary(epoch_ms(SystemTime::now())))
+    Ok(ledger.snapshot(epoch_ms(SystemTime::now())))
+}
+
+#[tauri::command]
+pub(crate) async fn retry_break_ledger(
+    window: tauri::WebviewWindow,
+    ledger: tauri::State<'_, BreakLedgerHandle>,
+) -> Result<StorageLoadHealth, String> {
+    crate::authorize_main_caller(window.label())?;
+    let ledger = ledger.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || ledger.retry_load(epoch_ms(SystemTime::now())))
+        .await
+        .map_err(|_| "break history retry could not run".to_owned())
+}
+
+#[tauri::command]
+pub(crate) async fn start_new_break_ledger(
+    window: tauri::WebviewWindow,
+    ledger: tauri::State<'_, BreakLedgerHandle>,
+) -> Result<StorageLoadHealth, String> {
+    crate::authorize_main_caller(window.label())?;
+    let ledger = ledger.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        ledger.start_new_after_invalid(epoch_ms(SystemTime::now()))
+    })
+    .await
+    .map_err(|_| "break history recovery could not run".to_owned())?
 }
 
 #[tauri::command]
@@ -764,16 +993,288 @@ mod tests {
     }
 
     #[test]
-    fn malformed_ledger_is_replaced_with_empty_complete_file() {
+    fn malformed_ledger_is_preserved_and_unavailable() {
         let dir = TestDirectory::new();
         let path = dir.path.join(LEDGER_FILE_NAME);
-        fs::write(&path, b"{nope").expect("garbage");
-        let events = load_or_repair_ledger(&path, 1_700_000_000_000).expect("repair");
-        assert!(events.is_empty());
-        let repaired: PersistedBreakLedger =
-            serde_json::from_slice(&fs::read(&path).expect("read")).expect("json");
-        assert_eq!(repaired.version, LEDGER_SCHEMA_VERSION);
-        assert!(repaired.events.is_empty());
+        let original = b"{nope";
+        fs::write(&path, original).expect("garbage");
+
+        let handle = BreakLedgerHandle::initialize_at(&dir.path, 1_700_000_000_000);
+
+        assert_eq!(fs::read(&path).expect("read"), original);
+        let snapshot = handle.snapshot(1_700_000_000_000);
+        assert!(snapshot.data.is_none());
+        assert_eq!(
+            snapshot.load_health.recovery,
+            crate::storage_recovery::StorageRecovery::RetryOrStartNew
+        );
+        assert!(handle.range(1, 2).is_err());
+    }
+
+    #[test]
+    fn read_failure_stays_unavailable_until_retry_starts_one_canonical_worker() {
+        let dir = TestDirectory::new();
+        let blocked_config = dir.path.join("blocked-config");
+        fs::write(&blocked_config, b"blocker").expect("block config directory");
+        let canonical = blocked_config.join(LEDGER_FILE_NAME);
+        let now = 1_700_000_000_000;
+        let handle = BreakLedgerHandle::initialize_at(&blocked_config, now);
+
+        assert_eq!(&*handle.path, &canonical);
+        assert_eq!(
+            handle.snapshot(now).load_health.recovery,
+            crate::storage_recovery::StorageRecovery::Retry
+        );
+        handle.record(BreakEventKind::ScheduledShown, 20, 20, now);
+        assert_eq!(
+            fs::read(&blocked_config).expect("blocker untouched"),
+            b"blocker"
+        );
+        assert!(handle.range(now, now + 1).is_err());
+        assert!(handle.start_new_after_invalid(now).is_err());
+
+        fs::remove_file(&blocked_config).expect("remove blocker");
+        fs::create_dir(&blocked_config).expect("create config directory");
+        persist_ledger(
+            &canonical,
+            &PersistedBreakLedger {
+                version: LEDGER_SCHEMA_VERSION,
+                events: Vec::new(),
+            },
+        )
+        .expect("write repaired ledger");
+
+        assert_eq!(handle.retry_load(now), StorageLoadHealth::available());
+        assert!(handle.snapshot(now).data.is_some());
+        handle.record(BreakEventKind::ManualTakeBreak, 20, 20, now);
+        drop(handle);
+        let persisted: PersistedBreakLedger =
+            serde_json::from_slice(&fs::read(canonical).expect("persisted record"))
+                .expect("valid ledger");
+        assert_eq!(persisted.events.len(), 1);
+    }
+
+    #[test]
+    fn failed_retry_preserves_invalid_ledger_bytes_and_state() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        let original = b"invalid ledger";
+        fs::write(&path, original).expect("seed invalid ledger");
+        let now = 1_700_000_000_000;
+        let handle = BreakLedgerHandle::initialize_at(&dir.path, now);
+
+        let health = handle.retry_load(now);
+
+        assert_eq!(
+            health.status,
+            crate::storage_recovery::StorageLoadStatus::Unavailable
+        );
+        assert_eq!(
+            health.recovery,
+            crate::storage_recovery::StorageRecovery::RetryOrStartNew
+        );
+        assert_eq!(fs::read(path).expect("canonical unchanged"), original);
+        assert!(handle.snapshot(now).data.is_none());
+    }
+
+    #[test]
+    fn invalid_start_new_quarantines_exact_bytes_and_writes_empty_ledger() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        let original = b"invalid ledger bytes\0";
+        fs::write(&path, original).expect("seed invalid ledger");
+        let now = 1_700_000_000_000;
+        let handle = BreakLedgerHandle::initialize_at(&dir.path, now);
+
+        assert_eq!(
+            handle.start_new_after_invalid(now).expect("start new"),
+            StorageLoadHealth::available()
+        );
+
+        let persisted: PersistedBreakLedger =
+            serde_json::from_slice(&fs::read(&path).expect("new canonical")).expect("valid empty");
+        assert_eq!(persisted.version, LEDGER_SCHEMA_VERSION);
+        assert!(persisted.events.is_empty());
+        let quarantines: Vec<_> = fs::read_dir(&dir.path)
+            .expect("siblings")
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("break-events.json.invalid-")
+            })
+            .collect();
+        assert_eq!(quarantines.len(), 1);
+        assert_eq!(
+            fs::read(quarantines[0].path()).expect("quarantine"),
+            original
+        );
+        assert!(handle.snapshot(now).data.is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn start_new_preserves_restrictive_canonical_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        fs::write(&path, b"invalid ledger bytes").expect("seed invalid ledger");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+            .expect("restrict canonical permissions");
+        let now = 1_700_000_000_000;
+        let handle = BreakLedgerHandle::initialize_at(&dir.path, now);
+
+        handle
+            .start_new_after_invalid(now)
+            .expect("start new break history");
+
+        assert_eq!(
+            fs::metadata(path).expect("metadata").permissions().mode() & 0o7777,
+            0o600
+        );
+    }
+
+    #[test]
+    fn failed_quarantine_or_replacement_preserves_invalid_ledger_bytes() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        let original = b"invalid ledger bytes";
+        fs::write(&path, original).expect("seed invalid ledger");
+        let now = 1_700_000_000_000;
+        let handle = BreakLedgerHandle::initialize_at(&dir.path, now);
+        crate::storage_recovery::TEST_QUARANTINE_FAILURES
+            .lock()
+            .expect("hook")
+            .push(path.clone());
+
+        assert!(handle.start_new_after_invalid(now).is_err());
+        assert_eq!(fs::read(&path).expect("after quarantine failure"), original);
+
+        *TEST_LEDGER_PERSIST_FAILURE.lock().expect("hook") = Some(path.clone());
+        assert!(handle.start_new_after_invalid(now).is_err());
+        assert_eq!(
+            fs::read(&path).expect("after replacement failure"),
+            original
+        );
+        assert!(handle.snapshot(now).data.is_none());
+    }
+
+    #[test]
+    fn start_new_worker_failure_preserves_invalid_canonical_and_unavailable_state() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        let original = b"invalid ledger bytes";
+        fs::write(&path, original).expect("seed invalid ledger");
+        let now = 1_700_000_000_000;
+        let handle = BreakLedgerHandle::initialize_at(&dir.path, now);
+        let before = handle.diagnostics();
+        TEST_WORKER_START_FAILURES
+            .lock()
+            .expect("hook")
+            .push(path.clone());
+
+        assert!(handle.start_new_after_invalid(now).is_err());
+
+        assert_eq!(fs::read(&path).expect("canonical unchanged"), original);
+        assert!(handle.snapshot(now).data.is_none());
+        let after = handle.diagnostics();
+        assert_eq!(after.status, before.status);
+        assert_eq!(after.recovery, before.recovery);
+        assert_eq!(after.category, before.category);
+        assert_eq!(after.error, before.error);
+    }
+
+    #[test]
+    fn concurrent_external_ledger_repair_is_not_overwritten() {
+        use std::time::Duration;
+
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        fs::write(&path, b"invalid ledger bytes").expect("seed invalid ledger");
+        let now = 1_700_000_000_000;
+        let handle = BreakLedgerHandle::initialize_at(&dir.path, now);
+        let repaired = PersistedBreakLedger {
+            version: LEDGER_SCHEMA_VERSION,
+            events: Vec::new(),
+        };
+        let (started, release) = crate::storage_recovery::install_replacement_barrier(path.clone());
+        let recovering = handle.clone();
+        let recovery = std::thread::spawn(move || recovering.start_new_after_invalid(now));
+        started
+            .recv_timeout(Duration::from_secs(1))
+            .expect("recovery reaches final validation");
+
+        persist_ledger(&path, &repaired).expect("external repair replaces canonical file");
+        let repaired_bytes = fs::read(&path).expect("repaired bytes");
+        release.send(()).expect("release recovery");
+
+        assert!(recovery.join().expect("recovery thread").is_err());
+        assert_eq!(
+            fs::read(&path).expect("canonical remains repaired"),
+            repaired_bytes
+        );
+        assert!(handle.snapshot(now).data.is_none());
+        assert_eq!(handle.retry_load(now), StorageLoadHealth::available());
+    }
+
+    #[test]
+    fn canonical_removal_at_final_recheck_publishes_read_failure() {
+        use std::time::Duration;
+
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        fs::write(&path, b"invalid ledger bytes").expect("seed invalid ledger");
+        let now = 1_700_000_000_000;
+        let handle = BreakLedgerHandle::initialize_at(&dir.path, now);
+        let (started, release) = crate::storage_recovery::install_replacement_barrier(path.clone());
+        let recovering = handle.clone();
+        let recovery = std::thread::spawn(move || recovering.start_new_after_invalid(now));
+        started
+            .recv_timeout(Duration::from_secs(1))
+            .expect("recovery reaches final canonical recheck");
+
+        fs::remove_file(&path).expect("remove canonical ledger");
+        release.send(()).expect("release recovery");
+
+        assert!(recovery.join().expect("recovery thread").is_err());
+        assert_eq!(
+            handle.snapshot(now).load_health,
+            StorageLoadHealth::unavailable(StorageFailureCategory::Read)
+        );
+        assert!(
+            handle.start_new_after_invalid(now).is_err(),
+            "read failures must remove start-new capability"
+        );
+        assert_eq!(handle.retry_load(now), StorageLoadHealth::available());
+    }
+
+    #[test]
+    fn worker_start_failure_is_unavailable_and_retry_recovers() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(LEDGER_FILE_NAME);
+        persist_ledger(
+            &path,
+            &PersistedBreakLedger {
+                version: LEDGER_SCHEMA_VERSION,
+                events: Vec::new(),
+            },
+        )
+        .expect("seed valid ledger");
+        TEST_WORKER_START_FAILURES
+            .lock()
+            .expect("hook")
+            .push(path.clone());
+
+        let handle = BreakLedgerHandle::initialize_at(&dir.path, 1_700_000_000_000);
+
+        assert!(handle.snapshot(1_700_000_000_000).data.is_none());
+        assert_eq!(
+            handle.retry_load(1_700_000_000_000),
+            StorageLoadHealth::available()
+        );
+        assert!(handle.snapshot(1_700_000_000_000).data.is_some());
     }
 
     #[test]
@@ -794,8 +1295,10 @@ mod tests {
             },
         )
         .expect("seed future");
-        let events = load_or_repair_ledger(&path, now).expect("repair");
-        assert!(events.is_empty());
+        let original = fs::read(&path).expect("read future bytes");
+        let failure = load_or_repair_ledger(&path, now).expect_err("future event is invalid");
+        assert_eq!(failure.category, StorageFailureCategory::Invalid);
+        assert_eq!(fs::read(&path).expect("bytes remain"), original);
     }
 
     #[test]
@@ -840,7 +1343,11 @@ mod tests {
         let handle = BreakLedgerHandle::new_with_path(path);
         let t0 = 1_700_000_000_000_u64;
 
-        handle.inner.lock().expect("lock").events = vec![
+        let mut storage = handle.inner.lock().expect("lock");
+        let BreakLedgerStorageState::Available(runtime) = &mut *storage else {
+            panic!("test ledger should be available");
+        };
+        runtime.events = vec![
             BreakEvent {
                 at_ms: t0 + 120_000,
                 kind: BreakEventKind::ManualTakeBreak,
@@ -866,6 +1373,7 @@ mod tests {
                 break_seconds: 20,
             },
         ];
+        drop(storage);
 
         let events = handle
             .range(t0 + 10_000, t0 + 150_000)

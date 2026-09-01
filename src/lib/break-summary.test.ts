@@ -3,6 +3,8 @@ import {
   breakErrorCaption,
   breakLoadingCaption,
   breakOutcomeStats,
+  breakRefreshCaption,
+  breakStaleCaption,
   breakSummaryCaption,
   isBreakDayEmpty,
   weekBreakCaption,
@@ -80,9 +82,40 @@ describe("break summary presentation", () => {
     ).toBe("7 outcomes in the last seven days.");
   });
 
-  test("uses calm loading and error captions", () => {
+  test("gives stale and unavailable errors precedence over fresh captions", () => {
+    const summary = sample({ scheduledShown: 2 });
+    expect(breakRefreshCaption({ status: "fresh", data: summary, error: null, asOfMs: 1_000 })).toBe(
+      "Stored only on this device."
+    );
+    expect(
+      breakRefreshCaption({
+        status: "stale",
+        data: summary,
+        error: "private path",
+        asOfMs: 1_000
+      })
+    ).toBe(
+      "Break outcomes are unavailable; last known summary shown. The break timer is unaffected."
+    );
+    expect(
+      breakRefreshCaption({
+        status: "unavailable",
+        data: null,
+        error: "private path",
+        asOfMs: null
+      })
+    ).toBe("Break outcomes are unavailable right now. The break timer is unaffected.");
+  });
+
+  test("uses calm loading and error captions without native detail", () => {
     expect(breakLoadingCaption()).toContain("Reading");
     expect(breakErrorCaption(null)).toContain("unaffected");
-    expect(breakErrorCaption("ledger lock poisoned")).toContain("ledger lock poisoned");
+    expect(breakStaleCaption(null)).toContain("last known summary shown");
+    expect(breakErrorCaption("/private/path: permission denied")).not.toContain(
+      "permission denied"
+    );
+    expect(breakStaleCaption("/private/path: permission denied")).not.toContain(
+      "permission denied"
+    );
   });
 });

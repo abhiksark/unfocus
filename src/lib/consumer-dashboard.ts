@@ -1,6 +1,10 @@
 import type { DiagnosticsReport } from "./diagnostics";
 import type { ReminderStatus } from "./reminder-status";
-import type { ReminderSettings } from "./reminder-settings";
+import type {
+  ReminderSettings,
+  ReminderSettingsErrorContext
+} from "./reminder-settings";
+import type { StorageLoadHealth } from "./storage-health";
 import { formatGridOffset, type GridPreview } from "./break-grid";
 
 /** The saved rhythm line, noting sync only when it is on. */
@@ -103,8 +107,9 @@ export type ConsumerWarningInput = {
   reminderStatus: ReminderStatus | null;
   reminderStatusError: string | null;
   reminderActionError: string | null;
+  settingsStorageHealth: StorageLoadHealth | null;
   settingsError: string | null;
-  settingsErrorContext: "load" | "save" | "reset" | null;
+  settingsErrorContext: ReminderSettingsErrorContext;
   overlayError: string | null;
 };
 
@@ -160,9 +165,33 @@ function presentation(
   };
 }
 
+export function developerTimerHeading(
+  status: ReminderStatus | null,
+  statusError: string | null,
+  settingsHealth: StorageLoadHealth | null
+): string {
+  if (statusError) return "Reminder status is unavailable.";
+  if (settingsHealth?.status === "unavailable") {
+    return "Automatic reminders have not started.";
+  }
+  if (status?.phase === "unavailable") return "Starting reminders…";
+  switch (status?.phase) {
+    case "working":
+    case "break":
+      return "Your timer is running.";
+    case "paused":
+      return "Your reminders are paused.";
+    case "stopped":
+      return "Your workday is complete.";
+    default:
+      return "Checking reminder timing…";
+  }
+}
+
 export function consumerReminderPresentation(
   status: ReminderStatus | null,
-  statusError: string | null
+  statusError: string | null,
+  settingsHealth: StorageLoadHealth | null = null
 ): ConsumerReminderPresentation {
   if (statusError) {
     return presentation(
@@ -216,11 +245,17 @@ export function consumerReminderPresentation(
         "Reminders are finished for now."
       );
     case "unavailable":
-      return presentation(
-        "unavailable",
-        "Reminder status is unavailable.",
-        "Unfocus will retry automatically."
-      );
+      return settingsHealth?.status === "unavailable"
+        ? presentation(
+            "unavailable",
+            "Automatic reminders have not started.",
+            "Recover your saved timing to begin reminders."
+          )
+        : presentation(
+            "unavailable",
+            "Starting reminders…",
+            "Unfocus is applying the saved timing on this device."
+          );
   }
 }
 
@@ -255,18 +290,50 @@ export function consumerWarning(input: ConsumerWarningInput): ConsumerWarning | 
       message: "Your previous reminder state was retained. You can try again."
     };
   }
+  const settingsStorageUnavailable =
+    input.settingsStorageHealth?.status === "unavailable" ||
+    (input.settingsStorageHealth === null &&
+      !input.diagnosticsError &&
+      input.report?.storage.reminderSettings.status === "unavailable");
+  if (settingsStorageUnavailable) {
+    return input.settingsErrorContext === "saveUnconfirmed"
+      ? {
+          kind: "settings",
+          heading: "Timing save could not be confirmed",
+          message: "Unfocus could not confirm whether the requested timing was saved. Saved timing is unavailable; use the recovery options under Your rhythm."
+        }
+      : {
+          kind: "settings",
+          heading: "Saved timing is unavailable",
+          message: "Automatic reminders have not started. Use the recovery options under Your rhythm."
+        };
+  }
   if (input.settingsError) {
     if (input.settingsErrorContext === "load") {
       return {
         kind: "settings",
-        heading: "Saved timing is unavailable",
-        message: "Unfocus couldn’t read your saved rhythm. Your reminder state was not changed."
+        heading: "Saved timing could not be confirmed",
+        message: "Retry loading it under Your rhythm. The reminder status above is unchanged."
+      };
+    }
+    if (input.settingsErrorContext === "saveReloaded") {
+      return {
+        kind: "settings",
+        heading: "Requested timing could not be confirmed",
+        message: "Unfocus reloaded the current saved timing. Review it before trying again."
+      };
+    }
+    if (input.settingsErrorContext === "saveUnconfirmed") {
+      return {
+        kind: "settings",
+        heading: "Timing save could not be confirmed",
+        message: "Unfocus could not confirm whether the requested timing was saved. Retry loading saved timing."
       };
     }
     return {
       kind: "settings",
       heading: "Your timing change wasn’t saved",
-      message: "Your previous rhythm was retained. You can try again."
+      message: "Try again after reviewing the current saved timing."
     };
   }
   if (input.overlayError) {
@@ -297,7 +364,9 @@ export function consumerWarning(input: ConsumerWarningInput): ConsumerWarning | 
     return {
       kind: "probes",
       heading: "Some device checks are unavailable",
-      message: "Your reminder timer keeps running while Unfocus retries those checks."
+      message: timerIsConfirmedRunning(input.reminderStatus, input.reminderStatusError)
+        ? "Your reminder timer keeps running while Unfocus retries those checks."
+        : "Reminder timing is unaffected by these checks."
     };
   }
   return null;
