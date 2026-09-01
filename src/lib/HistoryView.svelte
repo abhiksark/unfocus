@@ -4,11 +4,11 @@
     buildHistoryDayDetailRequest,
     historyActivationUsesKeyboard,
     historyCalendarNeedsRefresh,
+    historyDateKeyAfterRefresh,
     historyDayIsEmpty,
     historyEscapeAction,
     historyHourDetailLabel,
     historyMonthMarkers,
-    initialHistoryDateKey,
     moveHistoryGridFocus,
     moveHistoryHourFocus,
     type ActivityRangeBucket,
@@ -47,12 +47,12 @@
   let previewHourIndex = $state<number | null>(null);
   let openBreakSlotIndex = $state<number | null>(null);
 
+  // Keep this paired with `calendar`; a pending refresh swaps both only when it applies.
   let calendarRequest = buildHistoryCalendarRequest(
     Date.now(),
     untrack(() => dayStartHour)
   );
   let calendarRequested = false;
-  let calendarSelectionToRestore: string | null = null;
   let calendarPointerAnchor: { x: number; y: number } | null = null;
   let calendarPointerPreviewEnabled = $state(false);
   let wasActive = false;
@@ -115,22 +115,17 @@
 
   const loadCalendar = createHistoryCalendarLoader(
     fetcher,
-    (loaded) => {
-      const preferredDateKey = calendarSelectionToRestore;
-      calendarSelectionToRestore = null;
+    (loaded, loadedRequest) => {
+      const nextDateKey = historyDateKeyAfterRefresh(loaded.days, selectedDateKey);
       calendar = loaded;
+      calendarRequest = loadedRequest;
       calendarError = null;
       calendarLoading = false;
-      const initialDateKey =
-        preferredDateKey && loaded.days.some((day) => day.dateKey === preferredDateKey)
-          ? preferredDateKey
-          : initialHistoryDateKey(loaded.days);
-      selectedDateKey = initialDateKey;
-      focusedDateKey = initialDateKey;
-      if (initialDateKey) requestDay(initialDateKey);
+      selectedDateKey = nextDateKey;
+      focusedDateKey = nextDateKey;
+      if (nextDateKey) requestDay(nextDateKey);
     },
     () => {
-      calendarSelectionToRestore = null;
       calendarError = "Could not read local activity history. Please try again.";
       calendarLoading = false;
     }
@@ -149,10 +144,12 @@
     }
   );
 
-  function requestCalendar(preferredDateKey: string | null = null): void {
-    const preserveCurrentView = calendar !== null && preferredDateKey !== null;
-    calendarSelectionToRestore = preferredDateKey;
-    calendarRequest = buildHistoryCalendarRequest(Date.now(), untrack(() => dayStartHour));
+  function requestCalendar(preserveSelection = false): void {
+    const preserveCurrentView = calendar !== null && preserveSelection;
+    const nextRequest = buildHistoryCalendarRequest(
+      Date.now(),
+      untrack(() => dayStartHour)
+    );
     calendarRequested = true;
     calendarError = null;
     previewDateKey = null;
@@ -167,7 +164,7 @@
       detail = null;
       focusedHourIndex = 0;
     }
-    void loadCalendar(calendarRequest);
+    void loadCalendar(nextRequest);
   }
 
   function requestDay(dateKey: string): void {
@@ -362,17 +359,14 @@
       Date.now(),
       previouslyActive
     );
-    const preferredDateKey =
-      active && !previouslyActive && calendarRequested
-        ? untrack(() => selectedDateKey)
-        : null;
+    const preserveSelection = active && !previouslyActive && calendarRequested;
     if (active !== previouslyActive) {
       calendarPointerAnchor = null;
       calendarPointerPreviewEnabled = false;
       previewDateKey = null;
     }
     wasActive = active;
-    if (shouldRefresh) requestCalendar(preferredDateKey);
+    if (shouldRefresh) requestCalendar(preserveSelection);
   });
 </script>
 

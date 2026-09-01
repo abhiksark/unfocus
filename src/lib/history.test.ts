@@ -3,6 +3,7 @@ import {
   historyActivationUsesKeyboard,
   historyActivityLevel,
   historyCalendarNeedsRefresh,
+  historyDateKeyAfterRefresh,
   historyDayIsEmpty,
   historyEscapeAction,
   historyHourDetailLabel,
@@ -618,19 +619,29 @@ describe("history activity calendar", () => {
     expect(
       historyDayIsEmpty({
         totals: { isBlank: true },
-        breakCounts: [{ count: 0 }, { count: 0 }]
+        breakCounts: [{ count: 0 }, { count: 0 }],
+        hourSlots: []
       })
     ).toBe(true);
     expect(
       historyDayIsEmpty({
         totals: { isBlank: false },
-        breakCounts: [{ count: 0 }]
+        breakCounts: [{ count: 0 }],
+        hourSlots: []
       })
     ).toBe(false);
     expect(
       historyDayIsEmpty({
         totals: { isBlank: true },
-        breakCounts: [{ count: 1 }]
+        breakCounts: [{ count: 1 }],
+        hourSlots: []
+      })
+    ).toBe(false);
+    expect(
+      historyDayIsEmpty({
+        totals: { isBlank: true },
+        breakCounts: [{ count: 0 }],
+        hourSlots: [{ activeMs: 1_000, afkMs: 0 }]
       })
     ).toBe(false);
   });
@@ -751,6 +762,18 @@ console.log(JSON.stringify(mod.historyMonthMarkers(calendar).map((marker) => ({
     expect(initialHistoryDateKey(days.map((day) => calendarDay(day.dateKey, 0, 0)))).toBe(
       "2026-08-16"
     );
+  });
+
+  test("keeps the latest selected day when a refreshed calendar applies", () => {
+    const days = [
+      calendarDay("2026-08-14", 60_000, 0),
+      calendarDay("2026-08-15", 0, 120_000),
+      calendarDay("2026-08-16", 0, 0)
+    ];
+
+    expect(historyDateKeyAfterRefresh(days, "2026-08-15")).toBe("2026-08-15");
+    expect(historyDateKeyAfterRefresh(days, "2026-08-13")).toBe("2026-08-16");
+    expect(historyDateKeyAfterRefresh(days, null)).toBe("2026-08-16");
   });
 
   test("maps pointer, keyboard, Escape, and hourly focus interactions", () => {
