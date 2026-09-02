@@ -15,7 +15,8 @@
     MIN_WORK_MINUTES,
     reminderSettingsRecovery,
     type ReminderSettings,
-    type ReminderSettingsValidation
+    type ReminderSettingsValidation,
+    type ReminderSettingsView
   } from "$lib/reminder-settings";
   import {
     developerOverlayTestLabel,
@@ -25,6 +26,7 @@
   } from "$lib/reminder-status";
   import type { BreakSummary } from "$lib/break-summary";
   import type { ReflectionResource } from "$lib/reflection-resource";
+  import type { RefreshState } from "$lib/refresh-state";
   import {
     developerStoragePresentation,
     type StorageLoadHealth
@@ -54,6 +56,7 @@
     breakSecondsInput: string;
     savedSettings: ReminderSettings | null;
     settingsStorageHealth: StorageLoadHealth | null;
+    settingsSnapshotRefresh: RefreshState<ReminderSettingsView>;
     settingsRecoveryPending: "retry" | "reset" | null;
     settingsOperationPending: "retry" | "save" | "reset" | null;
     settingsRecoveryError: boolean;
@@ -94,6 +97,7 @@
     breakSecondsInput,
     savedSettings,
     settingsStorageHealth,
+    settingsSnapshotRefresh,
     settingsRecoveryPending,
     settingsOperationPending,
     settingsRecoveryError,
@@ -177,11 +181,25 @@
       diagnosticsCurrentSuccessful
     )
   );
+  const settingsSnapshotStorageHealth = $derived(
+    settingsSnapshotRefresh.status === "fresh" ||
+      settingsSnapshotRefresh.status === "stale"
+      ? settingsSnapshotRefresh.data.loadHealth
+      : null
+  );
   const settingsStoragePresentation = $derived(
     developerStoragePresentation(
       report?.storage.reminderSettings ?? null,
       report !== null,
-      diagnosticsError
+      diagnosticsError,
+      {
+        refresh: settingsSnapshotRefresh,
+        storageHealth: settingsSnapshotStorageHealth,
+        transportFailure:
+          settingsSnapshotRefresh.status === "stale" ||
+          settingsSnapshotRefresh.status === "unavailable"
+      },
+      diagnosticsCurrentSuccessful
     )
   );
   const settingsStatus = $derived(

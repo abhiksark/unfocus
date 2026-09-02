@@ -155,6 +155,59 @@ describe("reflection storage health", () => {
     expect(presentation.error).toBe("current native read detail");
   });
 
+  test("a current available snapshot outranks stale unavailable diagnostics", () => {
+    const presentation = developerStoragePresentation(
+      {
+        status: "unavailable",
+        recovery: "retryOrStartNew",
+        category: "invalid",
+        error: "stale invalid native detail"
+      },
+      true,
+      null,
+      {
+        refresh: { status: "fresh", error: null },
+        storageHealth: { status: "available", recovery: "none" },
+        transportFailure: false
+      },
+      false
+    );
+
+    expect(presentation).toEqual({
+      status: "available",
+      category: "none",
+      recovery: "none",
+      error: "Native resource snapshot reported storage available"
+    });
+    expect(JSON.stringify(presentation)).not.toContain("stale invalid native detail");
+  });
+
+  test("a matching current available diagnostic retains its no-error detail", () => {
+    const presentation = developerStoragePresentation(
+      {
+        status: "available",
+        recovery: "none",
+        category: null,
+        error: null
+      },
+      true,
+      null,
+      {
+        refresh: { status: "fresh", error: null },
+        storageHealth: { status: "available", recovery: "none" },
+        transportFailure: false
+      },
+      true
+    );
+
+    expect(presentation).toEqual({
+      status: "available",
+      category: "none",
+      recovery: "none",
+      error: "No load error"
+    });
+  });
+
   test.each(["activity", "break"] as const)(
     "%s is called transport unavailable only after rejection",
     (_resource) => {

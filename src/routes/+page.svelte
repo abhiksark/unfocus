@@ -58,6 +58,12 @@
     type ReflectionRecoveryError,
     type ReflectionResource
   } from "$lib/reflection-resource";
+  import {
+    refreshFailed,
+    refreshLoading,
+    refreshSucceeded,
+    type RefreshState
+  } from "$lib/refresh-state";
   import type { LocalSnapshot, StorageLoadHealth } from "$lib/storage-health";
   import type { TodayActivity } from "$lib/today-activity";
   import { invoke } from "@tauri-apps/api/core";
@@ -92,6 +98,9 @@
   let timingEditorExpanded = $state(false);
   let savedSettings = $state<ReminderSettings | null>(null);
   let settingsStorageHealth = $state<StorageLoadHealth | null>(null);
+  let settingsSnapshotRefresh = $state<RefreshState<ReminderSettingsView>>(
+    refreshLoading()
+  );
   let settingsOperationPending = $state<"retry" | "save" | "reset" | null>(null);
   let settingsRecoveryError = $state(false);
   const reminderOperationGate = createReminderOperationGate();
@@ -593,12 +602,17 @@
   }
 
   function applySettingsView(view: ReminderSettingsView): void {
+    settingsSnapshotRefresh = refreshSucceeded(view);
     settingsStorageHealth = view.loadHealth;
     if (view.loadHealth.status === "available" && view.data !== null) {
       useSettings(view.data);
     } else {
       clearSettings();
     }
+  }
+
+  function applySettingsSnapshotFailure(error: string): void {
+    settingsSnapshotRefresh = refreshFailed(settingsSnapshotRefresh, error);
   }
 
   async function loadReminderSettings() {
@@ -615,14 +629,18 @@
 
     const result = request.settled;
     if (result.status === "rejected") {
+      const error = errorMessage(result.reason);
+      applySettingsSnapshotFailure(error);
       clearSettings();
       settingsStorageHealth = null;
-      settingsError = `Could not load reminder settings: ${errorMessage(result.reason)}`;
+      settingsError = `Could not load reminder settings: ${error}`;
       settingsErrorContext = "load";
     } else if (result.value.outcome === "rejected") {
+      const error = errorMessage(result.value.error);
+      applySettingsSnapshotFailure(error);
       clearSettings();
       settingsStorageHealth = null;
-      settingsError = `Could not load reminder settings: ${errorMessage(result.value.error)}`;
+      settingsError = `Could not load reminder settings: ${error}`;
       settingsErrorContext = "load";
     } else {
       applySettingsView(result.value.view);
@@ -677,6 +695,7 @@
       };
     }
     if (settingsRequest.settled.status === "rejected") {
+      applySettingsSnapshotFailure(errorMessage(settingsRequest.settled.reason));
       return { outcome: "rejected", error: settingsRequest.settled.reason };
     }
 
@@ -687,9 +706,12 @@
         settingsError = null;
         settingsErrorContext = null;
       }
-    } else if (!preserveSettingsError) {
-      settingsError = `Could not refresh reminder settings: ${errorMessage(settings.error)}`;
-      settingsErrorContext = "load";
+    } else {
+      applySettingsSnapshotFailure(errorMessage(settings.error));
+      if (!preserveSettingsError) {
+        settingsError = `Could not refresh reminder settings: ${errorMessage(settings.error)}`;
+        settingsErrorContext = "load";
+      }
     }
     return settings;
   }
@@ -763,14 +785,19 @@
         () => refreshAfterSettingsRecovery(true)
       );
       if (resolution.outcome === "saved") {
-        useSettings(resolution.settings);
-        settingsStorageHealth = { status: "available", recovery: "none" };
+        applySettingsView({
+          loadHealth: { status: "available", recovery: "none" },
+          data: resolution.settings
+        });
         settingsRecoveryError = false;
         settingsError = null;
         settingsErrorContext = null;
         finishSettingsUpdate("saved");
       } else if (resolution.outcome === "reloaded") {
-        useSettings(resolution.settings);
+        applySettingsView({
+          loadHealth: { status: "available", recovery: "none" },
+          data: resolution.settings
+        });
         settingsRecoveryError = false;
         settingsError =
           command.latest && command.settled.status === "rejected"
@@ -838,7 +865,10 @@
         settingsRecoveryError =
           (await refreshAfterSettingsRecovery()).outcome !== "confirmed";
       } else {
-        useSettings(result.settled.value);
+        applySettingsView({
+          loadHealth: { status: "available", recovery: "none" },
+          data: result.settled.value
+        });
         settingsErrorContext = null;
         finishSettingsUpdate("reset");
       }
@@ -967,6 +997,7 @@
     {breakSecondsInput}
     {savedSettings}
     settingsStorageHealth={authoritativeSettingsHealth}
+    {settingsSnapshotRefresh}
     {settingsRecoveryPending}
     {settingsOperationPending}
     {settingsRecoveryError}

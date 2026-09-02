@@ -56,9 +56,9 @@ function categoryFromRecovery(recovery: StorageRecovery): string {
 }
 
 /**
- * Only an actual resource IPC rejection outranks native storage diagnostics.
- * A fulfilled unavailable envelope remains native storage evidence, even
- * though its refresh state also has no payload.
+ * A current resource IPC result outranks stale storage diagnostics. A fulfilled
+ * unavailable envelope remains native storage evidence, even though its
+ * refresh state also has no payload; only a rejection is a transport failure.
  */
 export function developerStoragePresentation(
   diagnostic: StorageDiagnostic | null,
@@ -114,6 +114,30 @@ export function developerStoragePresentation(
       category: "unknown",
       recovery: "unknown",
       error: "Resource snapshot pending"
+    };
+  }
+  if (
+    resourceTransport &&
+    !resourceTransport.transportFailure &&
+    resourceTransport.storageHealth?.status === "available"
+  ) {
+    const matchingDiagnostic =
+      diagnosticsCurrentSuccessful &&
+      diagnosticsError === null &&
+      diagnostic?.status === "available" &&
+      diagnostic.recovery === "none"
+        ? diagnostic
+        : null;
+    const genericDetail = "Native resource snapshot reported storage available";
+    return {
+      status: "available",
+      category: "none",
+      recovery: "none",
+      error: matchingDiagnostic
+        ? (matchingDiagnostic.error ?? "No load error")
+        : diagnosticsError
+          ? `${genericDetail}; latest diagnostics refresh failed: ${diagnosticsError}`
+          : genericDetail
     };
   }
   if (diagnosticsError) {
