@@ -197,7 +197,7 @@ console.log(JSON.stringify({
 });
 
 describe("history page materialization", () => {
-  test("labels exactly blank activity totals without implying classified time", () => {
+  test("renders exact zero totals while keeping blank classification distinct", () => {
     const page = runInTimezone<{
       totals: { activeLabel: string; afkLabel: string; longestLabel: string };
       day0: { activeLabel: string; afkLabel: string; longestLabel: string };
@@ -234,14 +234,14 @@ console.log(JSON.stringify({
     );
 
     expect(page.totals).toEqual({
-      activeLabel: "—",
-      afkLabel: "—",
-      longestLabel: "—"
+      activeLabel: "0m",
+      afkLabel: "0m",
+      longestLabel: "0m"
     });
     expect(page.day0).toEqual({
-      activeLabel: "—",
-      afkLabel: "—",
-      longestLabel: "—"
+      activeLabel: "0m",
+      afkLabel: "0m",
+      longestLabel: "0m"
     });
     expect(page.blankKind).toBe("blank");
   });

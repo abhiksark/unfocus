@@ -15,23 +15,35 @@
     MAX_WORK_MINUTES,
     MIN_BREAK_SECONDS,
     MIN_WORK_MINUTES,
+    reminderSettingsRecovery,
     type ReminderSettings,
+    type ReminderSettingsErrorContext,
     type ReminderSettingsValidation
   } from "$lib/reminder-settings";
-  import type { ReminderActionCommand, ReminderStatus } from "$lib/reminder-status";
+  import {
+    reminderCapabilityAvailable,
+    reminderPreviewLabel,
+    type ReminderActionCommand,
+    type ReminderStatus
+  } from "$lib/reminder-status";
   import { dayStartOptions } from "$lib/day-start";
   import {
-    breakErrorCaption,
-    breakLoadingCaption,
+    storageUnavailable,
+    storageUnavailableCopy,
+    type StorageLoadHealth
+  } from "$lib/storage-health";
+  import {
     breakOutcomeStats,
-    breakSummaryCaption,
+    breakRefreshCaption,
     isBreakDayEmpty,
     weekBreakCaption,
     type BreakSummary
   } from "$lib/break-summary";
+  import { refreshDisplayAsOfMs, type RefreshState } from "$lib/refresh-state";
+  import { reflectionRecoveryFeedback } from "$lib/reflection-resource";
   import {
     activityFootnote,
-    currentKindLabel,
+    activityStatusCaption,
     deepBlockCaption,
     formatActivityDuration,
     isActivityWindowEmpty,
@@ -40,8 +52,10 @@
     stripAfkHeight,
     stripAriaLabel,
     stripAxisTicks,
+    stripEndpointLabel,
     todayErrorCaption,
     todayLoadingCaption,
+    todayStaleCaption,
     type TodayActivity
   } from "$lib/today-activity";
 
@@ -51,16 +65,25 @@
     presentation: ConsumerReminderPresentation;
     warning: ConsumerWarning | null;
     reminderStatus: ReminderStatus | null;
+    reminderStatusError: string | null;
     reminderActionPending: ReminderActionCommand | null;
     reminderActionResult: string | null;
     overlayRunning: boolean;
     diagnosticsReady: boolean;
-    todayActivity: TodayActivity | null;
-    todayActivityError: string | null;
-    breakSummary: BreakSummary | null;
-    breakSummaryError: string | null;
+    activityRefresh: RefreshState<TodayActivity>;
+    activityStorageHealth: StorageLoadHealth | null;
+    activityRecoveryPending: "retry" | "startNew" | null;
+    activityRecoveryError: "operation" | "followUp" | null;
+    breakRefresh: RefreshState<BreakSummary>;
+    breakStorageHealth: StorageLoadHealth | null;
+    breakRecoveryPending: "retry" | "startNew" | null;
+    breakRecoveryError: "operation" | "followUp" | null;
     dayStartHour: number;
     savedSettings: ReminderSettings | null;
+    settingsStorageHealth: StorageLoadHealth | null;
+    settingsRecoveryPending: "retry" | "reset" | null;
+    settingsOperationPending: "retry" | "save" | "reset" | null;
+    settingsRecoveryError: boolean;
     timingEditorExpanded: boolean;
     workMinutesInput: string;
     breakSecondsInput: string;
@@ -74,7 +97,7 @@
     workMinutesError: string | null;
     breakSecondsError: string | null;
     settingsError: string | null;
-    settingsErrorContext: "load" | "save" | "reset" | null;
+    settingsErrorContext: ReminderSettingsErrorContext;
     settingsResult: SettingsResult;
     onTakeBreak: () => void;
     onPauseAction: () => void;
@@ -86,27 +109,41 @@
     onTogglePreBreakCue: (enabled: boolean) => void;
     onSaveSettings: () => void;
     onResetSettings: () => void;
+    onRetrySettings: () => void;
     onOpenDeveloperMode: () => void;
     onDayStartChange: (hour: number) => void;
     authorWebsiteError: boolean;
     onOpenAuthorWebsite: () => void;
     onViewHistory: (event: MouseEvent) => void;
+    onRetryActivity: () => void;
+    onStartNewActivity: () => void;
+    onRetryBreakHistory: () => void;
+    onStartNewBreakHistory: () => void;
   };
 
   let {
     presentation,
     warning,
     reminderStatus,
+    reminderStatusError,
     reminderActionPending,
     reminderActionResult,
     overlayRunning,
     diagnosticsReady,
-    todayActivity,
-    todayActivityError,
-    breakSummary,
-    breakSummaryError,
+    activityRefresh,
+    activityStorageHealth,
+    activityRecoveryPending,
+    activityRecoveryError,
+    breakRefresh,
+    breakStorageHealth,
+    breakRecoveryPending,
+    breakRecoveryError,
     dayStartHour,
     savedSettings,
+    settingsStorageHealth,
+    settingsRecoveryPending,
+    settingsOperationPending,
+    settingsRecoveryError,
     timingEditorExpanded,
     workMinutesInput,
     breakSecondsInput,
@@ -132,11 +169,16 @@
     onTogglePreBreakCue,
     onSaveSettings,
     onResetSettings,
+    onRetrySettings,
     onOpenDeveloperMode,
     onDayStartChange,
     authorWebsiteError,
     onOpenAuthorWebsite,
-    onViewHistory
+    onViewHistory,
+    onRetryActivity,
+    onStartNewActivity,
+    onRetryBreakHistory,
+    onStartNewBreakHistory
   }: Props = $props();
 
   const progress = $derived(focusProgress(reminderStatus, savedSettings));
@@ -147,17 +189,44 @@
         ? "Resuming…"
         : (reminderStatus?.pauseActionLabel ?? "Pause for 30 minutes")
   );
+  const settingsRecovery = $derived(
+    reminderSettingsRecovery(settingsStorageHealth, savedSettings, settingsLoading)
+  );
+  const pauseActionAvailable = $derived(
+    reminderCapabilityAvailable(
+      reminderStatus,
+      reminderStatusError,
+      settingsStorageHealth,
+      "pauseActionEnabled"
+    )
+  );
+  const takeBreakAvailable = $derived(
+    reminderCapabilityAvailable(
+      reminderStatus,
+      reminderStatusError,
+      settingsStorageHealth,
+      "takeBreakEnabled"
+    )
+  );
+  const previewAvailable = $derived(
+    reminderCapabilityAvailable(
+      reminderStatus,
+      reminderStatusError,
+      settingsStorageHealth,
+      "previewEnabled"
+    )
+  );
   const previewDisabled = $derived(
-    overlayRunning || !diagnosticsReady || !reminderStatus || !reminderStatus.previewEnabled
+    overlayRunning || !diagnosticsReady || !previewAvailable
   );
-  const previewLabel = $derived(
-    overlayRunning
-      ? "Opening…"
-      : reminderStatus && !reminderStatus.previewEnabled
-        ? "Break screen open"
-        : "Preview break screen"
+  const previewLabel = $derived(reminderPreviewLabel(reminderStatus, overlayRunning));
+  const rhythm = $derived(
+    savedSettings
+      ? describeRhythm(savedSettings)
+      : settingsRecovery.unavailable
+        ? settingsRecovery.heading
+        : "Reading saved rhythm…"
   );
-  const rhythm = $derived(savedSettings ? describeRhythm(savedSettings) : "Reading saved rhythm…");
   const timeFormat = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" });
 
   // The "upcoming" branch of the sync preview renders absolute times, so it
@@ -204,37 +273,54 @@
       presentation.showResume ||
       reminderActionResult !== null
   );
+  const activityStorageUnavailable = $derived(
+    storageUnavailable(activityStorageHealth)
+  );
+  const activityRecoveryFeedback = $derived(
+    reflectionRecoveryFeedback("activity", activityRecoveryError)
+  );
+  const breakRecoveryFeedback = $derived(
+    reflectionRecoveryFeedback("break", breakRecoveryError)
+  );
+  const breakStorageUnavailable = $derived(storageUnavailable(breakStorageHealth));
+  const activityUnavailableCopy = storageUnavailableCopy("activity");
+  const breakUnavailableCopy = storageUnavailableCopy("breaks");
+  const todayActivity = $derived(activityRefresh.data);
+  const breakSummary = $derived(breakRefresh.data);
   const activityKind = $derived(
-    todayActivity
-      ? currentKindLabel(todayActivity.currentKind, todayActivity.probeAvailable)
-      : todayActivityError
-        ? "Your day unavailable"
-        : "Gathering samples…"
+    activityStatusCaption(todayActivity, activityRefresh.status)
   );
   const activityStripLabel = $derived(
-    todayActivity ? stripAriaLabel(todayActivity) : "Activity strip loading"
+    todayActivity
+      ? stripAriaLabel(todayActivity, activityRefresh.status)
+      : "Activity strip loading"
   );
+  const activityStripEndpoint = $derived(stripEndpointLabel(activityRefresh.status));
   const axisTicks = $derived(
     todayActivity
-      ? stripAxisTicks(todayActivity.windowSeconds, Date.now(), dayStartHour)
+      ? stripAxisTicks(
+          todayActivity.windowSeconds,
+          refreshDisplayAsOfMs(activityRefresh, Date.now()),
+          dayStartHour
+        )
       : []
   );
   const activityEmpty = $derived(
     todayActivity ? isActivityWindowEmpty(todayActivity) : false
   );
+  const activityPending = $derived(todayActivity?.probeStatus === "pending");
   const activityStarting = $derived(
     todayActivity ? isActivityWindowStarting(todayActivity) : false
   );
   const breakStats = $derived(breakSummary ? breakOutcomeStats(breakSummary) : []);
   const breakDayEmpty = $derived(breakSummary ? isBreakDayEmpty(breakSummary) : false);
-  const breakCaption = $derived(
-    breakSummary
-      ? breakSummaryCaption(breakSummary)
-      : breakSummaryError
-        ? breakErrorCaption(breakSummaryError)
-        : breakLoadingCaption()
-  );
-  const weekCaption = $derived(breakSummary ? weekBreakCaption(breakSummary) : "");
+  const breakCaption = $derived(breakRefreshCaption(breakRefresh));
+  const weekCaption = $derived.by(() => {
+    if (!breakSummary) return "";
+    const caption = weekBreakCaption(breakSummary);
+    if (!caption || breakRefresh.status !== "stale") return caption;
+    return `Last known: ${caption}`;
+  });
 </script>
 
 <main class="wrap">
@@ -268,7 +354,7 @@
             class="btn-primary"
             type="button"
             onclick={onTakeBreak}
-            disabled={!reminderStatus?.takeBreakEnabled || reminderActionPending !== null}
+            disabled={!takeBreakAvailable || reminderActionPending !== null || settingsOperationPending !== null}
           >
             {reminderActionPending === "take_break_now" ? "Starting…" : "Take a break"}
           </button>
@@ -278,7 +364,7 @@
             class={presentation.showResume ? "btn-primary" : "btn-ghost"}
             type="button"
             onclick={onPauseAction}
-            disabled={!reminderStatus?.pauseActionEnabled || reminderActionPending !== null}
+            disabled={!pauseActionAvailable || reminderActionPending !== null || settingsOperationPending !== null}
           >
             {pauseLabel}
           </button>
@@ -314,7 +400,7 @@
         aria-expanded={timingEditorExpanded}
         aria-controls="timing-editor"
         onclick={onToggleTimingEditor}
-        disabled={settingsLoading}
+        disabled={settingsLoading || settingsRecovery.unavailable}
       >
         {timingEditorExpanded ? "Close" : "Edit timing"}
       </button>
@@ -323,7 +409,43 @@
       </button>
     </div>
 
-    {#if timingEditorExpanded}
+    {#if settingsRecovery.unavailable}
+      <div class="settings-recovery" role="status">
+        <p class="t-label">{settingsRecovery.heading}</p>
+        <p class="t-micro">{settingsRecovery.message}</p>
+        <div class="settings-actions">
+          {#if settingsRecovery.canRetry}
+            <button
+              class="btn-ghost"
+              type="button"
+              onclick={onRetrySettings}
+              disabled={settingsOperationPending !== null || reminderActionPending !== null}
+            >
+              {settingsRecoveryPending === "retry" ? "Retrying…" : "Retry"}
+            </button>
+          {/if}
+          {#if settingsRecovery.canRestoreDefaults}
+            <button
+              class="btn-ghost"
+              type="button"
+              onclick={onResetSettings}
+              disabled={settingsOperationPending !== null || reminderActionPending !== null}
+            >
+              {settingsRecoveryPending === "reset"
+                ? "Restoring…"
+                : "Preserve unreadable settings and restore defaults"}
+            </button>
+          {/if}
+        </div>
+        {#if settingsRecoveryError}
+          <p class="t-micro form-error">
+            {settingsErrorContext === "saveUnconfirmed"
+              ? "We couldn’t confirm whether the requested timing was saved. Saved timing is still unavailable."
+              : "Saved timing is still unavailable. You can try again."}
+          </p>
+        {/if}
+      </div>
+    {:else if timingEditorExpanded}
       <div id="timing-editor" class="timing-editor">
         <form
           novalidate
@@ -445,17 +567,17 @@
             <button
               class="btn-primary"
               type="submit"
-              disabled={settingsLoading || settingsSaving || !settingsValidation.settings}
+              disabled={settingsLoading || settingsSaving || reminderActionPending !== null || !settingsValidation.settings}
             >
-              {settingsSaving ? "Saving…" : "Save settings"}
+              {settingsOperationPending === "save" ? "Saving…" : "Save settings"}
             </button>
             <button
               class="btn-ghost"
               type="button"
               onclick={onResetSettings}
-              disabled={settingsLoading || settingsSaving}
+              disabled={settingsLoading || settingsSaving || reminderActionPending !== null}
             >
-              Reset to defaults
+              {settingsOperationPending === "reset" ? "Resetting…" : "Reset to defaults"}
             </button>
           </div>
 
@@ -465,7 +587,11 @@
                 ? "We couldn’t load your saved timing."
                 : settingsErrorContext === "reset"
                   ? "We couldn’t restore the default timing. Your previous rhythm was retained."
-                  : "We couldn’t save this timing. Your previous rhythm was retained."}
+                  : settingsErrorContext === "saveReloaded"
+                    ? "We couldn’t confirm the requested timing, so we reloaded the current saved timing."
+                    : settingsErrorContext === "saveUnconfirmed"
+                      ? "We couldn’t confirm whether this timing was saved. Retry loading saved timing."
+                      : "We couldn’t save this timing. Try again after reviewing the current saved timing."}
             </p>
           {/if}
         </form>
@@ -494,6 +620,7 @@
         class="btn-text"
         type="button"
         onclick={onViewHistory}
+        disabled={activityStorageUnavailable || breakStorageUnavailable}
       >
         View history
       </button>
@@ -516,8 +643,54 @@
       </label>
     </div>
 
-    {#if todayActivity}
-      {#if activityStarting}
+    {#if activityRecoveryFeedback}
+      <p class="t-micro is-error" role="status">{activityRecoveryFeedback}</p>
+    {/if}
+
+    {#if activityStorageUnavailable}
+      <div class="history-unavailable" role="status">
+        <p class="t-label">{activityUnavailableCopy.heading}</p>
+        <p class="t-micro">{activityUnavailableCopy.message}</p>
+        <div class="recovery-actions">
+          <button
+            class="btn-ghost"
+            type="button"
+            onclick={onRetryActivity}
+            disabled={activityRecoveryPending !== null}
+          >
+            {activityRecoveryPending === "retry" ? "Retrying…" : "Retry"}
+          </button>
+          {#if activityStorageHealth?.recovery === "retryOrStartNew"}
+            <button
+              class="btn-ghost"
+              type="button"
+              onclick={onStartNewActivity}
+              disabled={activityRecoveryPending !== null}
+            >
+              {activityRecoveryPending === "startNew"
+                ? "Starting…"
+                : "Preserve unreadable file and start new history"}
+            </button>
+          {/if}
+        </div>
+      </div>
+    {:else if todayActivity}
+      {#if activityRefresh.status === "stale"}
+        <p class="t-micro refresh-warning" role="status">
+          {todayStaleCaption(activityRefresh.error)}
+        </p>
+      {/if}
+      {#if activityRefresh.status !== "stale" && activityPending}
+        <div class="activity-starting" role="status">
+          <p class="t-label">Checking presence</p>
+          <p class="t-micro">
+            Waiting for the first local keyboard or mouse presence sample.
+          </p>
+        </div>
+        <p class="t-micro activity-note">
+          Keyboard and mouse presence only · nothing is keylogged
+        </p>
+      {:else if activityRefresh.status !== "stale" && activityStarting}
         <div class="activity-starting" role="status">
           <p class="t-label">Building your day</p>
           <p class="t-micro">
@@ -528,7 +701,13 @@
           Keyboard and mouse presence only · nothing is keylogged
         </p>
       {:else}
-        <div class="stats" role="group" aria-label="Activity totals for the rolling window">
+        <div
+          class="stats"
+          role="group"
+          aria-label={activityRefresh.status === "stale"
+            ? "Last-known activity totals for the rolling window"
+            : "Activity totals for the rolling window"}
+        >
           <div class="stat" class:is-zero={todayActivity.activeSeconds <= 0}>
             <span class="num">{formatActivityDuration(todayActivity.activeSeconds)}</span>
             <span class="t-micro">Active</span>
@@ -589,14 +768,14 @@
               >
             {/if}
           {/each}
-          <span class="strip-axis-now">now</span>
+          <span class="strip-axis-now">{activityStripEndpoint}</span>
         </div>
         <ul class="legend" aria-hidden="true">
           <li><span class="legend-swatch legend-active"></span> Active</li>
           <li><span class="legend-swatch legend-afk"></span> Away</li>
         </ul>
 
-        {#if activityEmpty}
+        {#if activityRefresh.status === "fresh" && activityEmpty}
           <p class="t-micro" role="status">
             No active or away time classified in this window yet.
           </p>
@@ -605,8 +784,10 @@
           {activityFootnote(todayActivity.afkThresholdSeconds)}
         </p>
       {/if}
-    {:else if todayActivityError}
-      <p class="t-micro is-error" role="status">{todayErrorCaption(todayActivityError)}</p>
+    {:else if activityRefresh.status === "unavailable"}
+      <p class="t-micro is-error" role="status">
+        {todayErrorCaption(activityRefresh.error)}
+      </p>
     {:else}
       <p class="t-micro" role="status">{todayLoadingCaption()}</p>
     {/if}
@@ -618,16 +799,51 @@
     <div class="section-head">
       <h2 id="break-history-title" class="t-title">Breaks</h2>
       {#if breakSummary}
-        <p class="t-micro">{breakSummary.windowLabel}</p>
+        <p class="t-micro">
+          {breakSummary.windowLabel}{breakRefresh.status === "stale" ? " · Last known" : ""}
+        </p>
       {/if}
     </div>
 
-    {#if breakSummary}
+    {#if breakRecoveryFeedback}
+      <p class="t-micro is-error" role="status">{breakRecoveryFeedback}</p>
+    {/if}
+
+    {#if breakStorageUnavailable}
+      <div class="history-unavailable" role="status">
+        <p class="t-label">{breakUnavailableCopy.heading}</p>
+        <p class="t-micro">{breakUnavailableCopy.message}</p>
+        <div class="recovery-actions">
+          <button
+            class="btn-ghost"
+            type="button"
+            onclick={onRetryBreakHistory}
+            disabled={breakRecoveryPending !== null}
+          >
+            {breakRecoveryPending === "retry" ? "Retrying…" : "Retry"}
+          </button>
+          {#if breakStorageHealth?.recovery === "retryOrStartNew"}
+            <button
+              class="btn-ghost"
+              type="button"
+              onclick={onStartNewBreakHistory}
+              disabled={breakRecoveryPending !== null}
+            >
+              {breakRecoveryPending === "startNew"
+                ? "Starting…"
+                : "Preserve unreadable file and start new break history"}
+            </button>
+          {/if}
+        </div>
+      </div>
+    {:else if breakSummary}
       <div
         class="stats"
         class:is-empty={breakDayEmpty}
         role="group"
-        aria-label="Break outcome counts for the last day"
+        aria-label={breakRefresh.status === "stale"
+          ? "Last-known break outcome counts for the last day"
+          : "Break outcome counts for the last day"}
       >
         {#each breakStats as stat (stat.kind)}
           <div class="stat" class:is-zero={stat.count <= 0} title={stat.hint}>
@@ -638,14 +854,20 @@
           </div>
         {/each}
       </div>
-      <p class="t-micro">{breakCaption}</p>
+      <p
+        class="t-micro"
+        class:refresh-warning={breakRefresh.status === "stale"}
+        role={breakRefresh.status === "stale" ? "status" : undefined}
+      >
+        {breakCaption}
+      </p>
       {#if weekCaption}
         <p class="t-micro">{weekCaption}</p>
       {/if}
-    {:else if breakSummaryError}
-      <p class="t-micro is-error" role="status">{breakErrorCaption(breakSummaryError)}</p>
+    {:else if breakRefresh.status === "unavailable"}
+      <p class="t-micro is-error" role="status">{breakCaption}</p>
     {:else}
-      <p class="t-micro" role="status">{breakLoadingCaption()}</p>
+      <p class="t-micro" role="status">{breakCaption}</p>
     {/if}
   </section>
 
@@ -1039,7 +1261,8 @@
     outline-offset: 2px;
   }
 
-  .activity-starting {
+  .activity-starting,
+  .history-unavailable {
     display: flex;
     max-width: 65ch;
     flex-direction: column;
@@ -1047,12 +1270,27 @@
     padding: var(--s2) 0;
   }
 
-  .activity-starting .t-label {
+  .activity-starting .t-label,
+  .history-unavailable .t-label {
     color: var(--ink);
+  }
+
+  .recovery-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s2);
+    margin-top: var(--s1);
   }
 
   .activity-note {
     max-width: 72ch;
+  }
+
+  .refresh-warning {
+    max-width: 72ch;
+    border-left: 2px solid var(--warn);
+    padding-left: var(--s2);
+    color: var(--warn);
   }
 
   .legend {
@@ -1124,10 +1362,18 @@
     max-width: 65ch;
   }
 
-  .timing-editor {
+  .timing-editor,
+  .settings-recovery {
     grid-column: 1 / -1;
     border-top: 1px solid var(--line);
     padding-top: var(--s4);
+  }
+
+  .settings-recovery {
+    display: flex;
+    max-width: 65ch;
+    flex-direction: column;
+    gap: var(--s1);
   }
 
   .timing-editor-intro {

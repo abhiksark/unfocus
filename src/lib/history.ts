@@ -225,13 +225,9 @@ export function moveHistoryHourFocus(
 export function historyHourDetailLabel(
   slot: Pick<HistoryHourSlot, "label" | "activeMs" | "afkMs" | "longestActiveMs">
 ): string {
-  const activeLabel =
-    slot.activeMs === 0 ? "0m" : formatActivityDuration(slot.activeMs / 1_000);
-  const afkLabel = slot.afkMs === 0 ? "0m" : formatActivityDuration(slot.afkMs / 1_000);
-  const longestLabel =
-    slot.longestActiveMs === 0
-      ? "0m"
-      : formatActivityDuration(slot.longestActiveMs / 1_000);
+  const activeLabel = formatActivityDuration(slot.activeMs / 1_000);
+  const afkLabel = formatActivityDuration(slot.afkMs / 1_000);
+  const longestLabel = formatActivityDuration(slot.longestActiveMs / 1_000);
   return `${slot.label}: ${activeLabel} active, ${afkLabel} away, ${longestLabel} longest stretch`;
 }
 
@@ -332,7 +328,7 @@ function sanitizeBucket(bucket: ActivityRangeBucket | undefined): ActivityRangeB
 }
 
 function formatHistoryDuration(milliseconds: number): string {
-  return milliseconds === 0 ? "—" : formatActivityDuration(milliseconds / 1_000);
+  return formatActivityDuration(milliseconds / 1_000);
 }
 
 function totalsFromBuckets(buckets: ActivityRangeBucket[]): HistoryTotals {

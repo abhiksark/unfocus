@@ -584,7 +584,11 @@ fn environment_value(key: &str) -> Option<String> {
 }
 
 #[cfg(debug_assertions)]
-pub(crate) fn schedule_automatic_overlay_test(app: &tauri::App, controller: OverlayController) {
+pub(crate) fn schedule_automatic_overlay_test(
+    app: &tauri::App,
+    controller: OverlayController,
+    tray_status: crate::tray::TrayStatus,
+) {
     if environment_value("UNFOCUS_SPIKE_AUTO_OVERLAY").as_deref() != Some("1") {
         return;
     }
@@ -595,6 +599,10 @@ pub(crate) fn schedule_automatic_overlay_test(app: &tauri::App, controller: Over
     let app = app.handle().clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(3));
+        if tray_status.current().phase == crate::tray::TrayPhase::Unavailable {
+            eprintln!("automatic overlay test skipped while reminder timing is unavailable");
+            return;
+        }
         match show_overlay(&app, &controller, duration_seconds) {
             Ok(count) => eprintln!("automatic overlay test opened {count} window(s)"),
             Err(error) => eprintln!("automatic overlay test failed: {error}"),

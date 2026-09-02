@@ -2,6 +2,8 @@
  * Local break-outcome counts from the native ledger (observe-only, no scores).
  */
 
+import type { RefreshState } from "./refresh-state";
+
 export type BreakSummary = {
   windowLabel: string;
   windowSeconds: number;
@@ -116,13 +118,25 @@ export function breakLoadingCaption(): string {
 }
 
 /** Calm error copy; timer continues regardless. */
-export function breakErrorCaption(error: string | null): string {
-  if (!error || !error.trim()) {
-    return "Break outcomes are unavailable right now. The break timer is unaffected.";
-  }
-  const trimmed = error.trim();
-  if (trimmed.length <= 160) {
-    return `${trimmed} The break timer is unaffected.`;
-  }
+export function breakErrorCaption(_error: string | null): string {
   return "Break outcomes are unavailable right now. The break timer is unaffected.";
+}
+
+/** Error-precedence caption for retained last-known break figures. */
+export function breakStaleCaption(_error: string | null): string {
+  return "Break outcomes are unavailable; last known summary shown. The break timer is unaffected.";
+}
+
+/** Consumer caption selected from freshness, never from data presence alone. */
+export function breakRefreshCaption(state: RefreshState<BreakSummary>): string {
+  switch (state.status) {
+    case "loading":
+      return breakLoadingCaption();
+    case "fresh":
+      return breakSummaryCaption(state.data);
+    case "stale":
+      return breakStaleCaption(state.error);
+    case "unavailable":
+      return breakErrorCaption(state.error);
+  }
 }

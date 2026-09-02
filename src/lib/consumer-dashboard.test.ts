@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   consumerReminderPresentation,
   consumerWarning,
+  developerTimerHeading,
   describeRhythm,
   focusProgress,
   formatMinuteDuration,
@@ -46,8 +47,15 @@ const report: DiagnosticsReport = {
   monitorError: null,
   idleSeconds: 1,
   idleError: null,
+  idleStatus: "available",
   activeWindowFullscreen: false,
   fullscreenError: null,
+  fullscreenStatus: "available",
+  storage: {
+    activityHistory: { status: "available", recovery: "none", category: null, error: null },
+    breakLedger: { status: "available", recovery: "none", category: null, error: null },
+    reminderSettings: { status: "available", recovery: "none", category: null, error: null }
+  },
   tray: { available: true, error: null }
 };
 
@@ -58,6 +66,7 @@ function warningInput(overrides: Partial<ConsumerWarningInput> = {}): ConsumerWa
     reminderStatus: status("working"),
     reminderStatusError: null,
     reminderActionError: null,
+    settingsStorageHealth: { status: "available", recovery: "none" },
     settingsError: null,
     settingsErrorContext: null,
     overlayError: null,
@@ -70,8 +79,7 @@ describe("consumer reminder presentation", () => {
     ["working", "You’re in focus time.", true, true, false],
     ["paused", "Reminders are paused.", false, false, true],
     ["break", "Your eye break is in progress.", false, false, false],
-    ["stopped", "Your workday is complete.", false, false, false],
-    ["unavailable", "Reminder status is unavailable.", false, false, false]
+    ["stopped", "Your workday is complete.", false, false, false]
   ] as const)("presents %s without invalid actions", (phase, heading, take, pause, resume) => {
     const result = consumerReminderPresentation(status(phase), null);
     expect(result.heading).toBe(heading);
@@ -79,6 +87,30 @@ describe("consumer reminder presentation", () => {
     expect(result.showPause).toBe(pause);
     expect(result.showResume).toBe(resume);
   });
+
+  test.each([
+    [
+      "confirmed unavailable settings",
+      { status: "unavailable", recovery: "retry" },
+      "Automatic reminders have not started.",
+      "Recover your saved timing"
+    ],
+    [
+      "available settings during scheduler reconciliation",
+      { status: "available", recovery: "none" },
+      "Starting reminders…",
+      "applying the saved timing"
+    ],
+    ["unknown settings IPC health", null, "Starting reminders…", "applying the saved timing"]
+  ] as const)(
+    "presents unavailable scheduler with %s",
+    (_label, health, heading, secondary) => {
+      const result = consumerReminderPresentation(status("unavailable"), null, health);
+      expect(result.heading).toBe(heading);
+      expect(result.secondary).toContain(secondary);
+      expect(result.showTakeBreak || result.showPause || result.showResume).toBe(false);
+    }
+  );
 
   test("gives a preview precedence outside a scheduled break", () => {
     expect(
@@ -125,6 +157,31 @@ describe("consumer reminder presentation", () => {
   });
 });
 
+describe("developer reminder heading", () => {
+  test("is truthful for unavailable, paused, stopped, and running states", () => {
+    const available = { status: "available", recovery: "none" } as const;
+    const unavailable = { status: "unavailable", recovery: "retry" } as const;
+    expect(developerTimerHeading(status("working"), null, available)).toBe(
+      "Your timer is running."
+    );
+    expect(developerTimerHeading(status("paused"), null, available)).toBe(
+      "Your reminders are paused."
+    );
+    expect(developerTimerHeading(status("stopped"), null, available)).toBe(
+      "Your workday is complete."
+    );
+    expect(developerTimerHeading(status("working"), null, unavailable)).toBe(
+      "Automatic reminders have not started."
+    );
+    expect(developerTimerHeading(status("unavailable"), null, available)).toBe(
+      "Starting reminders…"
+    );
+    expect(developerTimerHeading(status("working"), "IPC failed", unavailable)).toBe(
+      "Reminder status is unavailable."
+    );
+  });
+});
+
 describe("consumer warnings", () => {
   test("is absent when the dashboard is healthy", () => {
     expect(consumerWarning(warningInput())).toBeNull();
@@ -156,6 +213,24 @@ describe("consumer warnings", () => {
       expect(JSON.stringify(warning)).not.toContain("raw probe error");
     }
   );
+
+  test.each([
+    ["scheduler startup", status("unavailable"), null],
+    ["missing scheduler status", null, null],
+    ["a paused scheduler", status("paused"), null]
+  ] as const)("uses timing-unaffected probe copy during %s", (_label, reminderStatus, reminderStatusError) => {
+    const warning = consumerWarning(
+      warningInput({
+        report: { ...report, idleError: "raw probe error" },
+        reminderStatus,
+        reminderStatusError
+      })
+    );
+
+    expect(warning?.kind).toBe("probes");
+    expect(warning?.message).toBe("Reminder timing is unaffected by these checks.");
+    expect(warning?.message).not.toContain("keeps running");
+  });
 
   test("uses one warning for multiple probe failures", () => {
     const warning = consumerWarning(
@@ -197,16 +272,97 @@ describe("consumer warnings", () => {
     );
     expect(settingsWarning?.kind).toBe("settings");
     expect(settingsWarning?.message).toBe(
-      "Your previous rhythm was retained. You can try again."
+      "Try again after reviewing the current saved timing."
     );
+  });
+
+  test("reports unavailable reminder storage without claiming the timer runs", () => {
+    const warning = consumerWarning(
+      warningInput({
+        settingsStorageHealth: { status: "unavailable", recovery: "retryOrStartNew" },
+        report: {
+          ...report,
+          idleError: "raw probe failure",
+          storage: {
+            ...report.storage,
+            reminderSettings: {
+              status: "unavailable",
+              recovery: "retryOrStartNew",
+              category: "invalid",
+              error: "/private/config/reminder-settings.json is malformed"
+            }
+          }
+        }
+      })
+    );
+    expect(warning?.kind).toBe("settings");
+    expect(warning?.message).toContain("have not started");
+    expect(JSON.stringify(warning)).not.toContain("/private");
+    expect(JSON.stringify(warning)).not.toContain("keeps running");
+  });
+
+  test("does not treat stale invalid diagnostics as a failed native recovery", () => {
+    const warning = consumerWarning(
+      warningInput({
+        report: {
+          ...report,
+          storage: {
+            ...report.storage,
+            reminderSettings: {
+              status: "unavailable",
+              recovery: "retryOrStartNew",
+              category: "invalid",
+              error: "stale invalid detail"
+            }
+          }
+        },
+        diagnosticsError: "follow-up diagnostics failed"
+      })
+    );
+
+    expect(warning?.kind).toBe("diagnostics");
+    expect(warning?.message).toContain("timer is still running");
+    expect(warning?.message).not.toContain("have not started");
   });
 
   test("distinguishes settings load failure without exposing its raw error", () => {
     const warning = consumerWarning(
       warningInput({ settingsError: "private path", settingsErrorContext: "load" })
     );
-    expect(warning?.heading).toBe("Saved timing is unavailable");
+    expect(warning?.heading).toBe("Saved timing could not be confirmed");
+    expect(warning?.message).not.toMatch(/corrupt|stopped|have not started/i);
     expect(JSON.stringify(warning)).not.toContain("private path");
+  });
+
+  test.each([
+    ["saveReloaded", "reloaded the current saved timing"],
+    ["saveUnconfirmed", "could not confirm whether the requested timing was saved"]
+  ] as const)("uses safe %s save copy without raw errors or retention claims", (context, copy) => {
+    const warning = consumerWarning(
+      warningInput({
+        settingsError: "/private/config/reminder-settings.json: secret detail",
+        settingsErrorContext: context
+      })
+    );
+
+    expect(warning?.message).toContain(copy);
+    expect(JSON.stringify(warning)).not.toContain("/private");
+    expect(warning?.message).not.toMatch(/previous rhythm was retained/i);
+  });
+
+  test("an unavailable save follow-up does not claim the previous rhythm was retained", () => {
+    const warning = consumerWarning(
+      warningInput({
+        settingsStorageHealth: { status: "unavailable", recovery: "retry" },
+        settingsError: "raw save and follow-up failures",
+        settingsErrorContext: "saveUnconfirmed"
+      })
+    );
+
+    expect(warning?.heading).toBe("Timing save could not be confirmed");
+    expect(warning?.message).toContain("could not confirm whether the requested timing was saved");
+    expect(warning?.message).not.toMatch(/previous rhythm was retained/i);
+    expect(JSON.stringify(warning)).not.toContain("raw save");
   });
 
   test("recovers once the current errors clear", () => {
