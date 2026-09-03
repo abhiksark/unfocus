@@ -162,6 +162,9 @@ describe("AppImage outer inspection", () => {
     expect(() => inspectAppImageOuter(noLoad.path)).toThrow("loadable executable segment");
     const entryOutsideLoad = writeSyntheticAppImage((bytes) => bytes.writeBigUInt64LE(10_000n, 24));
     expect(() => inspectAppImageOuter(entryOutsideLoad.path)).toThrow("loadable executable segment");
+
+    const entryInZeroFill = writeSyntheticAppImage((bytes) => bytes.writeBigUInt64LE(127n, 64 + 32));
+    expect(() => inspectAppImageOuter(entryInZeroFill.path)).toThrow("file-backed bytes");
   });
 
   test("rejects malformed or unsupported SquashFS superblocks and trailing data", () => {

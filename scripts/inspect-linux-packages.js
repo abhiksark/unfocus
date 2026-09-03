@@ -292,13 +292,17 @@ function inspectProgramHeaders(file, header, fileSize, label) {
           throw new Error(`${label} load segment ${index} has inconsistent alignment`);
         }
       }
-      const memoryEnd = virtualAddress + BigInt(memoryBytes);
-      if ((flags & 1) !== 0 && entryPoint >= virtualAddress && entryPoint < memoryEnd) executableEntry = true;
+      const fileBackedEnd = virtualAddress + BigInt(fileBytes);
+      if ((flags & 1) !== 0 && entryPoint >= virtualAddress && entryPoint < fileBackedEnd) {
+        executableEntry = true;
+      }
     }
     maximumEnd = Math.max(maximumEnd, fileOffset + fileBytes);
   }
   if (loadSegments === 0 || !executableEntry) {
-    throw new Error(`${label} must contain a loadable executable segment covering its entry point`);
+    throw new Error(
+      `${label} must contain a loadable executable segment with file-backed bytes covering its entry point`,
+    );
   }
   return maximumEnd;
 }
