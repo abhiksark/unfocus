@@ -52,6 +52,11 @@ orchestration, OS probes, timing, and diagnostics.
   owns canonical labels, run IDs, bounds, deadlines, and caller authorization;
   `src/overlay/windows.rs` owns monitor windows, targeted events, sibling
   teardown, and startup-preview scheduling.
+- `examples/verify-update-signature.rs` is a release-only verifier, never a
+  bundled runtime command. It accepts only canonical Tauri outer-base64,
+  prehashed minisign signatures beside exact signed inputs, streams package
+  bytes, and is the cryptographic half of the release finalizer. Keep its test
+  key public-only; never add a test or production private key.
 
 ## Activity history: hot and cold storage
 
