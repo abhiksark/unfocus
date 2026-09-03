@@ -75,14 +75,25 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
 
 - A release tag must point to a commit already contained in `main` and equal
   the complete declared version with a `v` prefix.
-- The quality job runs before packaging. Build jobs do not receive release
-  credentials; the publisher alone receives narrowly scoped write,
-  provenance, and attestation permissions through the `release` environment.
+- The quality job runs before packaging. Build, assembly, package inspection,
+  and promotion-rehearsal jobs never receive production release credentials.
+  The publisher alone receives narrowly scoped write, provenance, and
+  attestation permissions through the `release` environment, and updater-key
+  secrets are mapped only for a fresh beta signing step.
 - Collect platform artifacts separately and reject filename collisions before
-  staging. Generate and verify checksums, then attest the staged assets.
+  staging. Deeply inspect Linux packages and bind their evidence to the base
+  checksums before protected signing. For exact beta releases, cryptographically
+  verify all package and payload signatures against the committed updater
+  public key, generate the 14-file final inventory, and only then checksum and
+  attest the final bytes. Alpha and stable inventories remain updater-free.
+- Draft discovery precedes signing. Reuse only a complete draft whose target,
+  exact inventory, checksums, package bytes, and updater signatures all match
+  the validated candidate. A partial or different draft fails closed before
+  the updater signing secrets are mapped; never delete or replace draft assets
+  to make a retry pass.
 - Verify the remote tag still resolves to the workflow's event commit before
   release writes and again before uploads. Never tolerate a moved tag.
-- Create or update only a draft prerelease. Published releases are immutable:
+- Create or reuse only a draft prerelease. Published releases are immutable:
   never replace their assets, reuse their tag, or overwrite their notes.
 - Current macOS app bundles are ad-hoc signed but not Developer ID-signed or
   notarized, and current Windows installers are not code-signed. Release notes
