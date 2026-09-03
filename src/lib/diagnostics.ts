@@ -1,3 +1,5 @@
+import type { StorageDiagnostic } from "./storage-health";
+
 export type MonitorReport = {
   name: string | null;
   x: number;
@@ -15,6 +17,8 @@ export type ProbeBackend =
   | { kind: "sway"; version: string; candidate: boolean }
   | { kind: "unsupported" };
 
+export type ProbeDiagnosticStatus = "pending" | "available" | "failed";
+
 export type DiagnosticsReport = {
   operatingSystem: string;
   sessionType: string | null;
@@ -24,10 +28,17 @@ export type DiagnosticsReport = {
   monitorError: string | null;
   idleSeconds: number | null;
   idleError: string | null;
+  idleStatus: ProbeDiagnosticStatus;
   activeWindowFullscreen: boolean | null;
   fullscreenError: string | null;
+  fullscreenStatus: ProbeDiagnosticStatus;
   /** Present on current builds; older reports may omit it. */
   probeBackend?: ProbeBackend | null;
+  storage: {
+    activityHistory: StorageDiagnostic;
+    breakLedger: StorageDiagnostic;
+    reminderSettings: StorageDiagnostic;
+  };
   tray: {
     available: boolean;
     error: string | null;
@@ -47,6 +58,9 @@ export function diagnosticsHealth(
     report.monitorError ||
     report.idleError ||
     report.fullscreenError ||
+    report.storage.activityHistory.status === "unavailable" ||
+    report.storage.breakLedger.status === "unavailable" ||
+    report.storage.reminderSettings.status === "unavailable" ||
     report.tray.error
   ) {
     return "degraded";

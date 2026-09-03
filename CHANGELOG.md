@@ -1,7 +1,34 @@
+<!-- CHANGELOG.md -->
+
 # Changelog
 
 Notable changes to Unfocus are recorded here. Dates use `YYYY-MM-DD`, and
 released versions link to their GitHub release.
+
+## [Unreleased]
+
+### Added
+
+- Scheduled breaks on Ubuntu X11 now offer an optional click-through heads-up
+  on the primary display. It appears briefly one minute before the break,
+  clears out of the way, returns for the final ten seconds, and stays visible
+  until the painted multi-monitor break overlay is ready.
+
+### Changed
+
+- The consumer dashboard now keeps reminder timing and warnings beside the
+  live reminder state, gives new local history a compact first-minute state,
+  separates day context from navigation, and uses clearer break-outcome labels
+  with larger settings targets, visible toggle states, and save/reset feedback
+  that stays in view.
+- History now refreshes whenever it reopens, replaces blank day details with a
+  calm empty state, shows only break outcome types that occurred, and keeps a
+  stationary pointer from obscuring the selected day on entry.
+- Break overlays now reveal the static scene, reflective heading, guidance,
+  timer, and controls in a synchronized 2.4-second sequence. Reduced Motion
+  continues to reveal the content immediately.
+- Space is now the primary keyboard shortcut for ending a break. Escape remains
+  available as a compatibility and safety fallback.
 
 ## [0.6.0-beta.2] - 2026-08-24
 

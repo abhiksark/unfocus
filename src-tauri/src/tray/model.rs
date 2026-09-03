@@ -87,7 +87,7 @@ impl TraySnapshot {
         }
     }
 
-    fn unavailable() -> Self {
+    pub(crate) fn unavailable() -> Self {
         Self {
             phase: TrayPhase::Unavailable,
             remaining_milliseconds: None,

@@ -1,3 +1,5 @@
+<!-- README.md -->
+
 # Unfocus
 
 [![CI](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml)
@@ -19,7 +21,9 @@ badges, accounts, or mascots competing for your attention.
 [Report a bug](https://github.com/abhiksark/unfocus/issues/new?template=bug_report.yml) ·
 [Request a feature](https://github.com/abhiksark/unfocus/issues/new?template=feature_request.yml)
 
-![The Unfocus dashboard with the focus countdown, Your day activity, and break outcomes](.github/media/dashboard.png)
+![The Unfocus dashboard with the live reminder and Your day activity strip](.github/media/dashboard.png)
+
+[Watch how Unfocus works in 45 seconds](.github/media/how-unfocus-works.mp4)
 
 ## Why Unfocus
 
@@ -27,6 +31,11 @@ A screen-break reminder should help you look away, not give you another
 interface to watch. When a break is due, Unfocus places the same calm, static
 landscape across every monitor and asks you to focus on something far away. As
 the break ends, a warm amber light signals that it is time to return.
+
+On qualified Ubuntu X11 sessions, an optional click-through heads-up appears
+briefly on the primary display one minute before a scheduled break, clears out
+of the way, then returns for the final ten-second countdown. At zero it stays
+visible until the full break scene is ready.
 
 The dashboard then reflects the rhythm of your day using presence and break
 outcomes. It does not grade your productivity, gamify consistency, or use that
@@ -37,13 +46,15 @@ history to control the reminder timer.
 ### Breaks that feel like breaks
 
 - Covers every monitor with a synchronized full-screen break
+- Gives scheduled breaks on Ubuntu X11 an optional visual-only, click-through
+  heads-up and final ten-second countdown on the primary display
 - Uses a bundled, first-party landscape that stays still throughout the break
 - Selects one cool-biased palette from local device time and holds it across
   every display; amber light signals that the break is nearly complete
 - Defaults to a 20-minute work interval and a 20-second break, configurable
   from 1–120 minutes and 3–30 seconds
 - Supports a fixed 30-minute pause, immediate breaks, break previews, and early
-  exit with Escape or **End break**
+  exit with Space or **End break**
 - Uses idle and fullscreen signals where supported to avoid interrupting you
   while you are already away or presenting
 - Keeps the timer running if a platform probe is unavailable or fails
@@ -137,7 +148,7 @@ built.
 
 | Platform | Status | Notes |
 | --- | --- | --- |
-| Linux X11 | **Qualified** | Synchronized multi-monitor overlays, idle detection, fullscreen detection, and AppIndicator tray support. Ubuntu is the primary test environment. |
+| Linux X11 | **Qualified** | Synchronized multi-monitor overlays, idle detection, fullscreen detection, and AppIndicator tray support. Ubuntu X11 also shows a primary-display pre-break cue. Ubuntu is the primary test environment. |
 | macOS 11+ | **Preview** | Idle and fullscreen probes work interactively. Physical multi-monitor acceptance is not complete. |
 | Windows x64 | **Early build** | Idle and fullscreen probes are implemented. Interactive multi-monitor qualification is pending. |
 | Linux Wayland | **Unsupported** | Default packages do not provide Wayland probes. |

@@ -26,7 +26,10 @@ fn prepare_unexpected_overlay_teardown(
     }
 }
 
-use crate::authorize_main_caller;
+use crate::{
+    authorize_main_caller,
+    tray::{TrayPhase, TrayStatus},
+};
 use labels::authorize_overlay_close_caller;
 use lifecycle::{
     overlay_close_retry_delay, overlay_worker_timeout, OverlayRunLifecycle,
@@ -45,7 +48,8 @@ use std::{
 };
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 use windows::{
-    close_overlay_windows, close_overlay_windows_confirmed, emit_overlay_event, overlay_run_exists,
+    close_overlay_windows, close_overlay_windows_confirmed, emit_overlay_event,
+    mark_overlay_scene_ready, overlay_run_exists,
 };
 
 const OVERLAY_COMMAND_CAPACITY: usize = 256;
@@ -705,13 +709,26 @@ fn begin_overlay_close(
     controller.dismiss(run_id)
 }
 
+fn ensure_overlay_preview_available(phase: TrayPhase, overlay_active: bool) -> Result<(), String> {
+    if phase == TrayPhase::Unavailable {
+        return Err("break preview is unavailable until reminder timing is available".into());
+    }
+    if overlay_active {
+        return Err("another break or preview is already active".into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub(crate) async fn show_overlay_test(
     window: WebviewWindow,
     controller: State<'_, OverlayController>,
+    tray_status: State<'_, TrayStatus>,
     duration_seconds: u64,
 ) -> Result<usize, String> {
     authorize_main_caller(window.label())?;
+    let snapshot = tray_status.current();
+    ensure_overlay_preview_available(snapshot.phase, snapshot.overlay_active)?;
     let app = window.app_handle().clone();
     let controller = controller.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -731,6 +748,15 @@ pub(crate) fn close_overlay_test(
     begin_overlay_close(window.app_handle(), &controller, run_id)
 }
 
+#[tauri::command]
+pub(crate) fn overlay_scene_ready(window: WebviewWindow) -> Result<(), String> {
+    if overlay_run_id_from_label(window.label()).is_none() {
+        return Err("this command is only available to a valid overlay window".into());
+    }
+    mark_overlay_scene_ready(window.label());
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -739,6 +765,22 @@ mod tests {
         sync::{Arc, Mutex},
         time::Duration,
     };
+
+    #[test]
+    fn preview_gate_distinguishes_unavailable_timing_from_an_active_overlay() {
+        assert_eq!(
+            ensure_overlay_preview_available(TrayPhase::Unavailable, false),
+            Err("break preview is unavailable until reminder timing is available".into())
+        );
+        assert_eq!(
+            ensure_overlay_preview_available(TrayPhase::Working, true),
+            Err("another break or preview is already active".into())
+        );
+        assert_eq!(
+            ensure_overlay_preview_available(TrayPhase::Working, false),
+            Ok(())
+        );
+    }
 
     #[test]
     fn a_full_lifecycle_queue_delivers_the_command_from_a_background_sender() {

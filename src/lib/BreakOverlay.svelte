@@ -1,3 +1,5 @@
+<!-- src/lib/BreakOverlay.svelte -->
+
 <script lang="ts">
   import {
     anchorFromRemaining,
@@ -17,6 +19,8 @@
     breakScenePeriodForRun,
     breakScenePhase
   } from "$lib/break-scene";
+  import { isOverlayDismissShortcut } from "$lib/overlay-shortcut";
+  import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount, untrack } from "svelte";
@@ -62,6 +66,7 @@
   let actionError = $state<string | null>(null);
   let syncError = $state<string | null>(null);
   let recoveryTimer: number | undefined;
+  let artworkElement: HTMLImageElement;
 
   let durationMs = $derived(Math.max(1_000, durationSeconds * 1_000));
   let remainingMs = $derived(remainingAt(nativeClock ?? fallbackClock, monotonicNowMs));
@@ -96,7 +101,7 @@
     if (recoveryTimer !== undefined) window.clearTimeout(recoveryTimer);
     recoveryTimer = window.setTimeout(() => {
       dismissing = false;
-      actionError ??= "The native window did not close. Press Escape to try again.";
+      actionError ??= "The native window did not close. Press Space to try again.";
     }, 2_500);
   }
 
@@ -118,9 +123,33 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key !== "Escape") return;
+    if (!isOverlayDismissShortcut(event)) return;
     event.preventDefault();
     void closePreview();
+  }
+
+  async function waitForArtworkDecode(): Promise<void> {
+    if (typeof artworkElement.decode === "function") {
+      try {
+        await artworkElement.decode();
+      } catch {
+        // A failed local image still has a painted native-color fallback. Do
+        // not let an asset error suppress the break entirely.
+      }
+      return;
+    }
+
+    if (artworkElement.complete) return;
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        artworkElement.removeEventListener("load", finish);
+        artworkElement.removeEventListener("error", finish);
+        resolve();
+      };
+      artworkElement.addEventListener("load", finish, { once: true });
+      artworkElement.addEventListener("error", finish, { once: true });
+      if (artworkElement.complete) finish();
+    });
   }
 
   onMount(() => {
@@ -139,6 +168,14 @@
     // Tauri delivers an untargeted listener every emit regardless of the
     // emitting window, so scope the subscription to this window's label.
     const ownLabel = getCurrentWindow().label;
+
+    void waitForArtworkDecode()
+      .then(async () => {
+        if (!disposed) await invoke("overlay_scene_ready");
+      })
+      .catch((value: unknown) => {
+        if (!disposed) syncError = `Native scene readiness unavailable: ${errorMessage(value)}`;
+      });
 
     function register<T>(eventName: string, handler: (payload: T) => void) {
       void listen<T>(eventName, (event) => handler(event.payload), { target: ownLabel })
@@ -191,7 +228,13 @@
   style={presentationStyle}
 >
   <div class="atmosphere" aria-hidden="true">
-    <img class="break-artwork" src={BREAK_SCENE_IMAGE_URL} alt="" draggable="false" />
+    <img
+      bind:this={artworkElement}
+      class="break-artwork"
+      src={BREAK_SCENE_IMAGE_URL}
+      alt=""
+      draggable="false"
+    />
     <div class="scene-veil"></div>
     <div class="return-light"></div>
     <div class="copy-veil"></div>
@@ -203,12 +246,14 @@
   </header>
 
   <section class="break-content" aria-labelledby="break-message">
-    <p class="eyebrow" data-type-role="ui">A moment for your eyes</p>
-    {#key currentMessage}
-      <h1 id="break-message" class="message" data-type-role="reflective-display">
-        {currentMessage}
-      </h1>
-    {/key}
+    <div class="heading-stage">
+      <p class="eyebrow" data-type-role="ui">A moment for your eyes</p>
+      {#key currentMessage}
+        <h1 id="break-message" class="message" data-type-role="reflective-display">
+          {currentMessage}
+        </h1>
+      {/key}
+    </div>
     <p class="guidance" data-type-role="ui">
       {complete
         ? "Notice how your eyes feel before returning."
@@ -245,7 +290,7 @@
       </svg>
       End break
     </button>
-    <p class="shortcut">Press <kbd>Esc</kbd> to close</p>
+    <p class="shortcut">Press <kbd>Space</kbd> to close</p>
     <p class="display-label" data-type-role="mono">
       Display {monitorIndex + 1} of {monitorCount}
     </p>
@@ -334,8 +379,8 @@
     z-index: -1;
     inset: 0;
     overflow: hidden;
-    opacity: 0;
-    animation: atmosphere-reveal 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    opacity: 0.72;
+    animation: atmosphere-reveal 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     animation-delay: calc(0ms - var(--presentation-offset));
   }
 
@@ -397,8 +442,8 @@
     align-items: center;
     justify-content: space-between;
     opacity: 0;
-    animation: chrome-reveal 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    animation-delay: calc(700ms - var(--presentation-offset));
+    animation: chrome-reveal 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(1800ms - var(--presentation-offset));
   }
 
   .wordmark {
@@ -442,10 +487,13 @@
     overflow: auto;
     padding: 8px 0;
     text-align: center;
+  }
+
+  .heading-stage {
     opacity: 0;
-    transform: translate3d(0, 18px, 0) scale(0.985);
-    animation: content-reveal 1.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    animation-delay: calc(180ms - var(--presentation-offset));
+    filter: blur(9px);
+    animation: heading-reveal 500ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(1100ms - var(--presentation-offset));
   }
 
   .eyebrow {
@@ -467,9 +515,6 @@
     line-height: 1.1;
     text-wrap: balance;
     text-shadow: 0 13px 34px rgba(0, 0, 0, 0.42);
-    animation: message-arrive 650ms cubic-bezier(0.22, 1, 0.36, 1);
-    animation-delay: calc(0ms - var(--presentation-offset));
-    animation-fill-mode: both;
   }
 
   .guidance {
@@ -478,6 +523,9 @@
     color: rgba(239, 242, 232, 0.82);
     font-size: clamp(0.82rem, 1.05vw, 1rem);
     line-height: 1.55;
+    opacity: 0;
+    animation: supporting-reveal 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(1550ms - var(--presentation-offset));
   }
 
   .timer {
@@ -486,6 +534,9 @@
     align-items: center;
     gap: 10px;
     margin-top: clamp(21px, 3.8vh, 34px);
+    opacity: 0;
+    animation: supporting-reveal 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(1550ms - var(--presentation-offset));
   }
 
   .timer svg {
@@ -534,8 +585,8 @@
     flex-direction: column;
     align-items: center;
     opacity: 0;
-    animation: chrome-reveal 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    animation-delay: calc(850ms - var(--presentation-offset));
+    animation: chrome-reveal 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(1800ms - var(--presentation-offset));
   }
 
   .skip-button {
@@ -636,45 +687,39 @@
 
   @keyframes atmosphere-reveal {
     from {
-      opacity: 0;
+      opacity: 0.72;
     }
     to {
       opacity: 1;
     }
   }
 
-  @keyframes content-reveal {
+  @keyframes heading-reveal {
     from {
       opacity: 0;
-      transform: translate3d(0, 18px, 0) scale(0.985);
+      filter: blur(9px);
     }
     to {
       opacity: 1;
-      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes supporting-reveal {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
     }
   }
 
   @keyframes chrome-reveal {
     from {
       opacity: 0;
-      transform: translateY(8px);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes message-arrive {
-    from {
-      opacity: 0;
-      filter: blur(9px);
-      transform: translateY(7px);
-    }
-    to {
-      opacity: 1;
-      filter: blur(0);
-      transform: translateY(0);
     }
   }
 
@@ -792,15 +837,15 @@
     .atmosphere,
     .overlay-header,
     .break-content,
+    .heading-stage,
+    .guidance,
+    .timer,
     .overlay-controls {
       opacity: 1;
       animation: none;
     }
 
-    .break-content {
-      transform: none;
-    }
-
+    .heading-stage,
     .message,
     .timer-digits {
       animation: none;

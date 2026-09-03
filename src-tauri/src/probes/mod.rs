@@ -1,3 +1,5 @@
+// src-tauri/src/probes/mod.rs
+
 #[cfg(any(target_os = "linux", test))]
 mod linux;
 #[cfg(any(target_os = "macos", test))]
@@ -16,10 +18,41 @@ use std::{
 const PROBE_POLL_INTERVAL: Duration = Duration::from_secs(2);
 const PROBE_STALE_AFTER: Duration = Duration::from_secs(10);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ProbeReading<T> {
+    Pending,
+    Available(T),
+    Failed(String),
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ProbeSnapshot {
-    pub(crate) idle_seconds: Result<u64, String>,
-    pub(crate) active_window_fullscreen: Result<bool, String>,
+    pub(crate) idle_seconds: ProbeReading<u64>,
+    pub(crate) active_window_fullscreen: ProbeReading<bool>,
+}
+
+#[cfg(test)]
+impl ProbeSnapshot {
+    pub(crate) fn pending() -> Self {
+        Self {
+            idle_seconds: ProbeReading::Pending,
+            active_window_fullscreen: ProbeReading::Pending,
+        }
+    }
+
+    pub(crate) fn available(idle_seconds: u64, active_window_fullscreen: bool) -> Self {
+        Self {
+            idle_seconds: ProbeReading::Available(idle_seconds),
+            active_window_fullscreen: ProbeReading::Available(active_window_fullscreen),
+        }
+    }
+
+    pub(crate) fn failed(idle_error: &str, fullscreen_error: &str) -> Self {
+        Self {
+            idle_seconds: ProbeReading::Failed(idle_error.to_owned()),
+            active_window_fullscreen: ProbeReading::Failed(fullscreen_error.to_owned()),
+        }
+    }
 }
 
 /// Discriminated probe backend for diagnostics (never infers support from env alone).
@@ -60,6 +93,21 @@ pub(crate) fn probe_backend() -> ProbeBackend {
     }
 }
 
+pub(crate) fn qualified_x11_session() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        linux::validate_session(
+            std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+            std::env::var("DISPLAY").ok().as_deref(),
+        )
+        .is_ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn linux_probe_backend() -> ProbeBackend {
     let session = std::env::var("XDG_SESSION_TYPE").ok();
@@ -94,17 +142,19 @@ impl<T> Default for CachedProbe<T> {
 }
 
 impl<T: Clone> CachedProbe<T> {
-    fn read(&self, now: Instant, name: &str) -> Result<T, String> {
+    fn read(&self, now: Instant, name: &str) -> ProbeReading<T> {
         let Some(updated_at) = self.updated_at else {
-            return Err(format!("{name} probe result is not available yet"));
+            return ProbeReading::Pending;
         };
         if now.saturating_duration_since(updated_at) > PROBE_STALE_AFTER {
-            return Err(format!("{name} probe result is stale"));
+            return ProbeReading::Failed(format!("{name} probe result is stale"));
         }
 
-        self.reading
-            .clone()
-            .unwrap_or_else(|| Err(format!("{name} probe result is not available yet")))
+        match self.reading.clone() {
+            Some(Ok(reading)) => ProbeReading::Available(reading),
+            Some(Err(error)) => ProbeReading::Failed(error),
+            None => ProbeReading::Failed(format!("{name} probe cache is inconsistent")),
+        }
     }
 }
 
@@ -165,6 +215,11 @@ impl ProbeCache {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn update_idle_for_test(&self, reading: Result<u64, String>, now: Instant) {
+        self.update_idle(reading, now);
+    }
+
     pub(crate) fn snapshot(&self) -> ProbeSnapshot {
         self.snapshot_at(Instant::now())
     }
@@ -173,8 +228,8 @@ impl ProbeCache {
         let Ok(inner) = self.inner.lock() else {
             let error = "probe cache lock is poisoned".to_owned();
             return ProbeSnapshot {
-                idle_seconds: Err(error.clone()),
-                active_window_fullscreen: Err(error),
+                idle_seconds: ProbeReading::Failed(error.clone()),
+                active_window_fullscreen: ProbeReading::Failed(error),
             };
         };
 
@@ -261,20 +316,26 @@ mod tests {
         let updated_at = Instant::now();
 
         let pending = cache.snapshot_at(updated_at);
-        assert!(pending.idle_seconds.is_err());
-        assert!(pending.active_window_fullscreen.is_err());
+        assert_eq!(pending.idle_seconds, ProbeReading::Pending);
+        assert_eq!(pending.active_window_fullscreen, ProbeReading::Pending);
 
         cache.update_idle(Ok(7), updated_at);
         cache.update_fullscreen(Ok(true), updated_at);
         let fresh = cache.snapshot_at(updated_at + PROBE_STALE_AFTER);
-        assert_eq!(fresh.idle_seconds, Ok(7));
-        assert_eq!(fresh.active_window_fullscreen, Ok(true));
+        assert_eq!(fresh.idle_seconds, ProbeReading::Available(7));
+        assert_eq!(
+            fresh.active_window_fullscreen,
+            ProbeReading::Available(true)
+        );
 
         let stale = cache.snapshot_at(updated_at + PROBE_STALE_AFTER + Duration::from_millis(1));
-        assert_eq!(stale.idle_seconds, Err("idle probe result is stale".into()));
+        assert_eq!(
+            stale.idle_seconds,
+            ProbeReading::Failed("idle probe result is stale".into())
+        );
         assert_eq!(
             stale.active_window_fullscreen,
-            Err("fullscreen probe result is stale".into())
+            ProbeReading::Failed("fullscreen probe result is stale".into())
         );
     }
 
@@ -285,14 +346,45 @@ mod tests {
 
         cache.update_idle(Ok(11), now);
         let only_idle = cache.snapshot_at(now);
-        assert_eq!(only_idle.idle_seconds, Ok(11));
-        assert!(only_idle.active_window_fullscreen.is_err());
+        assert_eq!(only_idle.idle_seconds, ProbeReading::Available(11));
+        assert_eq!(only_idle.active_window_fullscreen, ProbeReading::Pending);
 
         let cache = ProbeCache::default();
         cache.update_fullscreen(Ok(false), now);
         let only_fullscreen = cache.snapshot_at(now);
-        assert!(only_fullscreen.idle_seconds.is_err());
-        assert_eq!(only_fullscreen.active_window_fullscreen, Ok(false));
+        assert_eq!(only_fullscreen.idle_seconds, ProbeReading::Pending);
+        assert_eq!(
+            only_fullscreen.active_window_fullscreen,
+            ProbeReading::Available(false)
+        );
+    }
+
+    #[test]
+    fn cached_and_lock_failures_are_explicitly_failed() {
+        let cache = ProbeCache::default();
+        let now = Instant::now();
+        cache.update_idle(Err("idle failed".into()), now);
+        assert_eq!(
+            cache.snapshot_at(now).idle_seconds,
+            ProbeReading::Failed("idle failed".into())
+        );
+
+        let poisoned = ProbeCache::default();
+        let inner = Arc::clone(&poisoned.inner);
+        let _ = std::thread::spawn(move || {
+            let _guard = inner.lock().expect("cache lock");
+            panic!("poison cache lock");
+        })
+        .join();
+        let snapshot = poisoned.snapshot_at(now);
+        assert_eq!(
+            snapshot.idle_seconds,
+            ProbeReading::Failed("probe cache lock is poisoned".into())
+        );
+        assert_eq!(
+            snapshot.active_window_fullscreen,
+            ProbeReading::Failed("probe cache lock is poisoned".into())
+        );
     }
 
     #[test]

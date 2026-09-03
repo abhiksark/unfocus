@@ -1,3 +1,5 @@
+// src-tauri/src/lib.rs
+
 mod activity;
 mod activity_archive;
 mod break_ledger;
@@ -8,26 +10,35 @@ mod instance;
 #[cfg(test)]
 mod lifecycle_contract;
 mod overlay;
+mod pre_break_cue;
 mod probes;
 mod reminder;
+mod storage_recovery;
 mod tray;
 
-use activity::{get_activity_range, get_today_activity, ActivityTrackerHandle};
-use break_ledger::{get_break_range, get_break_summary, BreakLedgerHandle};
+use activity::{
+    get_activity_range, get_today_activity, retry_activity_history, start_new_activity_history,
+    ActivityTrackerHandle,
+};
+use break_ledger::{
+    get_break_range, get_break_summary, retry_break_ledger, start_new_break_ledger,
+    BreakLedgerHandle,
+};
 use diagnostics::get_diagnostics;
 #[cfg(desktop)]
 use instance::handle_secondary_launch;
 #[cfg(debug_assertions)]
 use overlay::schedule_automatic_overlay_test;
 use overlay::{
-    close_overlay_test, overlay_run_id_from_label, show_overlay_test, OverlayCloseEvent,
-    OverlayController,
+    close_overlay_test, overlay_run_id_from_label, overlay_scene_ready, show_overlay_test,
+    OverlayCloseEvent, OverlayController,
 };
+use pre_break_cue::set_pre_break_cue_visibility;
 use probes::ProbeCache;
 use reminder::{
     get_reminder_settings, get_reminder_status, pause_reminders, reset_reminder_settings,
-    resume_reminders, save_reminder_settings, start_scheduler as start_reminder_scheduler,
-    take_break_now, ReminderSettingsManager,
+    resume_reminders, retry_reminder_settings, save_reminder_settings,
+    start_scheduler as start_reminder_scheduler, take_break_now, ReminderSettingsManager,
 };
 use std::io;
 use tauri::Manager;
@@ -103,6 +114,100 @@ fn browser_launch_result(status: io::Result<std::process::ExitStatus>) -> Result
     }
 }
 
+fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+    let config_dir = app.path().app_config_dir()?;
+    let settings_manager = ReminderSettingsManager::initialize(&config_dir);
+    let probe_cache = ProbeCache::start()?;
+    let activity_tracker = ActivityTrackerHandle::initialize(&config_dir);
+    let break_ledger = BreakLedgerHandle::initialize(&config_dir);
+    let overlay_controller = OverlayController::start(app.handle().clone())?;
+    let tray_status = TrayStatus::default();
+    if !app.manage(settings_manager.clone()) {
+        return Err(io::Error::other("reminder settings were already managed").into());
+    }
+    if !app.manage(probe_cache.clone()) {
+        return Err(io::Error::other("probe cache was already managed").into());
+    }
+    if !app.manage(activity_tracker.clone()) {
+        return Err(io::Error::other("activity tracker was already managed").into());
+    }
+    if !app.manage(break_ledger.clone()) {
+        return Err(io::Error::other("break event ledger was already managed").into());
+    }
+    if !app.manage(overlay_controller.clone()) {
+        return Err(io::Error::other("overlay controller was already managed").into());
+    }
+    if !app.manage(tray_status.clone()) {
+        return Err(io::Error::other("tray status was already managed").into());
+    }
+    let reminder_control = start_reminder_scheduler(
+        app.handle().clone(),
+        probe_cache,
+        activity_tracker,
+        break_ledger,
+        overlay_controller.clone(),
+        settings_manager,
+        tray_status.clone(),
+    )?;
+    if !app.manage(reminder_control) {
+        return Err(io::Error::other("reminder control was already managed").into());
+    }
+    let tray_runtime = TrayRuntime::install(app, &tray_status);
+    if !app.manage(tray_runtime) {
+        return Err(io::Error::other("tray runtime was already managed").into());
+    }
+    #[cfg(debug_assertions)]
+    schedule_automatic_overlay_test(app, overlay_controller, tray_status);
+    Ok(())
+}
+
+fn handle_main_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
+    let tauri::WindowEvent::CloseRequested { api, .. } = event else {
+        return;
+    };
+    api.prevent_close();
+    let tray_available = window
+        .app_handle()
+        .try_state::<TrayRuntime>()
+        .is_some_and(|runtime| runtime.can_hide_dashboard());
+    match dashboard_close_action(tray_available) {
+        DashboardCloseAction::Hide => {
+            if let Err(error) = window.hide() {
+                eprintln!("could not hide the dashboard into the tray: {error}");
+            }
+        }
+        DashboardCloseAction::Exit => window.app_handle().exit(0),
+    }
+}
+
+fn handle_overlay_window_event(window: &tauri::Window, event: &tauri::WindowEvent, run_id: u64) {
+    let close_event = match event {
+        tauri::WindowEvent::CloseRequested { .. } => OverlayCloseEvent::Requested,
+        tauri::WindowEvent::Destroyed => OverlayCloseEvent::Destroyed,
+        _ => return,
+    };
+    let prevent_close = window
+        .app_handle()
+        .state::<OverlayController>()
+        .sibling_closed(run_id, window.label().to_owned(), close_event);
+    if prevent_close {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+        }
+    }
+}
+
+fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
+    if window.label() == "main" {
+        handle_main_window_event(window, event);
+    } else if let Some(run_id) = overlay_run_id_from_label(window.label()) {
+        handle_overlay_window_event(window, event, run_id);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -116,105 +221,20 @@ pub fn run() {
     let builder = builder.plugin(tauri_nspanel::init());
 
     builder
-        .setup(|app| {
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
-            let config_dir = app.path().app_config_dir()?;
-            let settings_manager = ReminderSettingsManager::load(&config_dir)?;
-            let probe_cache = ProbeCache::start()?;
-            let activity_tracker =
-                ActivityTrackerHandle::load(&config_dir).unwrap_or_else(|error| {
-                    eprintln!("could not load activity history: {error}; starting empty");
-                    ActivityTrackerHandle::default()
-                });
-            let break_ledger = BreakLedgerHandle::load(&config_dir).unwrap_or_else(|error| {
-                eprintln!("could not load break event ledger: {error}; starting empty");
-                BreakLedgerHandle::default()
-            });
-            let overlay_controller = OverlayController::start(app.handle().clone())?;
-            let tray_status = TrayStatus::default();
-            if !app.manage(settings_manager.clone()) {
-                return Err(io::Error::other("reminder settings were already managed").into());
-            }
-            if !app.manage(probe_cache.clone()) {
-                return Err(io::Error::other("probe cache was already managed").into());
-            }
-            if !app.manage(activity_tracker.clone()) {
-                return Err(io::Error::other("activity tracker was already managed").into());
-            }
-            if !app.manage(break_ledger.clone()) {
-                return Err(io::Error::other("break event ledger was already managed").into());
-            }
-            if !app.manage(overlay_controller.clone()) {
-                return Err(io::Error::other("overlay controller was already managed").into());
-            }
-            if !app.manage(tray_status.clone()) {
-                return Err(io::Error::other("tray status was already managed").into());
-            }
-            let reminder_control = start_reminder_scheduler(
-                app.handle().clone(),
-                probe_cache,
-                activity_tracker,
-                break_ledger,
-                overlay_controller.clone(),
-                settings_manager,
-                tray_status.clone(),
-            )?;
-            if !app.manage(reminder_control) {
-                return Err(io::Error::other("reminder control was already managed").into());
-            }
-            let tray_runtime = TrayRuntime::install(app, &tray_status);
-            if !app.manage(tray_runtime) {
-                return Err(io::Error::other("tray runtime was already managed").into());
-            }
-            #[cfg(debug_assertions)]
-            schedule_automatic_overlay_test(app, overlay_controller.clone());
-            Ok(())
-        })
-        .on_window_event(|window, event| {
-            if window.label() == "main" {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let tray_available = window
-                        .app_handle()
-                        .try_state::<TrayRuntime>()
-                        .is_some_and(|runtime| runtime.can_hide_dashboard());
-                    match dashboard_close_action(tray_available) {
-                        DashboardCloseAction::Hide => {
-                            if let Err(error) = window.hide() {
-                                eprintln!("could not hide the dashboard into the tray: {error}");
-                            }
-                        }
-                        DashboardCloseAction::Exit => window.app_handle().exit(0),
-                    }
-                }
-            } else if let Some(run_id) = overlay_run_id_from_label(window.label()) {
-                let close_event = match event {
-                    tauri::WindowEvent::CloseRequested { .. } => Some(OverlayCloseEvent::Requested),
-                    tauri::WindowEvent::Destroyed => Some(OverlayCloseEvent::Destroyed),
-                    _ => None,
-                };
-                if let Some(close_event) = close_event {
-                    let prevent_close = window
-                        .app_handle()
-                        .state::<OverlayController>()
-                        .sibling_closed(run_id, window.label().to_owned(), close_event);
-                    if prevent_close {
-                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                            api.prevent_close();
-                        }
-                    }
-                }
-            }
-        })
+        .setup(setup_app)
+        .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
             get_diagnostics,
             get_today_activity,
             get_activity_range,
+            retry_activity_history,
+            start_new_activity_history,
             get_break_range,
             get_break_summary,
+            retry_break_ledger,
+            start_new_break_ledger,
             get_reminder_settings,
+            retry_reminder_settings,
             get_reminder_status,
             save_reminder_settings,
             reset_reminder_settings,
@@ -223,6 +243,8 @@ pub fn run() {
             take_break_now,
             show_overlay_test,
             close_overlay_test,
+            overlay_scene_ready,
+            set_pre_break_cue_visibility,
             open_author_website
         ])
         .run(tauri::generate_context!())
