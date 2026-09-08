@@ -93,6 +93,7 @@ export type ConsumerWarningKind =
   | "preview"
   | "reminder-status"
   | "diagnostics"
+  | "autostart"
   | "probes";
 
 export type ConsumerWarning = {
@@ -358,6 +359,14 @@ export function consumerWarning(input: ConsumerWarningInput): ConsumerWarning | 
       message: timerIsConfirmedRunning(input.reminderStatus, input.reminderStatusError)
         ? `${retry} Your reminder timer is still running.`
         : retry
+    };
+  }
+  if (input.report?.autostart.status === "failed") {
+    return {
+      kind: "autostart",
+      heading: "Launch at login needs attention",
+      message:
+        "Unfocus is running now, but it may need to be opened manually after your next sign-in."
     };
   }
   if (hasProbeFailure(input.report)) {

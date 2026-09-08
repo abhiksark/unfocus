@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  autostartStatusLabel,
   diagnosticsHealth,
   diagnosticsHealthLabel,
   probeBackend,
@@ -26,6 +27,10 @@ const report: DiagnosticsReport = {
   },
   tray: {
     available: true,
+    error: null
+  },
+  autostart: {
+    status: "enabled",
     error: null
   }
 };
@@ -81,6 +86,22 @@ describe("diagnostics presentation", () => {
         null
       )
     ).toBe("degraded");
+  });
+
+  test("degrades only when launch-at-login registration failed", () => {
+    expect(
+      diagnosticsHealth(
+        { ...report, autostart: { status: "failed", error: "private native detail" } },
+        null
+      )
+    ).toBe("degraded");
+    expect(
+      diagnosticsHealth({ ...report, autostart: { status: "disabled", error: null } }, null)
+    ).toBe("healthy");
+    expect(autostartStatusLabel("disabled")).toBe("Disabled in system settings");
+    expect(autostartStatusLabel("skippedDevelopment")).toBe(
+      "Not registered in development builds"
+    );
   });
 
   test("does not guess X11 for unsupported platforms", () => {

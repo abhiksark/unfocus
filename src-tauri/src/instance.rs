@@ -1,8 +1,41 @@
+use crate::autostart::secondary_launch_is_autostart;
+
 use std::fmt;
 
 use tauri::{AppHandle, Manager, UserAttentionType, WebviewWindow};
 
 const MAIN_WINDOW_LABEL: &str = "main";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InitialDashboardAction {
+    KeepHidden,
+    Reveal,
+}
+
+fn initial_dashboard_action(
+    launch_is_autostart: bool,
+    tray_can_hide_dashboard: bool,
+) -> InitialDashboardAction {
+    if launch_is_autostart && tray_can_hide_dashboard {
+        InitialDashboardAction::KeepHidden
+    } else {
+        InitialDashboardAction::Reveal
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SecondaryLaunchAction {
+    Ignore,
+    Reveal,
+}
+
+fn secondary_launch_action(arguments: &[String]) -> SecondaryLaunchAction {
+    if secondary_launch_is_autostart(arguments) {
+        SecondaryLaunchAction::Ignore
+    } else {
+        SecondaryLaunchAction::Reveal
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ActivationStep {
@@ -129,11 +162,30 @@ pub(crate) fn reveal_dashboard(app: &AppHandle) {
     }
 }
 
+/// Applies the first-launch visibility policy while Tauri setup is still on
+/// the main thread. Login launches stay hidden only when the tray is usable;
+/// every ordinary launch and every tray failure reveals a reachable dashboard.
+pub(crate) fn apply_initial_window_policy(
+    app: &AppHandle,
+    launch_is_autostart: bool,
+    tray_can_hide_dashboard: bool,
+) {
+    if initial_dashboard_action(launch_is_autostart, tray_can_hide_dashboard)
+        == InitialDashboardAction::Reveal
+    {
+        let window = app.get_webview_window(MAIN_WINDOW_LABEL);
+        report_activation(activate_dashboard(window.as_ref()));
+    }
+}
+
 /// Handles a notification from an already-terminated secondary process.
-/// Arguments and the secondary working directory are deliberately discarded
-/// by the plugin callback before this function is reached.
-pub(crate) fn handle_secondary_launch(app: &AppHandle) {
-    reveal_dashboard(app);
+///
+/// A duplicate OS login launch must leave the hidden existing process alone;
+/// a deliberate unmarked launch still opens the dashboard.
+pub(crate) fn handle_secondary_launch(app: &AppHandle, arguments: &[String]) {
+    if secondary_launch_action(arguments) == SecondaryLaunchAction::Reveal {
+        reveal_dashboard(app);
+    }
 }
 
 #[cfg(test)]
@@ -286,5 +338,40 @@ mod tests {
     fn a_missing_dashboard_has_an_explicit_recovery_report() {
         let window: Option<&FakeWindow> = None;
         assert_eq!(activate_dashboard(window), ActivationReport::MissingWindow);
+    }
+
+    #[test]
+    fn initial_visibility_requires_a_marked_launch_and_a_usable_tray() {
+        assert_eq!(
+            initial_dashboard_action(true, true),
+            InitialDashboardAction::KeepHidden
+        );
+        assert_eq!(
+            initial_dashboard_action(true, false),
+            InitialDashboardAction::Reveal
+        );
+        assert_eq!(
+            initial_dashboard_action(false, true),
+            InitialDashboardAction::Reveal
+        );
+        assert_eq!(
+            initial_dashboard_action(false, false),
+            InitialDashboardAction::Reveal
+        );
+    }
+    #[test]
+    fn secondary_launch_reveals_only_unmarked_intent() {
+        assert_eq!(
+            secondary_launch_action(&["unfocus".into(), "--unfocus-autostart".into()]),
+            SecondaryLaunchAction::Ignore
+        );
+        assert_eq!(
+            secondary_launch_action(&["unfocus".into(), "--unfocus-autostart-now".into()]),
+            SecondaryLaunchAction::Reveal
+        );
+        assert_eq!(
+            secondary_launch_action(&["unfocus".into()]),
+            SecondaryLaunchAction::Reveal
+        );
     }
 }

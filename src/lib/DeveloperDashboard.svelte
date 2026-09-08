@@ -3,6 +3,7 @@
 <script lang="ts">
   import { developerTimerHeading } from "$lib/consumer-dashboard";
   import {
+    autostartStatusLabel,
     diagnosticsHealth,
     diagnosticsHealthLabel,
     probeBackend,
@@ -124,6 +125,18 @@
   const health = $derived(diagnosticsHealth(report, diagnosticsError));
   const healthLabel = $derived(diagnosticsHealthLabel(health));
   const backend = $derived(probeBackend(report));
+  const autostartLabel = $derived(autostartStatusLabel(report?.autostart.status));
+  const autostartCaption = $derived(
+    report?.autostart.status === "failed"
+      ? (report.autostart.error ?? "The registration failure did not include technical detail.")
+      : report?.autostart.status === "disabled"
+        ? "The operating system will not start Unfocus after sign-in."
+        : report?.autostart.status === "skippedDevelopment"
+          ? "Development builds do not create an OS login entry."
+          : report?.autostart.status === "enabled"
+            ? "Release login launches stay hidden while the tray is available."
+            : "Waiting for native launch-at-login state."
+  );
   const settingsRecovery = $derived(
     reminderSettingsRecovery(settingsStorageHealth, savedSettings, settingsLoading)
   );
@@ -277,6 +290,9 @@
   {#if report?.tray.error}
     <div class="error" role="alert">Tray needs attention: {report.tray.error}</div>
   {/if}
+  {#if report?.autostart.status === "failed" && report.autostart.error}
+    <div class="error" role="alert">Launch at login needs attention: {report.autostart.error}</div>
+  {/if}
   {#if reminderStatusError}
     <div class="error" role="alert">Reminder status unavailable: {reminderStatusError}</div>
   {/if}
@@ -361,6 +377,11 @@
       <span>Presence lifecycle</span>
       <strong data-type-role="mono">{presenceLifecycle}</strong>
       <small>Activity summary state; probe errors remain in Idle time.</small>
+    </article>
+    <article>
+      <span>Launch at login</span>
+      <strong data-type-role="mono">{autostartLabel}</strong>
+      <small>{autostartCaption}</small>
     </article>
   </section>
 

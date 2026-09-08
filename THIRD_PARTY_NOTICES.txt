@@ -682,6 +682,11 @@ Declared license: Apache-2.0 OR MIT
 Upstream authors: Stjepan Glavina <stjepang@gmail.com>, Contributors to futures-rs
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3, 6226d0632e2e1a80c23597e964da9812ae193c535fe058154afb034e94167aa5
 
+Rust: auto-launch@0.6.0
+Declared license: MIT
+Upstream authors: zzzgydi
+License text IDs: e3dee6d5b240791312cd89333a5cc62e6f65be66bff8ab6903dc9a67bbe84263
+
 Rust: autocfg@1.5.1
 Declared license: Apache-2.0 OR MIT
 Upstream authors: Josh Stone <cuviper@gmail.com>
@@ -822,6 +827,11 @@ Rust: cfg-if@1.0.4
 Declared license: MIT OR Apache-2.0
 Upstream authors: Alex Crichton <alex@alexcrichton.com>
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
+
+Rust: cfg_aliases@0.2.2
+Declared license: MIT
+Upstream authors: Zicklag <zicklag@katharostech.com>
+License text IDs: 31b94860253d8ec7b4529f51901044d3b459d6292d996504a36b1bae3a36a812
 
 Rust: chrono@0.4.45
 Declared license: MIT OR Apache-2.0
@@ -1620,6 +1630,10 @@ Declared license: MIT
 Upstream authors: Matt Brubeck <mbrubeck@limpet.net>, Jonathan Reem <jonathan.reem@gmail.com>
 License text IDs: f7715d38a3fa1b4ac97c5729740752505a39cb92ee83ab5b102aeb5eaa7cdea4
 
+Rust: nix@0.31.3
+Declared license: MIT
+License text IDs: 66e3ee1fa7f909ad3c612d556f2a0cdabcd809ad6e66f3b0605015ac64841b70
+
 Rust: num-conv@0.2.2
 Declared license: MIT OR Apache-2.0
 Upstream authors: Jacob Pratt <jacob@jhpratt.dev>
@@ -1702,6 +1716,14 @@ Rust: objc2-quartz-core@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
 License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
 
+Rust: objc2-security@0.3.2
+Declared license: Zlib OR Apache-2.0 OR MIT
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
+
+Rust: objc2-service-management@0.3.2
+Declared license: Zlib OR Apache-2.0 OR MIT
+License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
+
 Rust: objc2-ui-kit@0.3.2
 Declared license: Zlib OR Apache-2.0 OR MIT
 License text IDs: bb28c48e3e078166e91cfc2b6db7ffebb8a0973b9e23b3df060561292d8d69ec
@@ -1733,6 +1755,11 @@ Rust: ordered-stream@0.2.0
 Declared license: MIT OR Apache-2.0
 Upstream authors: Daniel De Graaf <code@danieldg.net>, Zeeshan Ali Khan <zeeshanak@gnome.org>
 License text IDs: 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4, 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+
+Rust: os_info@3.15.0
+Declared license: MIT
+Upstream authors: Jan Schulte <hello@unexpected-co.de>, Stanislav Tkach <stanislav.tkach@gmail.com>
+License text IDs: 44b62aa8f8a212f36d120a4f719438765020731207fd78bf28768032291df836
 
 Rust: pango-sys@0.18.0
 Declared license: MIT
@@ -2109,6 +2136,11 @@ Rust: smallvec@1.15.2
 Declared license: MIT OR Apache-2.0
 Upstream authors: The Servo Project Developers
 License text IDs: 0b28172679e0009b655da42797c03fd163a3379d5cfa67ba1f1655e974a2a1a9, 143368af9701a24ebaf89fe5310ad8116ca71e8e99f17415c0dd893f6a256ae4
+
+Rust: smappservice-rs@0.1.3
+Declared license: MIT
+Upstream authors: iparaskev
+License text IDs: 85343f47bd94b5f3e17d93b5a1ac0ac842f9db826f1c9802b5633eb719cefcde
 
 Rust: socket2@0.6.5
 Declared license: MIT OR Apache-2.0
@@ -2664,6 +2696,10 @@ Declared license: MIT OR Apache-2.0
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
 Rust: windows-numerics@0.2.0
+Declared license: MIT OR Apache-2.0
+License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
+
+Rust: windows-registry@0.6.1
 Declared license: MIT OR Apache-2.0
 License text IDs: 3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf, cb3b46a575dd9b39f881706288addc2e61e94c54658993da30cee083c0bb336f
 
@@ -7177,6 +7213,21 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ===============================================================================
+License text ID: 31b94860253d8ec7b4529f51901044d3b459d6292d996504a36b1bae3a36a812
+Used by:
+  - Rust: cfg_aliases@0.2.2
+-------------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2020 Katharos Technology
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+===============================================================================
 License text ID: 3290ae0fbc9ddb77d2239121d710f0bb9d31b3b4744e6d97fe01e652b4c1870b
 Used by:
   - Rust: linux-raw-sys@0.12.1
@@ -10033,6 +10084,7 @@ Used by:
   - Rust: windows-link@0.1.3
   - Rust: windows-link@0.2.1
   - Rust: windows-numerics@0.2.0
+  - Rust: windows-registry@0.6.1
   - Rust: windows-result@0.3.4
   - Rust: windows-result@0.4.1
   - Rust: windows-strings@0.4.2
@@ -10708,6 +10760,33 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+===============================================================================
+License text ID: 44b62aa8f8a212f36d120a4f719438765020731207fd78bf28768032291df836
+Used by:
+  - Rust: os_info@3.15.0
+-------------------------------------------------------------------------------
+The MIT License (MIT)
+
+Copyright (c) 2017 Stanislav Tkach
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ===============================================================================
 License text ID: 45f522cacecb1023856e46df79ca625dfc550c94910078bd8aec6e02880b3d42
@@ -13053,6 +13132,33 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
   defined by the Mozilla Public License, v. 2.0.
 
 ===============================================================================
+License text ID: 66e3ee1fa7f909ad3c612d556f2a0cdabcd809ad6e66f3b0605015ac64841b70
+Used by:
+  - Rust: nix@0.31.3
+-------------------------------------------------------------------------------
+The MIT License (MIT)
+
+Copyright (c) 2015 Carl Lerche + nix-rust Authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+===============================================================================
 License text ID: 6742bd3e9c2035522b00ddd9a7c76f09e7ed89491a6750d56db2c062d9251b65
 Used by:
   - Rust: cargo_toml@0.22.3
@@ -15061,6 +15167,33 @@ Apache License
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+===============================================================================
+License text ID: 85343f47bd94b5f3e17d93b5a1ac0ac842f9db826f1c9802b5633eb719cefcde
+Used by:
+  - Rust: smappservice-rs@0.1.3
+-------------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2025 iparaskev
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ===============================================================================
 License text ID: 861399f8c21c042b110517e76dc6b63a2b334276c8cf17412fc3c8908ca8dc17
@@ -18623,6 +18756,8 @@ Used by:
   - Rust: objc2-io-surface@0.3.2
   - Rust: objc2-metal@0.3.2
   - Rust: objc2-quartz-core@0.3.2
+  - Rust: objc2-security@0.3.2
+  - Rust: objc2-service-management@0.3.2
   - Rust: objc2-ui-kit@0.3.2
   - Rust: objc2-user-notifications@0.3.2
   - Rust: objc2-web-kit@0.3.2
@@ -19546,6 +19681,7 @@ Used by:
   - Rust: windows-link@0.1.3
   - Rust: windows-link@0.2.1
   - Rust: windows-numerics@0.2.0
+  - Rust: windows-registry@0.6.1
   - Rust: windows-result@0.3.4
   - Rust: windows-result@0.4.1
   - Rust: windows-strings@0.4.2
@@ -20347,6 +20483,33 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+===============================================================================
+License text ID: e3dee6d5b240791312cd89333a5cc62e6f65be66bff8ab6903dc9a67bbe84263
+Used by:
+  - Rust: auto-launch@0.6.0
+-------------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2022 zzzgydi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ===============================================================================
 License text ID: e4374ca982ab0914b599a16174d0aad4a8bb2efb3956ea2f51431536c7c1d22a
