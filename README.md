@@ -1,5 +1,15 @@
 <!-- README.md -->
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/media/unfocus-horizontal-color-on-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset=".github/media/unfocus-horizontal-color-on-light.svg">
+  <img
+    alt="Unfocus logo: a crescent moon above a distant landscape beside the Unfocus wordmark."
+    src=".github/media/unfocus-horizontal-color-on-light.svg"
+    width="320"
+  >
+</picture>
+
 # Unfocus
 
 [![CI](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml)
