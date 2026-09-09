@@ -325,7 +325,14 @@
 
 <main class="wrap">
   <header class="top">
-    <span class="mark"><span class="dot" aria-hidden="true"></span>Unfocus</span>
+    <img
+      class="consumer-wordmark"
+      src="/unfocus-wordmark-mist.svg"
+      width="160"
+      height="43"
+      alt="Unfocus"
+      draggable="false"
+    />
   </header>
 
   <section class="state" aria-labelledby="consumer-state-title">
@@ -906,20 +913,11 @@
     align-items: center;
   }
 
-  .mark {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--s2);
-    color: var(--ink-2);
-    font-size: 0.78rem;
-    font-weight: 600;
-  }
-
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--accent);
+  .consumer-wordmark {
+    display: block;
+    width: 160px;
+    max-width: 100%;
+    height: auto;
   }
 
   .rule {

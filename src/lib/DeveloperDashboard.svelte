@@ -234,9 +234,14 @@
 <main class="developer-dashboard">
   <header>
     <div class="brand-lockup">
-      <div class="scene-swatch" class:degraded={health !== "healthy"} aria-hidden="true">
-        <span></span>
-      </div>
+      <img
+        class="developer-mark"
+        src="/unfocus-icon.svg"
+        width="64"
+        height="64"
+        alt="Unfocus"
+        draggable="false"
+      />
       <div>
         <p class="eyebrow">Developer mode</p>
         <h1 data-type-role="ui">{timerHeading}</h1>
@@ -604,59 +609,11 @@
     gap: 9px;
   }
 
-  .scene-swatch {
-    position: relative;
+  .developer-mark {
+    display: block;
     flex: 0 0 auto;
-    width: 58px;
-    height: 58px;
-    overflow: hidden;
-    border: 1px solid #2c463a;
-    border-radius: 15px;
-    background:
-      radial-gradient(
-        ellipse 61.8% 38.2% at 61.8% 38.2%,
-        rgba(125, 207, 155, 0.24),
-        transparent 61.8%
-      ),
-      linear-gradient(145deg, #789a8d 0%, #274b3f 61.8%, #07100c 100%);
-  }
-
-  .scene-swatch::before {
-    position: absolute;
-    right: -9px;
-    bottom: -13px;
-    left: -11px;
-    height: 34px;
-    border-radius: 61.8% 38.2% 0 0 / 100% 100% 0 0;
-    background: #153a2e;
-    content: "";
-    transform: rotate(-5deg);
-  }
-
-  .scene-swatch::after {
-    position: absolute;
-    top: calc(38.2% - 9px);
-    left: calc(61.8% - 9px);
-    width: 18px;
-    height: 18px;
-    border: 1px solid rgba(215, 236, 220, 0.42);
-    border-radius: 50%;
-    content: "";
-  }
-
-  .scene-swatch span {
-    position: absolute;
-    z-index: 1;
-    top: calc(38.2% - 3px);
-    left: calc(61.8% - 3px);
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #7dcf9b;
-  }
-
-  .scene-swatch.degraded {
-    border-color: #d9bb7d;
+    width: 64px;
+    height: 64px;
   }
 
   h1,
