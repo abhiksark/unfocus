@@ -57,6 +57,11 @@ orchestration, OS probes, timing, and diagnostics.
   Developer preview commands. Scheduled labels are `cue-<run>-<deadline>`;
   preview labels are `cue-preview-<run>-<deadline>`. Their Rust and TypeScript
   parsers must stay synchronized.
+- `examples/verify-update-signature.rs` is a release-only verifier, never a
+  bundled runtime command. It accepts only canonical Tauri outer-base64,
+  prehashed minisign signatures beside exact signed inputs, streams package
+  bytes, and is the cryptographic half of the release finalizer. Keep its test
+  key public-only; never add a test or production private key.
 
 ## Activity history: hot and cold storage
 

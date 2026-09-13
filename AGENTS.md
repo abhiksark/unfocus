@@ -92,7 +92,7 @@ plans/            Local working notes only (gitignored; not tracked docs)
   `take_break_now`, `show_overlay_test`, `close_overlay_test`,
   `show_pre_break_cue_test`, `close_pre_break_cue_test`,
   `open_author_website`. Valid overlay labels can also call
-  `overlay_scene_ready` to release hidden Linux windows after the local scene
+  `overlay_scene_ready` to release hidden Linux and macOS windows after the local scene
   decodes; valid cue labels can call `prepare_pre_break_cue` for native notch layout and
   `set_pre_break_cue_visibility` to make the
   native window follow the heads-up, quiet, countdown, and handoff stages.

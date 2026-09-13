@@ -3,7 +3,10 @@
  * Observe-only: no keylogging and no effect on the break timer.
  */
 
+import type { RefreshState, RefreshStatus } from "./refresh-state";
+
 export type ActivityKind = "active" | "afk" | "unknown";
+export type ActivityProbeStatus = "pending" | "available" | "failed";
 
 export type StripBucket = {
   activeRatio: number;
@@ -21,16 +24,18 @@ export type TodayActivity = {
   deepBlockMinSeconds: number;
   afkThresholdSeconds: number;
   currentKind: ActivityKind | null;
-  probeAvailable: boolean;
+  probeStatus: ActivityProbeStatus;
   strip: StripBucket[];
 };
 
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
+const INITIAL_SUMMARY_SECONDS = SECONDS_PER_MINUTE;
 
-/** Compact duration for dashboard stats (e.g. "4h 12m", "47m", "<1m"). */
+/** Compact duration for dashboard stats (e.g. "4h 12m", "47m", "<1m", "0m"). */
 export function formatActivityDuration(totalSeconds: number): string {
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "—";
+  if (totalSeconds === 0) return "0m";
   const seconds = Math.floor(totalSeconds);
   if (seconds < SECONDS_PER_MINUTE) return "<1m";
   const hours = Math.floor(seconds / SECONDS_PER_HOUR);
@@ -44,11 +49,55 @@ export function formatActivityDuration(totalSeconds: number): string {
  * Live status under the Your day title.
  * Distinct for probe-down vs unknown classification vs active/away.
  */
-export function currentKindLabel(kind: ActivityKind | null, probeAvailable: boolean): string {
-  if (!probeAvailable) return "Presence probe unavailable";
+export function currentKindLabel(
+  kind: ActivityKind | null,
+  probeStatus: ActivityProbeStatus
+): string {
+  if (probeStatus === "pending") return "Checking presence";
+  if (probeStatus === "failed") return "Presence probe unavailable";
   if (kind === null || kind === "unknown") return "Waiting for presence samples";
   if (kind === "active") return "At the keyboard";
   return "Away from the keyboard";
+}
+
+/** The Your day context must never describe retained stale data as live. */
+export function activityStatusCaption(
+  activity: Pick<TodayActivity, "currentKind" | "probeStatus"> | null,
+  refreshStatus: RefreshStatus
+): string {
+  if (refreshStatus === "stale" || refreshStatus === "unavailable") {
+    return "Current activity unavailable";
+  }
+  if (!activity) return "Gathering samples…";
+  return currentKindLabel(activity.currentKind, activity.probeStatus);
+}
+
+export type DeveloperActivityRefreshPresentation = {
+  lifecycle: string;
+  refreshError: string | null;
+};
+
+/** Refresh failures outrank the probe status retained in a last-known payload. */
+export function developerActivityRefreshPresentation(
+  refresh: RefreshState<Pick<TodayActivity, "probeStatus">>
+): DeveloperActivityRefreshPresentation {
+  if (refresh.status === "stale") {
+    return { lifecycle: "Refresh stale", refreshError: refresh.error };
+  }
+  if (refresh.status === "unavailable") {
+    return { lifecycle: "Refresh unavailable", refreshError: refresh.error };
+  }
+  if (refresh.status === "loading") {
+    return { lifecycle: "Connecting", refreshError: null };
+  }
+
+  const lifecycle =
+    refresh.data.probeStatus === "pending"
+      ? "Pending"
+      : refresh.data.probeStatus === "available"
+        ? "Available"
+        : "Failed";
+  return { lifecycle, refreshError: null };
 }
 
 /**
@@ -73,20 +122,14 @@ export function todayLoadingCaption(): string {
   return "Collecting presence samples from this session…";
 }
 
-/**
- * Calm error copy. Prefer a short status; keep a technical detail only when it
- * adds something the user can act on (not a raw dump of every internal path).
- */
-export function todayErrorCaption(error: string | null): string {
-  if (!error || !error.trim()) {
-    return "Your day is unavailable right now. The break timer is unaffected.";
-  }
-  const trimmed = error.trim();
-  // Surface short native messages; clamp long stack-like strings.
-  if (trimmed.length <= 160) {
-    return `${trimmed} The break timer is unaffected.`;
-  }
+/** Calm consumer error copy. Technical details stay in developer diagnostics. */
+export function todayErrorCaption(_error: string | null): string {
   return "Your day is unavailable right now. The break timer is unaffected.";
+}
+
+/** Calm warning adjacent to retained figures after a transport refresh failure. */
+export function todayStaleCaption(_error: string | null): string {
+  return "Current activity is unavailable; last known summary shown. The break timer is unaffected.";
 }
 
 /**
@@ -100,18 +143,45 @@ export function isActivityWindowEmpty(
 }
 
 /**
+ * A fresh local history needs one classified minute before its totals and
+ * mostly-empty 24-hour strip become useful. Probe failures stay distinct and
+ * must never be presented as ordinary startup.
+ */
+export function isActivityWindowStarting(
+  activity: Pick<TodayActivity, "activeSeconds" | "afkSeconds" | "probeStatus">
+): boolean {
+  const { activeSeconds, afkSeconds, probeStatus } = activity;
+  if (probeStatus !== "available") return false;
+  if (!Number.isFinite(activeSeconds) || !Number.isFinite(afkSeconds)) return false;
+  if (activeSeconds < 0 || afkSeconds < 0) return false;
+  return activeSeconds + afkSeconds < INITIAL_SUMMARY_SECONDS;
+}
+
+/**
  * Accessible description of the strip: active vs AFK presence across buckets.
  */
-export function stripAriaLabel(activity: Pick<TodayActivity, "strip" | "windowLabel">): string {
+export function stripAriaLabel(
+  activity: Pick<TodayActivity, "strip" | "windowLabel">,
+  refreshStatus: RefreshStatus = "fresh"
+): string {
+  const context =
+    refreshStatus === "stale"
+      ? `${activity.windowLabel}, last known`
+      : activity.windowLabel;
   const buckets = activity.strip;
   if (buckets.length === 0) {
-    return `${activity.windowLabel}: no activity samples yet`;
+    return `${context}: no activity samples yet`;
   }
   const activeBuckets = buckets.filter((bucket) => bucket.activeRatio >= 0.5).length;
   const afkBuckets = buckets.filter(
     (bucket) => bucket.afkRatio >= 0.5 && bucket.activeRatio < 0.5
   ).length;
-  return `${activity.windowLabel}: ${activeBuckets} mostly-active and ${afkBuckets} mostly-away half-hour blocks`;
+  return `${context}: ${activeBuckets} mostly-active and ${afkBuckets} mostly-away half-hour blocks`;
+}
+
+/** Visible endpoint for the strip; retained buckets must not end at "now". */
+export function stripEndpointLabel(refreshStatus: RefreshStatus): string {
+  return refreshStatus === "stale" ? "last known" : "now";
 }
 
 /** Height factor 0–1 for the active bar in a strip bucket. */

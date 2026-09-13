@@ -4,10 +4,11 @@
     buildHistoryDayDetailRequest,
     historyActivationUsesKeyboard,
     historyCalendarNeedsRefresh,
+    historyDateKeyAfterRefresh,
+    historyDayIsEmpty,
     historyEscapeAction,
     historyHourDetailLabel,
     historyMonthMarkers,
-    initialHistoryDateKey,
     moveHistoryGridFocus,
     moveHistoryHourFocus,
     type ActivityRangeBucket,
@@ -46,11 +47,15 @@
   let previewHourIndex = $state<number | null>(null);
   let openBreakSlotIndex = $state<number | null>(null);
 
+  // Keep this paired with `calendar`; a pending refresh swaps both only when it applies.
   let calendarRequest = buildHistoryCalendarRequest(
     Date.now(),
     untrack(() => dayStartHour)
   );
   let calendarRequested = false;
+  let calendarPointerAnchor: { x: number; y: number } | null = null;
+  let calendarPointerPreviewEnabled = $state(false);
+  let wasActive = false;
   const fetcher = {
     getActivityRange: ({ boundaries }: { boundaries: number[] }) =>
       invoke<ActivityRangeBucket[]>("get_activity_range", { boundaries }),
@@ -89,9 +94,13 @@
         })
       : []
   );
+  const selectedRecordedBreakStats = $derived(
+    selectedBreakStats.filter((stat) => stat.count > 0)
+  );
+  const selectedDayIsEmpty = $derived(detail ? historyDayIsEmpty(detail) : false);
   const rangeLabel = $derived(
     calendar
-      ? `${formatShortDate(calendar.days[0].startMs)} to ${formatShortDate(
+      ? `${formatShortDate(calendar.days[0].startMs)} – ${formatShortDate(
           calendar.days[calendar.days.length - 1].startMs
         )}`
       : ""
@@ -101,19 +110,20 @@
       ? "Reading local activity…"
       : calendarError
         ? "History is unavailable right now."
-        : rangeLabel
+        : `${rangeLabel} · Stored only on this device`
   );
 
   const loadCalendar = createHistoryCalendarLoader(
     fetcher,
-    (loaded) => {
+    (loaded, loadedRequest) => {
+      const nextDateKey = historyDateKeyAfterRefresh(loaded.days, selectedDateKey);
       calendar = loaded;
+      calendarRequest = loadedRequest;
       calendarError = null;
       calendarLoading = false;
-      const initialDateKey = initialHistoryDateKey(loaded.days);
-      selectedDateKey = initialDateKey;
-      focusedDateKey = initialDateKey;
-      if (initialDateKey) requestDay(initialDateKey);
+      selectedDateKey = nextDateKey;
+      focusedDateKey = nextDateKey;
+      if (nextDateKey) requestDay(nextDateKey);
     },
     () => {
       calendarError = "Could not read local activity history. Please try again.";
@@ -134,21 +144,27 @@
     }
   );
 
-  function requestCalendar(): void {
-    calendarRequest = buildHistoryCalendarRequest(Date.now(), untrack(() => dayStartHour));
+  function requestCalendar(preserveSelection = false): void {
+    const preserveCurrentView = calendar !== null && preserveSelection;
+    const nextRequest = buildHistoryCalendarRequest(
+      Date.now(),
+      untrack(() => dayStartHour)
+    );
     calendarRequested = true;
-    calendar = null;
-    calendarLoading = true;
     calendarError = null;
-    selectedDateKey = null;
-    focusedDateKey = null;
     previewDateKey = null;
-    detail = null;
     detailError = null;
-    focusedHourIndex = 0;
     previewHourIndex = null;
     openBreakSlotIndex = null;
-    void loadCalendar(calendarRequest);
+    if (!preserveCurrentView) {
+      calendar = null;
+      calendarLoading = true;
+      selectedDateKey = null;
+      focusedDateKey = null;
+      detail = null;
+      focusedHourIndex = 0;
+    }
+    void loadCalendar(nextRequest);
   }
 
   function requestDay(dateKey: string): void {
@@ -191,6 +207,23 @@
     focusedDateKey = nextDateKey;
     await tick();
     document.getElementById(`history-day-${nextDateKey}`)?.focus();
+  }
+
+  function previewCalendarDay(event: PointerEvent, dateKey: string): void {
+    if (!calendarPointerPreviewEnabled) {
+      if (calendarPointerAnchor === null) {
+        calendarPointerAnchor = { x: event.clientX, y: event.clientY };
+        return;
+      }
+      if (
+        calendarPointerAnchor.x === event.clientX &&
+        calendarPointerAnchor.y === event.clientY
+      ) {
+        return;
+      }
+      calendarPointerPreviewEnabled = true;
+    }
+    previewDateKey = dateKey;
   }
 
   function clearPreview(dateKey: string): void {
@@ -318,9 +351,22 @@
   }
 
   $effect(() => {
-    if (historyCalendarNeedsRefresh(active, calendarRequested, calendarRequest, Date.now())) {
-      requestCalendar();
+    const previouslyActive = wasActive;
+    const shouldRefresh = historyCalendarNeedsRefresh(
+      active,
+      calendarRequested,
+      calendarRequest,
+      Date.now(),
+      previouslyActive
+    );
+    const preserveSelection = active && !previouslyActive && calendarRequested;
+    if (active !== previouslyActive) {
+      calendarPointerAnchor = null;
+      calendarPointerPreviewEnabled = false;
+      previewDateKey = null;
     }
+    wasActive = active;
+    if (shouldRefresh) requestCalendar(preserveSelection);
   });
 </script>
 
@@ -362,7 +408,7 @@
       <div class="history-message" role="alert">
         <p>History is unavailable right now. The break timer is unaffected.</p>
         <p class="t-micro">{calendarError}</p>
-        <button class="btn-ghost" type="button" onclick={requestCalendar}>Retry</button>
+        <button class="btn-ghost" type="button" onclick={() => requestCalendar()}>Retry</button>
       </div>
     {:else if calendar}
       <div
@@ -385,6 +431,7 @@
           </p>
           <div
             class="calendar-cells"
+            class:is-pointer-ready={calendarPointerPreviewEnabled}
             role="group"
             aria-label="90-day active minutes calendar"
             aria-describedby="history-calendar-instructions"
@@ -408,8 +455,8 @@
                   previewDateKey = day.dateKey;
                 }}
                 onblur={() => clearPreview(day.dateKey)}
-                onmouseenter={() => (previewDateKey = day.dateKey)}
-                onmouseleave={() => clearPreview(day.dateKey)}
+                onpointermove={(event) => previewCalendarDay(event, day.dateKey)}
+                onpointerleave={() => clearPreview(day.dateKey)}
               ></button>
             {/each}
             {#each Array.from({ length: calendar.trailingEmptyCells }) as _, index (`trailing-${index}`)}
@@ -451,37 +498,52 @@
             <p class="t-micro">{detailError}</p>
             <button class="btn-ghost" type="button" onclick={retryDay}>Retry</button>
           </div>
+        {:else if detail && selectedDayIsEmpty}
+          <div class="day-empty" role="status">
+            <p>No classified activity or break outcomes for this day.</p>
+            <p class="t-micro">
+              Activity reflects local keyboard and mouse presence only.
+            </p>
+          </div>
         {:else if detail}
           <div class="summary-groups">
             <section class="summary-group" aria-labelledby="history-activity-summary-title">
               <h3 id="history-activity-summary-title" class="summary-title">Activity</h3>
-              <div class="stats">
-                <div class="stat" class:is-zero={detail.totals.activeMs <= 0}>
-                  <span class="num">{detail.totals.activeLabel}</span>
-                  <span class="t-micro">Active</span>
+              {#if detail.totals.isBlank}
+                <p class="t-micro summary-empty">No classified activity for this day.</p>
+              {:else}
+                <div class="stats">
+                  <div class="stat" class:is-zero={detail.totals.activeMs <= 0}>
+                    <span class="num">{detail.totals.activeLabel}</span>
+                    <span class="t-micro">Active</span>
+                  </div>
+                  <div class="stat" class:is-zero={detail.totals.afkMs <= 0}>
+                    <span class="num">{detail.totals.afkLabel}</span>
+                    <span class="t-micro">Away</span>
+                  </div>
+                  <div class="stat" class:is-zero={detail.totals.longestActiveMs <= 0}>
+                    <span class="num">{detail.totals.longestLabel}</span>
+                    <span class="t-micro">Longest stretch</span>
+                  </div>
                 </div>
-                <div class="stat" class:is-zero={detail.totals.afkMs <= 0}>
-                  <span class="num">{detail.totals.afkLabel}</span>
-                  <span class="t-micro">Away</span>
-                </div>
-                <div class="stat" class:is-zero={detail.totals.longestActiveMs <= 0}>
-                  <span class="num">{detail.totals.longestLabel}</span>
-                  <span class="t-micro">Longest stretch</span>
-                </div>
-              </div>
+              {/if}
             </section>
 
             <section class="summary-group" aria-labelledby="history-break-summary-title">
               <h3 id="history-break-summary-title" class="summary-title">Break outcomes</h3>
-              <div class="break-stats">
-                {#each selectedBreakStats as stat (stat.kind)}
-                  <div class="stat" class:is-zero={stat.count <= 0}>
-                    <span class="num">{stat.count}</span>
-                    <span class="t-micro">{stat.label}</span>
-                    <span class="stat-hint">{stat.hint}</span>
-                  </div>
-                {/each}
-              </div>
+              {#if selectedRecordedBreakStats.length > 0}
+                <div class="break-stats">
+                  {#each selectedRecordedBreakStats as stat (stat.kind)}
+                    <div class="stat">
+                      <span class="num">{stat.count}</span>
+                      <span class="t-micro">{stat.label}</span>
+                      <span class="stat-hint">{stat.hint}</span>
+                    </div>
+                  {/each}
+                </div>
+              {:else}
+                <p class="t-micro summary-empty">No break outcomes for this day.</p>
+              {/if}
             </section>
           </div>
 
@@ -682,6 +744,11 @@
     color: var(--ink);
   }
 
+  .btn-text:active,
+  .btn-ghost:active {
+    transform: translateY(1px);
+  }
+
   .history-back {
     min-height: 44px;
     padding: 10px var(--s2);
@@ -784,12 +851,13 @@
     padding: 0;
   }
 
-  .calendar-cell:hover {
+  .calendar-cells.is-pointer-ready .calendar-cell:hover {
     border-color: var(--ink-2);
   }
 
   .calendar-cell[aria-pressed="true"] {
-    box-shadow: 0 0 0 2px var(--warn);
+    border-color: var(--bg);
+    box-shadow: 0 0 0 2px var(--ink-2);
   }
 
   .is-no-data {
@@ -875,6 +943,23 @@
     min-height: 240px;
   }
 
+  .day-empty {
+    display: flex;
+    max-width: 65ch;
+    flex-direction: column;
+    gap: var(--s1);
+    padding: var(--s2) 0 var(--s4);
+  }
+
+  .day-empty p {
+    margin: 0;
+  }
+
+  .day-empty > p:first-child {
+    color: var(--ink-2);
+    line-height: 1.45;
+  }
+
   .summary-groups {
     display: grid;
     grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
@@ -893,6 +978,10 @@
     color: var(--ink-2);
     font-size: 0.76rem;
     font-weight: 600;
+  }
+
+  .summary-empty {
+    max-width: 42ch;
   }
 
   .stats {

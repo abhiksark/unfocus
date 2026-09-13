@@ -12,10 +12,17 @@
 //! archive write leaves a segment hot so it is retried on a later prune;
 //! nothing is lost to a failed write or a crash between the two.
 
-use crate::activity_archive::{archive_segments, prune_chunks, read_range, ARCHIVE_BLOCK_MS};
+use crate::{
+    activity_archive::{archive_segments, prune_chunks, read_range, ARCHIVE_BLOCK_MS},
+    storage_recovery::{
+        canonical_bytes_unchanged, create_new_file_with_permissions, existing_file_permissions,
+        quarantine_invalid_hard_link, replace_file_atomically, LoadFailure, LocalSnapshot,
+        StorageDiagnostic, StorageFailureCategory, StorageLoadHealth,
+    },
+};
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{self, Write},
     path::{Path, PathBuf},
     sync::{
@@ -53,6 +60,8 @@ const MILLIS_PER_SECOND: u64 = 1_000;
 const MAX_RANGE_BUCKETS: usize = 1_024;
 
 static HISTORY_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+static TEST_HISTORY_PERSIST_FAILURE: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,6 +69,16 @@ pub(crate) enum ActivityKind {
     Active,
     Afk,
     Unknown,
+}
+
+/// Runtime lifecycle of the idle probe used for activity classification.
+/// This is serialized in summaries only and is never persisted to history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ActivityProbeStatus {
+    Pending,
+    Available,
+    Failed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,7 +136,7 @@ pub(crate) struct ActivityTracker {
     segments: Vec<Segment>,
     last_sample_ms: Option<u64>,
     last_kind: Option<ActivityKind>,
-    last_probe_ok: bool,
+    probe_status: ActivityProbeStatus,
 }
 
 impl Default for ActivityTracker {
@@ -150,13 +169,13 @@ impl ActivityTracker {
             segments: Vec::new(),
             last_sample_ms: None,
             last_kind: None,
-            last_probe_ok: false,
+            probe_status: ActivityProbeStatus::Pending,
         }
     }
 
     /// Replace live segments with a loaded history snapshot.
     ///
-    /// The caller (the loader in `load_or_repair_history`) has already
+    /// The caller (the loader in `load_history`) has already
     /// archived-before-dropping anything aged out of the window; this must
     /// not re-drop anything itself, or a segment kept hot for a later
     /// archive retry (because the write failed at load time) would be
@@ -173,12 +192,12 @@ impl ActivityTracker {
             self.segments.clear();
             self.last_sample_ms = None;
             self.last_kind = None;
-            self.last_probe_ok = false;
+            self.probe_status = ActivityProbeStatus::Pending;
             return;
         }
         self.last_sample_ms = self.segments.last().map(|segment| segment.end_ms);
         self.last_kind = self.segments.last().map(|segment| segment.kind);
-        self.last_probe_ok = false;
+        self.probe_status = ActivityProbeStatus::Pending;
     }
 
     /// Record one idle reading at `now_ms` (Unix epoch milliseconds).
@@ -202,15 +221,15 @@ impl ActivityTracker {
         self.last_sample_ms = Some(now_ms);
         let kind = match idle_seconds {
             Some(seconds) if seconds >= self.afk_threshold_seconds => {
-                self.last_probe_ok = true;
+                self.probe_status = ActivityProbeStatus::Available;
                 ActivityKind::Afk
             }
             Some(_) => {
-                self.last_probe_ok = true;
+                self.probe_status = ActivityProbeStatus::Available;
                 ActivityKind::Active
             }
             None => {
-                self.last_probe_ok = false;
+                self.probe_status = ActivityProbeStatus::Failed;
                 ActivityKind::Unknown
             }
         };
@@ -388,7 +407,7 @@ impl ActivityTracker {
             deep_block_min_seconds: self.deep_block_min_seconds,
             afk_threshold_seconds: self.afk_threshold_seconds,
             current_kind: self.last_kind,
-            probe_available: self.last_probe_ok,
+            probe_status: self.probe_status,
             strip: self.strip_buckets(now_ms, window_start, window_ms),
         }
     }
@@ -460,7 +479,7 @@ pub(crate) struct ActivitySummary {
     pub(crate) deep_block_min_seconds: u64,
     pub(crate) afk_threshold_seconds: u64,
     pub(crate) current_kind: Option<ActivityKind>,
-    pub(crate) probe_available: bool,
+    pub(crate) probe_status: ActivityProbeStatus,
     pub(crate) strip: Vec<StripBucket>,
 }
 
@@ -515,65 +534,82 @@ struct ActivityTrackerState {
     last_retention_pruned_at_ms: Option<u64>,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct ActivityTrackerHandle {
-    inner: Arc<Mutex<ActivityTrackerState>>,
+#[derive(Debug)]
+enum ActivityStorageState {
+    Available(ActivityTrackerState),
+    Unavailable(LoadFailure),
 }
 
-impl Default for ActivityTrackerHandle {
-    fn default() -> Self {
-        // Tests and fallbacks only; production uses `load`.
-        Self {
-            inner: Arc::new(Mutex::new(ActivityTrackerState {
-                tracker: ActivityTracker::default(),
-                path: PathBuf::from(HISTORY_FILE_NAME),
-                config_dir: PathBuf::new(),
-                last_persisted_at_ms: None,
-                last_retention_pruned_at_ms: None,
-            })),
-        }
-    }
+#[derive(Debug, Clone)]
+pub(crate) struct ActivityTrackerHandle {
+    inner: Arc<Mutex<ActivityStorageState>>,
+    path: Arc<PathBuf>,
+    config_dir: Arc<PathBuf>,
+    recovery: Arc<Mutex<()>>,
 }
 
 impl ActivityTrackerHandle {
-    /// Load pruned history from `config_dir` or start empty after repair.
-    pub(crate) fn load(config_dir: &Path) -> io::Result<Self> {
-        Self::load_at(config_dir, epoch_ms(SystemTime::now()))
+    /// Initialize against the canonical app-config path. A load failure is
+    /// retained as unavailable state; it is never replaced with an empty,
+    /// cwd-relative tracker.
+    pub(crate) fn initialize(config_dir: &Path) -> Self {
+        Self::initialize_at(config_dir, epoch_ms(SystemTime::now()))
     }
 
-    fn load_at(config_dir: &Path, now_ms: u64) -> io::Result<Self> {
+    fn initialize_at(config_dir: &Path, now_ms: u64) -> Self {
         let path = config_dir.join(HISTORY_FILE_NAME);
-        let mut tracker = ActivityTracker::default();
-        let segments = load_or_repair_history(&path, now_ms, tracker.window_seconds)?;
-        tracker.restore_segments(segments, now_ms);
-        prune_expired_archives(config_dir, now_ms);
-        Ok(Self {
-            inner: Arc::new(Mutex::new(ActivityTrackerState {
-                tracker,
-                path,
-                config_dir: config_dir.to_path_buf(),
-                last_persisted_at_ms: None,
-                last_retention_pruned_at_ms: Some(now_ms),
-            })),
-        })
+        let state = match load_activity_state(&path, config_dir, now_ms) {
+            Ok(state) => ActivityStorageState::Available(state),
+            Err(failure) => ActivityStorageState::Unavailable(failure),
+        };
+        Self {
+            inner: Arc::new(Mutex::new(state)),
+            path: Arc::new(path),
+            config_dir: Arc::new(config_dir.to_path_buf()),
+            recovery: Arc::new(Mutex::new(())),
+        }
+    }
+
+    #[cfg(test)]
+    fn load_at(config_dir: &Path, now_ms: u64) -> io::Result<Self> {
+        let handle = Self::initialize_at(config_dir, now_ms);
+        let available = handle
+            .inner
+            .lock()
+            .map_err(|_| io::Error::other("lock poisoned"))?
+            .as_available()
+            .is_some();
+        if available {
+            Ok(handle)
+        } else {
+            Err(io::Error::other("activity history unavailable"))
+        }
     }
 
     #[cfg(test)]
     fn new_with_path(tracker: ActivityTracker, path: PathBuf) -> Self {
         let config_dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
         Self {
-            inner: Arc::new(Mutex::new(ActivityTrackerState {
-                tracker,
-                path,
-                config_dir,
-                last_persisted_at_ms: None,
-                last_retention_pruned_at_ms: None,
-            })),
+            inner: Arc::new(Mutex::new(ActivityStorageState::Available(
+                ActivityTrackerState {
+                    tracker,
+                    path: path.clone(),
+                    config_dir: config_dir.clone(),
+                    last_persisted_at_ms: None,
+                    last_retention_pruned_at_ms: None,
+                },
+            ))),
+            path: Arc::new(path),
+            config_dir: Arc::new(config_dir),
+            recovery: Arc::new(Mutex::new(())),
         }
     }
 
     pub(crate) fn observe(&self, now_ms: u64, idle_seconds: Option<u64>) {
-        let Ok(mut state) = self.inner.lock() else {
+        let Ok(mut storage) = self.inner.lock() else {
+            return;
+        };
+        let ActivityStorageState::Available(state) = &mut *storage else {
             return;
         };
         let previous_kind = state.tracker.last_kind;
@@ -605,9 +641,7 @@ impl ActivityTrackerHandle {
         let archivable = state.tracker.archivable_segments(now_ms);
         if !archivable.is_empty() && (kind_changed || due) {
             match archive_segments(&state.config_dir, &archivable) {
-                Ok(()) => {
-                    state.tracker.drop_archived(now_ms);
-                }
+                Ok(()) => state.tracker.drop_archived(now_ms),
                 Err(error) => {
                     eprintln!("could not archive activity history: {error}; will retry");
                 }
@@ -629,17 +663,37 @@ impl ActivityTrackerHandle {
         state.last_persisted_at_ms = Some(now_ms);
     }
 
-    pub(crate) fn summary(&self, now_ms: u64) -> ActivitySummary {
-        self.inner
-            .lock()
-            .map(|state| state.tracker.summary(now_ms))
-            .unwrap_or_else(|_| ActivityTracker::default().summary(now_ms))
+    pub(crate) fn snapshot(&self, now_ms: u64) -> LocalSnapshot<ActivitySummary> {
+        let Ok(storage) = self.inner.lock() else {
+            return LocalSnapshot::unavailable(StorageFailureCategory::Read);
+        };
+        match &*storage {
+            ActivityStorageState::Available(state) => {
+                LocalSnapshot::available(state.tracker.summary(now_ms))
+            }
+            ActivityStorageState::Unavailable(failure) => {
+                LocalSnapshot::unavailable(failure.category)
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn summary(&self, now_ms: u64) -> ActivitySummary {
+        self.snapshot(now_ms)
+            .data
+            .expect("test tracker should be available")
     }
 
     pub(crate) fn presentation_context(&self, now_ms: u64) -> ActivityPresentationContext {
         self.inner
             .lock()
-            .map(|state| state.tracker.presentation_context(now_ms))
+            .ok()
+            .and_then(|storage| match &*storage {
+                ActivityStorageState::Available(state) => {
+                    Some(state.tracker.presentation_context(now_ms))
+                }
+                ActivityStorageState::Unavailable(_) => None,
+            })
             .unwrap_or(ActivityPresentationContext {
                 history_available: false,
                 continuous_active_seconds: 0,
@@ -647,11 +701,149 @@ impl ActivityTrackerHandle {
             })
     }
 
+    pub(crate) fn diagnostics(&self) -> StorageDiagnostic {
+        let Ok(storage) = self.inner.lock() else {
+            return LoadFailure::read("activity history state lock is poisoned").diagnostic();
+        };
+        match &*storage {
+            ActivityStorageState::Available(_) => StorageDiagnostic::available(),
+            ActivityStorageState::Unavailable(failure) => failure.diagnostic(),
+        }
+    }
+
+    pub(crate) fn retry_load(&self, now_ms: u64) -> StorageLoadHealth {
+        let Ok(_recovery) = self.recovery.lock() else {
+            return StorageLoadHealth::unavailable(StorageFailureCategory::Read);
+        };
+        if self.is_available() {
+            return StorageLoadHealth::available();
+        }
+        self.retry_load_locked(now_ms)
+    }
+
+    pub(crate) fn start_new_after_invalid(&self, now_ms: u64) -> Result<StorageLoadHealth, String> {
+        let _recovery = self
+            .recovery
+            .lock()
+            .map_err(|_| "activity history recovery is unavailable".to_owned())?;
+        let category = self.failure_category()?;
+        if category != StorageFailureCategory::Invalid {
+            return Err("start-new is only available for invalid activity history".into());
+        }
+
+        let contents = fs::read(&*self.path).map_err(|error| {
+            self.publish_failure(LoadFailure::read(format!(
+                "could not re-read {} before recovery: {error}",
+                self.path.display()
+            )));
+            "activity history could not be read; retry is still available".to_owned()
+        })?;
+
+        if history_from_bytes(&contents, now_ms).is_ok() {
+            return Ok(self.retry_load_locked(now_ms));
+        }
+
+        quarantine_invalid_hard_link(&self.path, &contents).map_err(|error| {
+            self.publish_failure(LoadFailure::invalid(format!(
+                "could not preserve invalid {}: {error}",
+                self.path.display()
+            )));
+            "invalid activity history could not be preserved".to_owned()
+        })?;
+        let empty = PersistedActivityHistory {
+            version: HISTORY_SCHEMA_VERSION,
+            segments: Vec::new(),
+        };
+        let temp_path = prepare_history_file(&self.path, &empty).map_err(|error| {
+            self.publish_failure(LoadFailure::invalid(format!(
+                "invalid {} was preserved, but a new history could not be prepared: {error}",
+                self.path.display()
+            )));
+            "a new activity history could not be started".to_owned()
+        })?;
+        let candidate = new_activity_state(&self.path, &self.config_dir, Vec::new(), now_ms);
+        let unchanged = match canonical_bytes_unchanged(&self.path, &contents) {
+            Ok(unchanged) => unchanged,
+            Err(error) => {
+                let _ = fs::remove_file(&temp_path);
+                self.publish_failure(LoadFailure::read(format!(
+                    "could not complete the final canonical recheck for {}: {error}",
+                    self.path.display()
+                )));
+                return Err(
+                    "activity history could not be rechecked; retry is still available".into(),
+                );
+            }
+        };
+        if !unchanged {
+            let _ = fs::remove_file(&temp_path);
+            return Err(
+                "activity history changed while recovery was being prepared; retry to load it"
+                    .to_owned(),
+            );
+        }
+        let mut storage = self.inner.lock().map_err(|_| {
+            let _ = fs::remove_file(&temp_path);
+            "activity history recovery is unavailable".to_owned()
+        })?;
+        if let Err(error) = replace_file_atomically(&temp_path, &self.path) {
+            let _ = fs::remove_file(&temp_path);
+            return Err(format!(
+                "a new activity history could not be started: {error}"
+            ));
+        }
+        *storage = ActivityStorageState::Available(candidate);
+        Ok(StorageLoadHealth::available())
+    }
+
+    fn retry_load_locked(&self, now_ms: u64) -> StorageLoadHealth {
+        match load_activity_state(&self.path, &self.config_dir, now_ms) {
+            Ok(candidate) => {
+                if let Ok(mut storage) = self.inner.lock() {
+                    *storage = ActivityStorageState::Available(candidate);
+                    StorageLoadHealth::available()
+                } else {
+                    StorageLoadHealth::unavailable(StorageFailureCategory::Read)
+                }
+            }
+            Err(failure) => {
+                let health = failure.health();
+                self.publish_failure(failure);
+                health
+            }
+        }
+    }
+
+    fn is_available(&self) -> bool {
+        self.inner
+            .lock()
+            .is_ok_and(|storage| matches!(&*storage, ActivityStorageState::Available(_)))
+    }
+
+    fn failure_category(&self) -> Result<StorageFailureCategory, String> {
+        let storage = self
+            .inner
+            .lock()
+            .map_err(|_| "activity history recovery is unavailable".to_owned())?;
+        match &*storage {
+            ActivityStorageState::Available(_) => {
+                Err("activity history is already available".into())
+            }
+            ActivityStorageState::Unavailable(failure) => Ok(failure.category),
+        }
+    }
+
+    fn publish_failure(&self, failure: LoadFailure) {
+        if let Ok(mut storage) = self.inner.lock() {
+            *storage = ActivityStorageState::Unavailable(failure);
+        }
+    }
+
     /// Sum occupancy into `boundaries.len() - 1` buckets, one per adjacent
     /// pair, from the union of the hot segments and the archive. Fails
     /// closed (a descriptive error, never a partial or empty success) when
-    /// `boundaries` has fewer than two entries, is not strictly increasing,
-    /// or would produce more than `MAX_RANGE_BUCKETS` buckets.
+    /// storage is unavailable, `boundaries` has fewer than two entries, is
+    /// not strictly increasing, or would produce too many buckets.
     ///
     /// `boundaries` are caller-computed epoch milliseconds: Rust has no
     /// calendar and must not gain one, so it never buckets by local day or
@@ -687,7 +879,7 @@ impl ActivityTrackerHandle {
                 "boundaries must not span more than {max_span_ms} ms of retained history"
             ));
         }
-        let segments = self.segments_in_range(span_start, span_end);
+        let segments = self.segments_in_range(span_start, span_end)?;
 
         Ok(boundaries
             .windows(2)
@@ -703,18 +895,22 @@ impl ActivityTrackerHandle {
     /// both places at once. But this method takes its own snapshot of the
     /// hot set and only afterwards reads the archive from disk; a concurrent
     /// `observe` can archive-and-drop a segment in between those two steps,
-    /// so the snapshot (taken before the drop) and the archive read (taken
-    /// after the archive write) can both contain it. Such a duplicate is a
-    /// value-identical `Segment`, since a dropped segment can never be
-    /// extended again (a later sample with the same kind opens a new
-    /// segment instead, see `extend_or_open`), so sorting and deduping by
-    /// value is exact, not a heuristic.
-    fn segments_in_range(&self, start_ms: u64, end_ms: u64) -> Vec<Segment> {
+    /// so the snapshot and archive read can both contain it. Sorting and
+    /// deduping by exact value handles that race without heuristics.
+    fn segments_in_range(&self, start_ms: u64, end_ms: u64) -> Result<Vec<Segment>, String> {
         let (hot, config_dir) = {
-            let Ok(state) = self.inner.lock() else {
-                return Vec::new();
-            };
-            (state.tracker.segments.clone(), state.config_dir.clone())
+            let storage = self
+                .inner
+                .lock()
+                .map_err(|_| "activity history is unavailable".to_owned())?;
+            match &*storage {
+                ActivityStorageState::Available(state) => {
+                    (state.tracker.segments.clone(), state.config_dir.clone())
+                }
+                ActivityStorageState::Unavailable(_) => {
+                    return Err("activity history is unavailable".into());
+                }
+            }
         };
 
         let mut combined: Vec<Segment> = hot
@@ -724,8 +920,45 @@ impl ActivityTrackerHandle {
         combined.extend(read_range(&config_dir, start_ms, end_ms));
         combined.sort_by_key(|segment| (segment.start_ms, segment.end_ms, segment.kind as u8));
         combined.dedup();
-        combined
+        Ok(combined)
     }
+}
+
+impl ActivityStorageState {
+    #[cfg(test)]
+    fn as_available(&self) -> Option<&ActivityTrackerState> {
+        match self {
+            Self::Available(state) => Some(state),
+            Self::Unavailable(_) => None,
+        }
+    }
+}
+
+fn new_activity_state(
+    path: &Path,
+    config_dir: &Path,
+    segments: Vec<Segment>,
+    now_ms: u64,
+) -> ActivityTrackerState {
+    let mut tracker = ActivityTracker::default();
+    tracker.restore_segments(segments, now_ms);
+    ActivityTrackerState {
+        tracker,
+        path: path.to_path_buf(),
+        config_dir: config_dir.to_path_buf(),
+        last_persisted_at_ms: None,
+        last_retention_pruned_at_ms: Some(now_ms),
+    }
+}
+
+fn load_activity_state(
+    path: &Path,
+    config_dir: &Path,
+    now_ms: u64,
+) -> Result<ActivityTrackerState, LoadFailure> {
+    let segments = load_history(path, now_ms, ACTIVITY_WINDOW_SECONDS)?;
+    prune_expired_archives(config_dir, now_ms);
+    Ok(new_activity_state(path, config_dir, segments, now_ms))
 }
 
 fn prune_expired_archives(config_dir: &Path, now_ms: u64) {
@@ -808,32 +1041,38 @@ fn archive_before_drop(
     }
 }
 
+fn history_from_bytes(contents: &[u8], now_ms: u64) -> Result<Vec<Segment>, LoadFailure> {
+    let history =
+        serde_json::from_slice::<PersistedActivityHistory>(contents).map_err(|error| {
+            LoadFailure::invalid(format!("activity history content is malformed: {error}"))
+        })?;
+    segments_from_persisted(history, now_ms)
+        .map_err(|()| LoadFailure::invalid("activity history content is unsupported or invalid"))
+}
+
+fn load_history(
+    path: &Path,
+    now_ms: u64,
+    window_seconds: u64,
+) -> Result<Vec<Segment>, LoadFailure> {
+    match fs::read(path) {
+        Ok(contents) => history_from_bytes(&contents, now_ms)
+            .map(|segments| archive_before_drop(path, segments, now_ms, window_seconds)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) => Err(LoadFailure::read(format!(
+            "could not read {}: {error}",
+            path.display()
+        ))),
+    }
+}
+
+#[cfg(test)]
 fn load_or_repair_history(
     path: &Path,
     now_ms: u64,
     window_seconds: u64,
-) -> io::Result<Vec<Segment>> {
-    match fs::read(path) {
-        Ok(contents) => {
-            let parsed = serde_json::from_slice::<PersistedActivityHistory>(&contents)
-                .ok()
-                .and_then(|history| segments_from_persisted(history, now_ms).ok());
-            if let Some(segments) = parsed {
-                return Ok(archive_before_drop(path, segments, now_ms, window_seconds));
-            }
-
-            // Invalid or untrusted content: write a complete empty history so
-            // the next launch does not re-parse corruption silently as success.
-            let empty = PersistedActivityHistory {
-                version: HISTORY_SCHEMA_VERSION,
-                segments: Vec::new(),
-            };
-            persist_history(path, &empty)?;
-            Ok(Vec::new())
-        }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(error) => Err(error),
-    }
+) -> Result<Vec<Segment>, LoadFailure> {
+    load_history(path, now_ms, window_seconds)
 }
 
 fn create_history_temp_file(path: &Path) -> io::Result<(PathBuf, File)> {
@@ -847,15 +1086,12 @@ fn create_history_temp_file(path: &Path) -> io::Result<(PathBuf, File)> {
         .file_name()
         .map(|name| name.to_string_lossy())
         .unwrap_or_else(|| "activity-history".into());
+    let permissions = existing_file_permissions(path)?;
 
     for _ in 0..100 {
         let id = HISTORY_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let temp_path = parent.join(format!(".{name}.{}.{id}.tmp", std::process::id()));
-        match OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp_path)
-        {
+        match create_new_file_with_permissions(&temp_path, permissions.as_ref()) {
             Ok(file) => return Ok((temp_path, file)),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(error),
@@ -868,25 +1104,19 @@ fn create_history_temp_file(path: &Path) -> io::Result<(PathBuf, File)> {
     ))
 }
 
-#[cfg(not(target_os = "windows"))]
-fn replace_history_file(temp_path: &Path, path: &Path) -> io::Result<()> {
-    fs::rename(temp_path, path)
-}
-
-#[cfg(target_os = "windows")]
-fn replace_history_file(temp_path: &Path, path: &Path) -> io::Result<()> {
-    match fs::rename(temp_path, path) {
-        Ok(()) => Ok(()),
-        Err(_error) if path.exists() => {
-            fs::copy(temp_path, path)?;
-            OpenOptions::new().write(true).open(path)?.sync_all()?;
-            fs::remove_file(temp_path)
+fn prepare_history_file(path: &Path, history: &PersistedActivityHistory) -> io::Result<PathBuf> {
+    #[cfg(test)]
+    if TEST_HISTORY_PERSIST_FAILURE.lock().is_ok_and(|mut target| {
+        if target.as_deref() == Some(path) {
+            target.take();
+            true
+        } else {
+            false
         }
-        Err(error) => Err(error),
+    }) {
+        return Err(io::Error::other("injected activity history write failure"));
     }
-}
 
-pub(crate) fn persist_history(path: &Path, history: &PersistedActivityHistory) -> io::Result<()> {
     let parent = path.parent().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -906,8 +1136,12 @@ pub(crate) fn persist_history(path: &Path, history: &PersistedActivityHistory) -
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
+    Ok(temp_path)
+}
 
-    if let Err(error) = replace_history_file(&temp_path, path) {
+pub(crate) fn persist_history(path: &Path, history: &PersistedActivityHistory) -> io::Result<()> {
+    let temp_path = prepare_history_file(path, history)?;
+    if let Err(error) = replace_file_atomically(&temp_path, path) {
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
@@ -918,9 +1152,35 @@ pub(crate) fn persist_history(path: &Path, history: &PersistedActivityHistory) -
 pub(crate) fn get_today_activity(
     window: tauri::WebviewWindow,
     tracker: tauri::State<'_, ActivityTrackerHandle>,
-) -> Result<ActivitySummary, String> {
+) -> Result<LocalSnapshot<ActivitySummary>, String> {
     crate::authorize_main_caller(window.label())?;
-    Ok(tracker.summary(epoch_ms(SystemTime::now())))
+    Ok(tracker.snapshot(epoch_ms(SystemTime::now())))
+}
+
+#[tauri::command]
+pub(crate) async fn retry_activity_history(
+    window: tauri::WebviewWindow,
+    tracker: tauri::State<'_, ActivityTrackerHandle>,
+) -> Result<StorageLoadHealth, String> {
+    crate::authorize_main_caller(window.label())?;
+    let tracker = tracker.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || tracker.retry_load(epoch_ms(SystemTime::now())))
+        .await
+        .map_err(|_| "activity history retry could not run".to_owned())
+}
+
+#[tauri::command]
+pub(crate) async fn start_new_activity_history(
+    window: tauri::WebviewWindow,
+    tracker: tauri::State<'_, ActivityTrackerHandle>,
+) -> Result<StorageLoadHealth, String> {
+    crate::authorize_main_caller(window.label())?;
+    let tracker = tracker.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        tracker.start_new_after_invalid(epoch_ms(SystemTime::now()))
+    })
+    .await
+    .map_err(|_| "activity history recovery could not run".to_owned())?
 }
 
 /// Historical occupancy across an arbitrary span, bucketed by the caller.
@@ -994,7 +1254,7 @@ mod tests {
         tracker.observe(t0 + 240_000, Some(1));
 
         let summary = tracker.summary(t0 + 240_000);
-        assert!(summary.probe_available);
+        assert_eq!(summary.probe_status, ActivityProbeStatus::Available);
         assert_eq!(summary.current_kind, Some(ActivityKind::Active));
         assert!(summary.active_seconds >= 120);
         assert!(summary.afk_seconds >= 60);
@@ -1004,7 +1264,18 @@ mod tests {
     }
 
     #[test]
-    fn probe_failure_does_not_invent_active_or_afk_time() {
+    fn new_tracker_serializes_pending_before_the_first_probe_result() {
+        let summary = tracker().summary(1_700_000_000_000);
+
+        assert_eq!(summary.probe_status, ActivityProbeStatus::Pending);
+        assert_eq!(
+            serde_json::to_value(&summary).expect("serialize summary")["probeStatus"],
+            "pending"
+        );
+    }
+
+    #[test]
+    fn probe_failure_does_not_invent_active_or_afk_time_and_success_recovers() {
         let mut tracker = tracker();
         let t0 = 1_700_000_000_000_u64;
         tracker.observe(t0, Some(0));
@@ -1013,13 +1284,19 @@ mod tests {
 
         tracker.observe(t0 + 120_000, None);
         tracker.observe(t0 + 180_000, None);
-        let after = tracker.summary(t0 + 180_000);
+        let failed = tracker.summary(t0 + 180_000);
 
-        assert!(!after.probe_available);
-        assert_eq!(after.current_kind, Some(ActivityKind::Unknown));
+        assert_eq!(failed.probe_status, ActivityProbeStatus::Failed);
+        assert_eq!(failed.current_kind, Some(ActivityKind::Unknown));
         // Known classified time must not grow while the probe is dark.
-        assert_eq!(after.active_seconds, before.active_seconds);
-        assert_eq!(after.afk_seconds, before.afk_seconds);
+        assert_eq!(failed.active_seconds, before.active_seconds);
+        assert_eq!(failed.afk_seconds, before.afk_seconds);
+
+        tracker.observe(t0 + 180_001, Some(0));
+        assert_eq!(
+            tracker.summary(t0 + 180_001).probe_status,
+            ActivityProbeStatus::Available
+        );
     }
 
     #[test]
@@ -1084,8 +1361,8 @@ mod tests {
         let after = reloaded.summary(t0 + 240_000);
         assert_eq!(after.active_seconds, before.active_seconds);
         assert_eq!(after.afk_seconds, before.afk_seconds);
-        // Restored history is not treated as a live probe success.
-        assert!(!after.probe_available);
+        // Restored history awaits a live probe result rather than reporting failure.
+        assert_eq!(after.probe_status, ActivityProbeStatus::Pending);
     }
 
     #[test]
@@ -1152,7 +1429,7 @@ mod tests {
     }
 
     #[test]
-    fn future_timestamps_clear_history_instead_of_inventing_spans() {
+    fn future_timestamps_make_storage_unavailable_without_inventing_spans() {
         let dir = TestDirectory::new();
         let path = dir.path.join(HISTORY_FILE_NAME);
         let now = 1_700_000_000_000_u64;
@@ -1166,8 +1443,11 @@ mod tests {
         };
         persist_history(&path, &history).expect("persist skewed");
 
-        let loaded = load_or_repair_history(&path, now, ACTIVITY_WINDOW_SECONDS).expect("load");
-        assert!(loaded.is_empty());
+        let original = fs::read(&path).expect("read skewed bytes");
+        let failure = load_or_repair_history(&path, now, ACTIVITY_WINDOW_SECONDS)
+            .expect_err("future timestamps are invalid");
+        assert_eq!(failure.category, StorageFailureCategory::Invalid);
+        assert_eq!(fs::read(&path).expect("bytes remain"), original);
 
         let mut tracker = tracker();
         tracker.restore_segments(
@@ -1183,17 +1463,264 @@ mod tests {
     }
 
     #[test]
-    fn malformed_history_is_replaced_with_empty_complete_file() {
+    fn malformed_history_is_preserved_and_unavailable() {
         let dir = TestDirectory::new();
         let path = dir.path.join(HISTORY_FILE_NAME);
-        fs::write(&path, b"{not-json").expect("seed garbage");
-        let loaded = load_or_repair_history(&path, 1_700_000_000_000, ACTIVITY_WINDOW_SECONDS)
-            .expect("repair");
-        assert!(loaded.is_empty());
-        let repaired: PersistedActivityHistory =
-            serde_json::from_slice(&fs::read(&path).expect("read")).expect("valid json");
-        assert_eq!(repaired.version, HISTORY_SCHEMA_VERSION);
-        assert!(repaired.segments.is_empty());
+        let original = b"{not-json";
+        fs::write(&path, original).expect("seed garbage");
+
+        let handle = ActivityTrackerHandle::initialize_at(&dir.path, 1_700_000_000_000);
+
+        assert_eq!(fs::read(&path).expect("read"), original);
+        let snapshot = handle.snapshot(1_700_000_000_000);
+        assert!(snapshot.data.is_none());
+        assert_eq!(
+            snapshot.load_health.recovery,
+            crate::storage_recovery::StorageRecovery::RetryOrStartNew
+        );
+        assert!(handle.range(&[1, 2]).is_err());
+        assert_eq!(
+            handle.presentation_context(1_700_000_000_000),
+            ActivityPresentationContext {
+                history_available: false,
+                continuous_active_seconds: 0,
+                recent_afk_seconds: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn read_failure_stays_unavailable_until_retry_recovers_canonical_path() {
+        let dir = TestDirectory::new();
+        let blocked_config = dir.path.join("blocked-config");
+        fs::write(&blocked_config, b"blocker").expect("block config directory");
+        let canonical = blocked_config.join(HISTORY_FILE_NAME);
+        let now = 1_700_000_000_000;
+        let handle = ActivityTrackerHandle::initialize_at(&blocked_config, now);
+
+        assert_eq!(&*handle.path, &canonical);
+        assert_eq!(
+            handle.snapshot(now).load_health.recovery,
+            crate::storage_recovery::StorageRecovery::Retry
+        );
+        handle.observe(now, Some(0));
+        assert_eq!(
+            fs::read(&blocked_config).expect("blocker untouched"),
+            b"blocker"
+        );
+        assert!(handle.range(&[now, now + 1]).is_err());
+        assert!(handle.start_new_after_invalid(now).is_err());
+
+        fs::remove_file(&blocked_config).expect("remove blocker");
+        fs::create_dir(&blocked_config).expect("create config directory");
+        persist_history(
+            &canonical,
+            &PersistedActivityHistory {
+                version: HISTORY_SCHEMA_VERSION,
+                segments: Vec::new(),
+            },
+        )
+        .expect("write repaired history");
+
+        assert_eq!(handle.retry_load(now), StorageLoadHealth::available());
+        assert!(handle.snapshot(now).data.is_some());
+    }
+
+    #[test]
+    fn failed_retry_preserves_invalid_bytes_and_unavailable_state() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let original = b"not valid activity history";
+        fs::write(&path, original).expect("seed invalid history");
+        let now = 1_700_000_000_000;
+        let handle = ActivityTrackerHandle::initialize_at(&dir.path, now);
+
+        let health = handle.retry_load(now);
+
+        assert_eq!(
+            health.status,
+            crate::storage_recovery::StorageLoadStatus::Unavailable
+        );
+        assert_eq!(
+            health.recovery,
+            crate::storage_recovery::StorageRecovery::RetryOrStartNew
+        );
+        assert_eq!(fs::read(path).expect("canonical unchanged"), original);
+        assert!(handle.snapshot(now).data.is_none());
+    }
+
+    #[test]
+    fn invalid_start_new_quarantines_exact_bytes_and_writes_empty_history() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let original = b"invalid activity bytes\0";
+        fs::write(&path, original).expect("seed invalid history");
+        let now = 1_700_000_000_000;
+        let handle = ActivityTrackerHandle::initialize_at(&dir.path, now);
+
+        assert_eq!(
+            handle.start_new_after_invalid(now).expect("start new"),
+            StorageLoadHealth::available()
+        );
+
+        let persisted: PersistedActivityHistory =
+            serde_json::from_slice(&fs::read(&path).expect("new canonical")).expect("valid empty");
+        assert_eq!(persisted.version, HISTORY_SCHEMA_VERSION);
+        assert!(persisted.segments.is_empty());
+        let quarantines: Vec<_> = fs::read_dir(&dir.path)
+            .expect("siblings")
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("activity-history.json.invalid-")
+            })
+            .collect();
+        assert_eq!(quarantines.len(), 1);
+        assert_eq!(
+            fs::read(quarantines[0].path()).expect("quarantine"),
+            original
+        );
+        assert!(handle.snapshot(now).data.is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn start_new_preserves_restrictive_canonical_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        fs::write(&path, b"invalid activity bytes").expect("seed invalid history");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+            .expect("restrict canonical permissions");
+        let now = 1_700_000_000_000;
+        let handle = ActivityTrackerHandle::initialize_at(&dir.path, now);
+
+        handle
+            .start_new_after_invalid(now)
+            .expect("start new activity history");
+
+        assert_eq!(
+            fs::metadata(path).expect("metadata").permissions().mode() & 0o7777,
+            0o600
+        );
+    }
+
+    #[test]
+    fn failed_quarantine_or_replacement_preserves_invalid_canonical_bytes() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let original = b"invalid activity bytes";
+        fs::write(&path, original).expect("seed invalid history");
+        let now = 1_700_000_000_000;
+        let handle = ActivityTrackerHandle::initialize_at(&dir.path, now);
+        crate::storage_recovery::TEST_QUARANTINE_FAILURES
+            .lock()
+            .expect("hook")
+            .push(path.clone());
+
+        assert!(handle.start_new_after_invalid(now).is_err());
+        assert_eq!(fs::read(&path).expect("after quarantine failure"), original);
+
+        *TEST_HISTORY_PERSIST_FAILURE.lock().expect("hook") = Some(path.clone());
+        assert!(handle.start_new_after_invalid(now).is_err());
+        assert_eq!(
+            fs::read(&path).expect("after replacement failure"),
+            original
+        );
+        assert!(handle.snapshot(now).data.is_none());
+    }
+
+    #[test]
+    fn concurrent_external_activity_repair_is_not_overwritten() {
+        use std::time::Duration;
+
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        let original = b"invalid activity bytes";
+        fs::write(&path, original).expect("seed invalid history");
+        let now = 1_700_000_000_000;
+        let handle = ActivityTrackerHandle::initialize_at(&dir.path, now);
+        let repaired = PersistedActivityHistory {
+            version: HISTORY_SCHEMA_VERSION,
+            segments: Vec::new(),
+        };
+        let (started, release) = crate::storage_recovery::install_replacement_barrier(path.clone());
+        let recovering = handle.clone();
+        let recovery = std::thread::spawn(move || recovering.start_new_after_invalid(now));
+        started
+            .recv_timeout(Duration::from_secs(1))
+            .expect("recovery reaches final validation");
+
+        persist_history(&path, &repaired).expect("external repair replaces canonical file");
+        let repaired_bytes = fs::read(&path).expect("repaired bytes");
+        release.send(()).expect("release recovery");
+
+        assert!(recovery.join().expect("recovery thread").is_err());
+        assert_eq!(
+            fs::read(&path).expect("canonical remains repaired"),
+            repaired_bytes
+        );
+        assert!(handle.snapshot(now).data.is_none());
+        assert_eq!(handle.retry_load(now), StorageLoadHealth::available());
+    }
+
+    #[test]
+    fn canonical_removal_at_final_recheck_publishes_read_failure() {
+        use std::time::Duration;
+
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        fs::write(&path, b"invalid activity bytes").expect("seed invalid history");
+        let now = 1_700_000_000_000;
+        let handle = ActivityTrackerHandle::initialize_at(&dir.path, now);
+        let (started, release) = crate::storage_recovery::install_replacement_barrier(path.clone());
+        let recovering = handle.clone();
+        let recovery = std::thread::spawn(move || recovering.start_new_after_invalid(now));
+        started
+            .recv_timeout(Duration::from_secs(1))
+            .expect("recovery reaches final canonical recheck");
+
+        fs::remove_file(&path).expect("remove canonical history");
+        release.send(()).expect("release recovery");
+
+        assert!(recovery.join().expect("recovery thread").is_err());
+        assert_eq!(
+            handle.snapshot(now).load_health,
+            StorageLoadHealth::unavailable(StorageFailureCategory::Read)
+        );
+        assert!(
+            handle.start_new_after_invalid(now).is_err(),
+            "read failures must remove start-new capability"
+        );
+        assert_eq!(handle.retry_load(now), StorageLoadHealth::available());
+    }
+
+    #[test]
+    fn hot_history_recovery_does_not_rewrite_archive_chunks() {
+        let dir = TestDirectory::new();
+        let path = dir.path.join(HISTORY_FILE_NAME);
+        fs::write(&path, b"invalid hot history").expect("invalid hot file");
+        let archived = Segment {
+            kind: ActivityKind::Active,
+            start_ms: 1_000,
+            end_ms: 2_000,
+        };
+        activity_archive::archive_segments(&dir.path, &[archived]).expect("seed archive");
+        let archive_path = activity_archive::chunk_path(&dir.path, 0);
+        let archive_bytes = fs::read(&archive_path).expect("archive bytes");
+        let handle = ActivityTrackerHandle::initialize_at(&dir.path, 1_700_000_000_000);
+
+        handle
+            .start_new_after_invalid(1_700_000_000_000)
+            .expect("start new hot history");
+
+        assert_eq!(
+            fs::read(archive_path).expect("archive remains"),
+            archive_bytes
+        );
     }
 
     #[test]
@@ -1348,11 +1875,16 @@ mod tests {
 
         let locked = handle.inner.lock().expect("lock tracker state");
         assert!(
-            locked.tracker.segments.contains(&Segment {
-                kind: ActivityKind::Active,
-                start_ms: t0,
-                end_ms: t0 + 60_000,
-            }),
+            locked
+                .as_available()
+                .expect("available")
+                .tracker
+                .segments
+                .contains(&Segment {
+                    kind: ActivityKind::Active,
+                    start_ms: t0,
+                    end_ms: t0 + 60_000,
+                }),
             "a failed archive write at load time must keep the segment hot for a later retry, \
              not be silently re-dropped by restore_segments"
         );
@@ -1402,7 +1934,12 @@ mod tests {
 
         let locked = handle.inner.lock().expect("lock tracker state");
         assert!(
-            !locked.tracker.segments.contains(&old_segment),
+            !locked
+                .as_available()
+                .expect("available")
+                .tracker
+                .segments
+                .contains(&old_segment),
             "an archived segment must be dropped from the hot set"
         );
     }
@@ -1436,11 +1973,21 @@ mod tests {
 
         let locked = handle.inner.lock().expect("lock tracker state");
         assert!(
-            locked.tracker.segments.contains(&old_segment),
+            locked
+                .as_available()
+                .expect("available")
+                .tracker
+                .segments
+                .contains(&old_segment),
             "a failed archive write must keep the segment hot for a later retry"
         );
         assert_eq!(
-            locked.tracker.segments.len(),
+            locked
+                .as_available()
+                .expect("available")
+                .tracker
+                .segments
+                .len(),
             2,
             "nothing is lost when the archive write fails"
         );
@@ -1488,7 +2035,12 @@ mod tests {
 
         let locked = handle.inner.lock().expect("lock tracker state");
         assert!(
-            locked.tracker.segments.contains(&closed_segment),
+            locked
+                .as_available()
+                .expect("available")
+                .tracker
+                .segments
+                .contains(&closed_segment),
             "an archivable segment must stay hot when the observation that saw it \
              was neither due nor a kind change"
         );

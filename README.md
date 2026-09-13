@@ -1,5 +1,15 @@
 <!-- README.md -->
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/media/unfocus-horizontal-color-on-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset=".github/media/unfocus-horizontal-color-on-light.svg">
+  <img
+    alt="Unfocus logo: a crescent moon above a distant landscape beside the Unfocus wordmark."
+    src=".github/media/unfocus-horizontal-color-on-light.svg"
+    width="320"
+  >
+</picture>
+
 # Unfocus
 
 [![CI](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml)
@@ -21,7 +31,7 @@ badges, accounts, or mascots competing for your attention.
 [Report a bug](https://github.com/abhiksark/unfocus/issues/new?template=bug_report.yml) ·
 [Request a feature](https://github.com/abhiksark/unfocus/issues/new?template=feature_request.yml)
 
-![The Unfocus dashboard with the focus countdown, Your day activity, and break outcomes](.github/media/dashboard.png)
+![The Unfocus dashboard with the live reminder and Your day activity strip](.github/media/dashboard.png)
 
 [Watch how Unfocus works in 45 seconds](.github/media/how-unfocus-works.mp4)
 

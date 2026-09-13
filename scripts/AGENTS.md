@@ -88,6 +88,20 @@ or release-artifact collection.
   reject missing or unsupported bundles, and preserve platform-distinct files.
   Coordinate changes with `.github/workflows/release.yml` and
   `.github/AGENTS.md`.
+- Validate Linux candidates credential-free with
+  `bun run release:inspect-linux` before any signing secret is available. The
+  inspector owns exact package identities/layouts, bounded AppImage
+  ELF/SquashFS traversal, notices, and cross-package executable build IDs.
+- Linux beta update payloads and envelopes are generated only with
+  `bun run release:update-envelope`. They use exact target keys, immutable
+  release URLs, package hashes/sizes, and Tauri-style prehashed minisign
+  signatures from one key ID. `release:sign-linux-update` is the only step
+  allowed to receive the updater private key; it may invoke only the signer,
+  never package tools, Cargo, network clients, attestation, or upload code.
+  Structural envelope validation never counts as cryptographic verification;
+  run `bun run release:verify-update-signature` against the canonical public
+  key for the payload and every package before checksums, attestation, or
+  publication. Alpha and stable inventories remain updater-free.
 
 ## Checks
 

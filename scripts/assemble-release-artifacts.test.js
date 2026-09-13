@@ -60,9 +60,16 @@ describe("release artifact assembly", () => {
     const assembled = assembleReleaseArtifacts(downloads, output, version);
     expect(assembled).toEqual([...expectedReleaseFilenames(version), "SHA256SUMS"].sort());
     verifyChecksums(output, expectedReleaseFilenames(version));
-    expect(readFileSync(join(output, "SHA256SUMS"), "utf8")).toContain(
-      `  Unfocus_${version}_amd64.deb`,
-    );
+    const checksumPath = join(output, "SHA256SUMS");
+    const canonicalChecksums = readFileSync(checksumPath, "utf8");
+    expect(canonicalChecksums).toContain(`  Unfocus_${version}_amd64.deb`);
+
+    writeFileSync(checksumPath, `${canonicalChecksums.trimEnd().split("\n").reverse().join("\n")}\n`);
+    expect(() => verifyChecksums(output, expectedReleaseFilenames(version))).toThrow("sorted canonical");
+    writeFileSync(checksumPath, `${canonicalChecksums}\n`);
+    expect(() => verifyChecksums(output, expectedReleaseFilenames(version))).toThrow("one trailing LF");
+    writeFileSync(checksumPath, canonicalChecksums.replaceAll("\n", "\r\n"));
+    expect(() => verifyChecksums(output, expectedReleaseFilenames(version))).toThrow("canonical size");
   });
 
   linuxPackaging("rejects unexpected files", () => {

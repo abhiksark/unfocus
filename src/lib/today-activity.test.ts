@@ -1,18 +1,30 @@
 import { describe, expect, test } from "bun:test";
 import {
   activityFootnote,
+  activityStatusCaption,
   currentKindLabel,
   deepBlockCaption,
+  developerActivityRefreshPresentation,
   formatActivityDuration,
   isActivityWindowEmpty,
+  isActivityWindowStarting,
   stripActiveHeight,
   stripAfkHeight,
   stripAriaLabel,
   stripAxisTicks,
+  stripEndpointLabel,
   todayErrorCaption,
   todayLoadingCaption,
+  todayStaleCaption,
   type TodayActivity
 } from "./today-activity";
+import {
+  refreshDisplayAsOfMs,
+  refreshFailed,
+  refreshSucceeded,
+  refreshUnavailable,
+  type RefreshState
+} from "./refresh-state";
 
 function sample(partial: Partial<TodayActivity> = {}): TodayActivity {
   return {
@@ -26,7 +38,7 @@ function sample(partial: Partial<TodayActivity> = {}): TodayActivity {
     deepBlockMinSeconds: 25 * 60,
     afkThresholdSeconds: 5 * 60,
     currentKind: "active",
-    probeAvailable: true,
+    probeStatus: "available",
     strip: [
       { activeRatio: 0.8, afkRatio: 0.1 },
       { activeRatio: 0.2, afkRatio: 0.7 },
@@ -38,7 +50,8 @@ function sample(partial: Partial<TodayActivity> = {}): TodayActivity {
 
 describe("today activity presentation", () => {
   test("formats durations for dashboard stats", () => {
-    expect(formatActivityDuration(0)).toBe("<1m");
+    expect(formatActivityDuration(0)).toBe("0m");
+    expect(formatActivityDuration(0.5)).toBe("<1m");
     expect(formatActivityDuration(59)).toBe("<1m");
     expect(formatActivityDuration(60)).toBe("1m");
     expect(formatActivityDuration(3_600)).toBe("1h");
@@ -46,13 +59,62 @@ describe("today activity presentation", () => {
     expect(formatActivityDuration(-1)).toBe("—");
   });
 
-  test("labels current kind with distinct probe and waiting states", () => {
-    expect(currentKindLabel("active", true)).toBe("At the keyboard");
-    expect(currentKindLabel("afk", true)).toBe("Away from the keyboard");
-    expect(currentKindLabel("unknown", true)).toBe("Waiting for presence samples");
-    expect(currentKindLabel("active", false)).toBe("Presence probe unavailable");
-    expect(currentKindLabel(null, true)).toBe("Waiting for presence samples");
-    expect(currentKindLabel(null, false)).toBe("Presence probe unavailable");
+  test("labels current kind with distinct pending, available, and failed states", () => {
+    expect(currentKindLabel("active", "available")).toBe("At the keyboard");
+    expect(currentKindLabel("afk", "available")).toBe("Away from the keyboard");
+    expect(currentKindLabel("unknown", "available")).toBe(
+      "Waiting for presence samples"
+    );
+    expect(currentKindLabel(null, "available")).toBe("Waiting for presence samples");
+    expect(currentKindLabel("active", "pending")).toBe("Checking presence");
+    expect(currentKindLabel(null, "pending")).toBe("Checking presence");
+    expect(currentKindLabel("active", "failed")).toBe("Presence probe unavailable");
+    expect(currentKindLabel(null, "failed")).toBe("Presence probe unavailable");
+  });
+
+  test("never presents stale activity classification as live", () => {
+    const activity = sample({ currentKind: "active" });
+    expect(activityStatusCaption(activity, "fresh")).toBe("At the keyboard");
+    expect(activityStatusCaption(activity, "stale")).toBe(
+      "Current activity unavailable"
+    );
+    expect(activityStatusCaption(null, "unavailable")).toBe(
+      "Current activity unavailable"
+    );
+    expect(activityStatusCaption(null, "loading")).toBe("Gathering samples…");
+  });
+
+  test("gives developer refresh state precedence through fresh to stale to fresh", () => {
+    let refresh: RefreshState<TodayActivity> = refreshSucceeded(
+      sample({ probeStatus: "available" })
+    );
+    expect(developerActivityRefreshPresentation(refresh)).toEqual({
+      lifecycle: "Available",
+      refreshError: null
+    });
+
+    refresh = refreshFailed(refresh, "/private/config: activity IPC failed");
+    expect(developerActivityRefreshPresentation(refresh)).toEqual({
+      lifecycle: "Refresh stale",
+      refreshError: "/private/config: activity IPC failed"
+    });
+
+    refresh = refreshSucceeded(sample({ probeStatus: "pending" }));
+    expect(developerActivityRefreshPresentation(refresh)).toEqual({
+      lifecycle: "Pending",
+      refreshError: null
+    });
+  });
+
+  test("presents an unavailable developer refresh with its technical error", () => {
+    const refresh = refreshUnavailable<TodayActivity>(
+      "get_today_activity command unavailable"
+    );
+
+    expect(developerActivityRefreshPresentation(refresh)).toEqual({
+      lifecycle: "Refresh unavailable",
+      refreshError: "get_today_activity command unavailable"
+    });
   });
 
   test("describes deep blocks without repeating the count", () => {
@@ -67,11 +129,18 @@ describe("today activity presentation", () => {
     expect(activityFootnote(5 * 60)).not.toMatch(/streak|score|badge/i);
   });
 
-  test("uses calm loading and error captions", () => {
+  test("distinguishes calm stale and unavailable captions without technical errors", () => {
     expect(todayLoadingCaption()).toContain("Collecting");
+    expect(todayErrorCaption(null)).toContain("unavailable right now");
     expect(todayErrorCaption(null)).toContain("unaffected");
-    expect(todayErrorCaption("probe cache lock is poisoned")).toContain(
-      "probe cache lock is poisoned"
+    expect(todayStaleCaption("/private/path: permission denied")).toBe(
+      "Current activity is unavailable; last known summary shown. The break timer is unaffected."
+    );
+    expect(todayErrorCaption("/private/path: permission denied")).not.toContain(
+      "permission denied"
+    );
+    expect(todayStaleCaption("/private/path: permission denied")).not.toContain(
+      "permission denied"
     );
     const longError = todayErrorCaption("x".repeat(200));
     expect(longError.length).toBeLessThan(120);
@@ -83,13 +152,61 @@ describe("today activity presentation", () => {
     expect(isActivityWindowEmpty(sample({ activeSeconds: 1, afkSeconds: 0 }))).toBe(false);
   });
 
-  test("builds a calm strip aria label", () => {
+  test("keeps the first classified minute in a distinct startup state", () => {
+    expect(
+      isActivityWindowStarting(sample({ activeSeconds: 20, afkSeconds: 39 }))
+    ).toBe(true);
+    expect(
+      isActivityWindowStarting(sample({ activeSeconds: 20, afkSeconds: 40 }))
+    ).toBe(false);
+    expect(
+      isActivityWindowStarting(
+        sample({ activeSeconds: 0, afkSeconds: 0, probeStatus: "pending" })
+      )
+    ).toBe(false);
+    expect(
+      isActivityWindowStarting(
+        sample({ activeSeconds: 0, afkSeconds: 0, probeStatus: "failed" })
+      )
+    ).toBe(false);
+    expect(
+      isActivityWindowStarting(sample({ activeSeconds: Number.NaN, afkSeconds: 0 }))
+    ).toBe(false);
+  });
+
+  test("builds a calm strip aria label and marks retained data as last known", () => {
     expect(stripAriaLabel(sample())).toBe(
       "Last 24 hours: 1 mostly-active and 1 mostly-away half-hour blocks"
+    );
+    expect(stripAriaLabel(sample(), "stale")).toBe(
+      "Last 24 hours, last known: 1 mostly-active and 1 mostly-away half-hour blocks"
     );
     expect(stripAriaLabel(sample({ strip: [] }))).toBe(
       "Last 24 hours: no activity samples yet"
     );
+    expect(stripEndpointLabel("fresh")).toBe("now");
+    expect(stripEndpointLabel("stale")).toBe("last known");
+  });
+
+  test("anchors stale strip ticks to capture time and moves again after fresh success", () => {
+    const capturedAt = new Date(2026, 0, 2, 12, 37).getTime();
+    const stale = refreshFailed(refreshSucceeded(sample(), capturedAt), "IPC failed");
+    const first = stripAxisTicks(
+      24 * 60 * 60,
+      refreshDisplayAsOfMs(stale, capturedAt + 2_000),
+      9
+    );
+    const repeated = stripAxisTicks(
+      24 * 60 * 60,
+      refreshDisplayAsOfMs(stale, capturedAt + 60_000),
+      9
+    );
+    const freshAt = capturedAt + 120_000;
+    const fresh = refreshSucceeded(sample(), freshAt);
+
+    expect(repeated).toEqual(first);
+    expect(refreshDisplayAsOfMs(stale, capturedAt + 60_000)).toBe(capturedAt);
+    expect(refreshDisplayAsOfMs(fresh, freshAt)).toBe(freshAt);
   });
 
   test("clamps strip bar heights", () => {

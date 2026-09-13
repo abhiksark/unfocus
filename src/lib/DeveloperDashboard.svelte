@@ -1,6 +1,7 @@
 <!-- src/lib/DeveloperDashboard.svelte -->
 
 <script lang="ts">
+  import { developerTimerHeading } from "$lib/consumer-dashboard";
   import {
     diagnosticsHealth,
     diagnosticsHealthLabel,
@@ -12,19 +13,41 @@
     MAX_WORK_MINUTES,
     MIN_BREAK_SECONDS,
     MIN_WORK_MINUTES,
-    type ReminderSettingsValidation
+    reminderSettingsRecovery,
+    type ReminderSettings,
+    type ReminderSettingsValidation,
+    type ReminderSettingsView
   } from "$lib/reminder-settings";
-  import type { ReminderActionCommand, ReminderStatus } from "$lib/reminder-status";
   import {
     developerCuePreviewVisible,
     type DeveloperCuePreviewState
   } from "$lib/developer-cue-preview";
+  import {
+    developerOverlayTestLabel,
+    reminderCapabilityAvailable,
+    type ReminderActionCommand,
+    type ReminderStatus
+  } from "$lib/reminder-status";
+  import type { BreakSummary } from "$lib/break-summary";
+  import type { ReflectionResource } from "$lib/reflection-resource";
+  import type { RefreshState } from "$lib/refresh-state";
+  import {
+    developerStoragePresentation,
+    type StorageLoadHealth
+  } from "$lib/storage-health";
+  import {
+    developerActivityRefreshPresentation,
+    type TodayActivity
+  } from "$lib/today-activity";
 
   type SettingsResult = "saved" | "reset" | null;
 
   type Props = {
     report: DiagnosticsReport | null;
+    activityResource: ReflectionResource<TodayActivity>;
+    breakResource: ReflectionResource<BreakSummary>;
     diagnosticsError: string | null;
+    diagnosticsCurrentSuccessful: boolean;
     overlayError: string | null;
     reminderStatus: ReminderStatus | null;
     reminderStatusError: string | null;
@@ -37,6 +60,12 @@
     cuePreviewError: string | null;
     workMinutesInput: string;
     breakSecondsInput: string;
+    savedSettings: ReminderSettings | null;
+    settingsStorageHealth: StorageLoadHealth | null;
+    settingsSnapshotRefresh: RefreshState<ReminderSettingsView>;
+    settingsRecoveryPending: "retry" | "reset" | null;
+    settingsOperationPending: "retry" | "save" | "reset" | null;
+    settingsRecoveryError: boolean;
     settingsLoading: boolean;
     settingsSaving: boolean;
     settingsValidation: ReminderSettingsValidation;
@@ -55,11 +84,15 @@
     onBreakSecondsInput: (value: string) => void;
     onSaveSettings: () => void;
     onResetSettings: () => void;
+    onRetrySettings: () => void;
   };
 
   let {
     report,
+    activityResource,
+    breakResource,
     diagnosticsError,
+    diagnosticsCurrentSuccessful,
     overlayError,
     reminderStatus,
     reminderStatusError,
@@ -72,6 +105,12 @@
     cuePreviewError,
     workMinutesInput,
     breakSecondsInput,
+    savedSettings,
+    settingsStorageHealth,
+    settingsSnapshotRefresh,
+    settingsRecoveryPending,
+    settingsOperationPending,
+    settingsRecoveryError,
     settingsLoading,
     settingsSaving,
     settingsValidation,
@@ -89,7 +128,8 @@
     onWorkMinutesInput,
     onBreakSecondsInput,
     onSaveSettings,
-    onResetSettings
+    onResetSettings,
+    onRetrySettings
   }: Props = $props();
 
   const isMac = $derived(report?.operatingSystem === "macos");
@@ -97,6 +137,84 @@
   const health = $derived(diagnosticsHealth(report, diagnosticsError));
   const healthLabel = $derived(diagnosticsHealthLabel(health));
   const backend = $derived(probeBackend(report));
+  const settingsRecovery = $derived(
+    reminderSettingsRecovery(settingsStorageHealth, savedSettings, settingsLoading)
+  );
+  const timerHeading = $derived(
+    developerTimerHeading(reminderStatus, reminderStatusError, settingsStorageHealth)
+  );
+  const pauseActionAvailable = $derived(
+    reminderCapabilityAvailable(
+      reminderStatus,
+      reminderStatusError,
+      settingsStorageHealth,
+      "pauseActionEnabled"
+    )
+  );
+  const takeBreakAvailable = $derived(
+    reminderCapabilityAvailable(
+      reminderStatus,
+      reminderStatusError,
+      settingsStorageHealth,
+      "takeBreakEnabled"
+    )
+  );
+  const previewAvailable = $derived(
+    reminderCapabilityAvailable(
+      reminderStatus,
+      reminderStatusError,
+      settingsStorageHealth,
+      "previewEnabled"
+    )
+  );
+  const activityRefreshPresentation = $derived(
+    developerActivityRefreshPresentation(activityResource.refresh)
+  );
+  const presenceLifecycle = $derived(
+    !activityResource.transportFailure &&
+      activityResource.storageHealth?.status === "unavailable"
+      ? "Activity storage unavailable"
+      : activityRefreshPresentation.lifecycle
+  );
+  const activityStoragePresentation = $derived(
+    developerStoragePresentation(
+      report?.storage.activityHistory ?? null,
+      report !== null,
+      diagnosticsError,
+      activityResource,
+      diagnosticsCurrentSuccessful
+    )
+  );
+  const breakStoragePresentation = $derived(
+    developerStoragePresentation(
+      report?.storage.breakLedger ?? null,
+      report !== null,
+      diagnosticsError,
+      breakResource,
+      diagnosticsCurrentSuccessful
+    )
+  );
+  const settingsSnapshotStorageHealth = $derived(
+    settingsSnapshotRefresh.status === "fresh" ||
+      settingsSnapshotRefresh.status === "stale"
+      ? settingsSnapshotRefresh.data.loadHealth
+      : null
+  );
+  const settingsStoragePresentation = $derived(
+    developerStoragePresentation(
+      report?.storage.reminderSettings ?? null,
+      report !== null,
+      diagnosticsError,
+      {
+        refresh: settingsSnapshotRefresh,
+        storageHealth: settingsSnapshotStorageHealth,
+        transportFailure:
+          settingsSnapshotRefresh.status === "stale" ||
+          settingsSnapshotRefresh.status === "unavailable"
+      },
+      diagnosticsCurrentSuccessful
+    )
+  );
   const settingsStatus = $derived(
     settingsResult === "saved"
       ? "Saved locally. Timing changes restart a running work countdown; cue-only changes do not. An active break keeps its current deadline."
@@ -113,24 +231,33 @@
   const desktopCaption = $derived(caption(report?.desktop));
   const displayCaption = $derived(caption(report?.display));
   const idleCaption = $derived(
-    report?.idleError ??
-      (report ? (isMac ? "Quartz event source" : "XScreenSaver extension") : "Connecting…")
+    report?.idleStatus === "pending"
+      ? "Waiting for the first probe reading"
+      : report?.idleError ??
+        (report ? (isMac ? "Quartz event source" : "XScreenSaver extension") : "Connecting…")
   );
   const fullscreenCaption = $derived(
-    report?.fullscreenError ??
-      (report ? (isMac ? "Quartz window list" : "EWMH window state") : "Connecting…")
+    report?.fullscreenStatus === "pending"
+      ? "Waiting for the first probe reading"
+      : report?.fullscreenError ??
+        (report ? (isMac ? "Quartz window list" : "EWMH window state") : "Connecting…")
   );
 </script>
 
 <main class="developer-dashboard">
   <header>
     <div class="brand-lockup">
-      <div class="scene-swatch" class:degraded={health !== "healthy"} aria-hidden="true">
-        <span></span>
-      </div>
+      <img
+        class="developer-mark"
+        src="/unfocus-icon.svg"
+        width="64"
+        height="64"
+        alt="Unfocus"
+        draggable="false"
+      />
       <div>
         <p class="eyebrow">Developer mode</p>
-        <h1 data-type-role="ui">Your timer is running.</h1>
+        <h1 data-type-role="ui">{timerHeading}</h1>
         <p class="lede">Native evidence from Tauri and {backend}—not mocked browser data.</p>
       </div>
     </div>
@@ -151,6 +278,19 @@
 
   {#if diagnosticsError}
     <div class="error" role="alert">Diagnostics unavailable: {diagnosticsError}</div>
+  {/if}
+  {#if activityResource.transportFailure && activityRefreshPresentation.refreshError}
+    <div class="error" role="alert">
+      Activity summary refresh {activityResource.refresh.status === "stale" ? "stale" : "unavailable"}:
+      {activityRefreshPresentation.refreshError}
+      {activityResource.refresh.status === "stale" ? " Last-known payload retained." : ""}
+    </div>
+  {/if}
+  {#if breakResource.transportFailure}
+    <div class="error" role="alert">
+      Break summary refresh {breakResource.refresh.status}: {breakResource.refresh.error}
+      {breakResource.refresh.status === "stale" ? " Last-known payload retained." : ""}
+    </div>
   {/if}
   {#if report?.tray.error}
     <div class="error" role="alert">Tray needs attention: {report.tray.error}</div>
@@ -174,6 +314,38 @@
   {#if showCuePreview && cuePreviewError}
     <div class="error" role="alert">Could not update the cue preview: {cuePreviewError}</div>
   {/if}
+
+  <section class="panel storage-panel" aria-labelledby="storage-health-title">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Local storage</p>
+        <h2 id="storage-health-title">Reminder and reflection load state</h2>
+      </div>
+    </div>
+    <div class="storage-list">
+      <article>
+        <strong>Activity history · {activityStoragePresentation.status}</strong>
+        <span data-type-role="mono">
+          {activityStoragePresentation.category} · {activityStoragePresentation.recovery}
+        </span>
+        <code data-type-role="mono">{activityStoragePresentation.error}</code>
+      </article>
+      <article>
+        <strong>Break ledger · {breakStoragePresentation.status}</strong>
+        <span data-type-role="mono">
+          {breakStoragePresentation.category} · {breakStoragePresentation.recovery}
+        </span>
+        <code data-type-role="mono">{breakStoragePresentation.error}</code>
+      </article>
+      <article>
+        <strong>Reminder settings · {settingsStoragePresentation.status}</strong>
+        <span data-type-role="mono">
+          {settingsStoragePresentation.category} · {settingsStoragePresentation.recovery}
+        </span>
+        <code data-type-role="mono">{settingsStoragePresentation.error}</code>
+      </article>
+    </div>
+  </section>
 
   <section class="summary-grid" aria-label="Platform probe summary">
     <article>
@@ -206,6 +378,11 @@
       </strong>
       <small>{fullscreenCaption}</small>
     </article>
+    <article>
+      <span>Presence lifecycle</span>
+      <strong data-type-role="mono">{presenceLifecycle}</strong>
+      <small>Activity summary state; probe errors remain in Idle time.</small>
+    </article>
   </section>
 
   <section class="panel reminder-controls-panel" aria-labelledby="developer-reminder-controls-title">
@@ -223,7 +400,7 @@
         class="secondary"
         type="button"
         onclick={onPauseAction}
-        disabled={!reminderStatus?.pauseActionEnabled || reminderActionPending !== null}
+        disabled={!pauseActionAvailable || reminderActionPending !== null || settingsOperationPending !== null}
       >
         {reminderActionPending === "pause_reminders" || reminderActionPending === "resume_reminders"
           ? "Updating…"
@@ -233,7 +410,7 @@
         class="primary"
         type="button"
         onclick={onTakeBreak}
-        disabled={!reminderStatus?.takeBreakEnabled || reminderActionPending !== null}
+        disabled={!takeBreakAvailable || reminderActionPending !== null || settingsOperationPending !== null}
       >
         {reminderActionPending === "take_break_now" ? "Starting…" : "Take a break now"}
       </button>
@@ -250,6 +427,41 @@
         a break already on screen keeps the deadline it opened with.
       </p>
     </div>
+    {#if settingsRecovery.unavailable}
+      <div class="settings-recovery" role="status">
+        <strong>{settingsRecovery.heading}</strong>
+        <p>{settingsRecovery.message}</p>
+        <div class="settings-actions">
+          {#if settingsRecovery.canRetry}
+            <button
+              class="secondary"
+              type="button"
+              onclick={onRetrySettings}
+              disabled={settingsOperationPending !== null || reminderActionPending !== null}
+            >
+              {settingsRecoveryPending === "retry" ? "Retrying…" : "Retry"}
+            </button>
+          {/if}
+          {#if settingsRecovery.canRestoreDefaults}
+            <button
+              class="secondary"
+              type="button"
+              onclick={onResetSettings}
+              disabled={settingsOperationPending !== null || reminderActionPending !== null}
+            >
+              {settingsRecoveryPending === "reset"
+                ? "Restoring…"
+                : "Preserve unreadable settings and restore defaults"}
+            </button>
+          {/if}
+        </div>
+        {#if settingsError}
+          <p class="settings-error" role="alert">{settingsError}</p>
+        {:else if settingsRecoveryError}
+          <p class="settings-error" role="alert">Saved timing is still unavailable.</p>
+        {/if}
+      </div>
+    {:else}
     <form
       class="settings-form"
       novalidate
@@ -260,7 +472,7 @@
     >
       <div class="duration-fields">
         <div class="duration-field">
-          <label for="developer-work-duration">Work duration</label>
+          <label for="developer-work-duration">Focus duration</label>
           <div class="duration-input" class:invalid={workMinutesError}>
             <input
               id="developer-work-duration"
@@ -283,7 +495,7 @@
           {/if}
         </div>
         <div class="duration-field">
-          <label for="developer-break-duration">Break duration</label>
+          <label for="developer-break-duration">Rest duration</label>
           <div class="duration-input" class:invalid={breakSecondsError}>
             <input
               id="developer-break-duration"
@@ -307,11 +519,11 @@
         </div>
       </div>
       <div class="settings-actions">
-        <button class="primary" type="submit" disabled={settingsLoading || settingsSaving || !settingsValidation.settings}>
-          {settingsSaving ? "Saving…" : "Save timing"}
+        <button class="primary" type="submit" disabled={settingsLoading || settingsSaving || reminderActionPending !== null || !settingsValidation.settings}>
+          {settingsOperationPending === "save" ? "Saving…" : "Save timing"}
         </button>
-        <button class="secondary" type="button" onclick={onResetSettings} disabled={settingsLoading || settingsSaving}>
-          Reset to defaults
+        <button class="secondary" type="button" onclick={onResetSettings} disabled={settingsLoading || settingsSaving || reminderActionPending !== null}>
+          {settingsOperationPending === "reset" ? "Resetting…" : "Reset to defaults"}
         </button>
       </div>
       <div class="settings-feedback" aria-live="polite">
@@ -324,6 +536,7 @@
         {/if}
       </div>
     </form>
+    {/if}
   </section>
 
   <section class="panel">
@@ -365,13 +578,9 @@
       class="primary"
       type="button"
       onclick={onPreview}
-      disabled={overlayRunning || !report || !reminderStatus?.previewEnabled}
+      disabled={overlayRunning || !report || !previewAvailable}
     >
-      {overlayRunning
-        ? "Opening…"
-        : reminderStatus && !reminderStatus.previewEnabled
-          ? "Overlay active"
-          : "Run overlay test"}
+      {developerOverlayTestLabel(reminderStatus, overlayRunning)}
     </button>
   </section>
 
@@ -443,59 +652,11 @@
     gap: 9px;
   }
 
-  .scene-swatch {
-    position: relative;
+  .developer-mark {
+    display: block;
     flex: 0 0 auto;
-    width: 58px;
-    height: 58px;
-    overflow: hidden;
-    border: 1px solid #2c463a;
-    border-radius: 15px;
-    background:
-      radial-gradient(
-        ellipse 61.8% 38.2% at 61.8% 38.2%,
-        rgba(125, 207, 155, 0.24),
-        transparent 61.8%
-      ),
-      linear-gradient(145deg, #789a8d 0%, #274b3f 61.8%, #07100c 100%);
-  }
-
-  .scene-swatch::before {
-    position: absolute;
-    right: -9px;
-    bottom: -13px;
-    left: -11px;
-    height: 34px;
-    border-radius: 61.8% 38.2% 0 0 / 100% 100% 0 0;
-    background: #153a2e;
-    content: "";
-    transform: rotate(-5deg);
-  }
-
-  .scene-swatch::after {
-    position: absolute;
-    top: calc(38.2% - 9px);
-    left: calc(61.8% - 9px);
-    width: 18px;
-    height: 18px;
-    border: 1px solid rgba(215, 236, 220, 0.42);
-    border-radius: 50%;
-    content: "";
-  }
-
-  .scene-swatch span {
-    position: absolute;
-    z-index: 1;
-    top: calc(38.2% - 3px);
-    left: calc(61.8% - 3px);
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #7dcf9b;
-  }
-
-  .scene-swatch.degraded {
-    border-color: #d9bb7d;
+    width: 64px;
+    height: 64px;
   }
 
   h1,
@@ -634,6 +795,30 @@
 
   .panel { border-radius: 14px; padding: 22px; }
 
+  .storage-panel {
+    margin: 30px 0 12px;
+  }
+
+  .storage-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .storage-list article {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 6px;
+    border-radius: 10px;
+    padding: 12px;
+    background: #0f1511;
+  }
+
+  .storage-list strong { font-size: 0.78rem; }
+  .storage-list span { color: #a0aaa2; font-size: 0.75rem; }
+  .storage-list code { color: #ffc4c4; font-size: 0.75rem; overflow-wrap: anywhere; }
+
   .reminder-controls-panel {
     display: grid;
     grid-template-columns: minmax(260px, 1fr) auto;
@@ -662,7 +847,9 @@
     margin-bottom: 12px;
   }
 
-  .settings-form { min-width: 0; }
+  .settings-form,
+  .settings-recovery { min-width: 0; }
+  .settings-recovery > p { margin: 10px 0 0; color: #abb5ad; font-size: 0.78rem; line-height: 1.55; }
   .duration-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .duration-field { min-width: 0; }
   .duration-field label { display: block; margin-bottom: 7px; color: #dce7de; font-size: 0.78rem; font-weight: 600; }
@@ -707,7 +894,8 @@
     .summary-grid { grid-template-columns: repeat(2, 1fr); }
     .reminder-controls-panel,
     .settings-panel,
-    .duration-fields { grid-template-columns: 1fr; }
+    .duration-fields,
+    .storage-list { grid-template-columns: 1fr; }
     .reminder-actions { justify-content: flex-start; }
     .reminder-feedback { text-align: left; }
     header,

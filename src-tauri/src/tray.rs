@@ -231,8 +231,13 @@ fn apply_menu_update(
         Ok(()) if health.record_update_success() => TrayUpdateOutcome::Recovered,
         Ok(()) => TrayUpdateOutcome::Updated,
         Err(error) => {
+            let timing = if reminder.phase == TrayPhase::Unavailable {
+                "Automatic reminders have not started"
+            } else {
+                "Reminder timing is still running"
+            };
             let message = format!(
-                "Tray status updates failed: {error}. Reminder timing is still running; use the dashboard until the tray recovers."
+                "Tray status updates failed: {error}. {timing}; use the dashboard until the tray recovers."
             );
             if health.record_update_failure(message.clone()) {
                 TrayUpdateOutcome::FailedFirst(message)
@@ -343,6 +348,11 @@ fn handle_tray_menu_event(app: &tauri::AppHandle, menu_id: &str) {
         }
         Some(TrayAction::Open) => reveal_dashboard(app),
         Some(TrayAction::Preview) => {
+            let status = app.state::<TrayStatus>();
+            if !ReminderStatus::from_snapshot(status.current()).preview_enabled {
+                eprintln!("tray overlay preview ignored while reminder controls are unavailable");
+                return;
+            }
             let app = app.clone();
             let controller = app.state::<OverlayController>().inner().clone();
             tauri::async_runtime::spawn_blocking(move || {

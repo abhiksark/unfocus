@@ -73,8 +73,15 @@ const macReport: DiagnosticsReport = {
   monitorError: null,
   idleSeconds: null,
   idleError: null,
+  idleStatus: "pending",
   activeWindowFullscreen: null,
   fullscreenError: null,
+  fullscreenStatus: "pending",
+  storage: {
+    activityHistory: { status: "available", recovery: "none", category: null, error: null },
+    breakLedger: { status: "available", recovery: "none", category: null, error: null },
+    reminderSettings: { status: "available", recovery: "none", category: null, error: null }
+  },
   tray: { available: true, error: null }
 };
 
@@ -143,6 +150,69 @@ describe("developer pre-break cue preview", () => {
       error: null
     });
     expect([...harness.scheduled.values()].map((timer) => timer.delayMs)).toEqual([13_250]);
+  });
+
+  test("does not reactivate a preview ended before its native show response", async () => {
+    const shown = deferred<PreviewResponse>();
+    const harness = controllerHarness(() => shown.promise);
+    const starting = harness.controller.start();
+    for (const runId of [42, 41]) {
+      const endedRunId = developerCuePreviewModule.developerCuePreviewEndedRunId(
+        new CustomEvent("native-end", { detail: { runId } }),
+        harness.snapshots.at(-1)?.state.runId ?? null
+      );
+      if (endedRunId !== null) harness.controller.nativeEnded(endedRunId);
+    }
+
+    shown.resolve({ runId: 42, closesAfterMs: 17_000 });
+    await starting;
+
+    expect(harness.snapshots.at(-1)).toEqual({
+      state: { phase: "idle", runId: null },
+      error: null
+    });
+    expect(harness.snapshots.some(({ state }) => state.phase === "active")).toBe(false);
+    expect(harness.scheduled.size).toBe(0);
+  });
+
+  test("ignores another run ending while a preview is opening", async () => {
+    const shown = deferred<PreviewResponse>();
+    const harness = controllerHarness(() => shown.promise);
+    const starting = harness.controller.start();
+    harness.controller.nativeEnded(41);
+
+    shown.resolve({ runId: 42, closesAfterMs: 17_000 });
+    await starting;
+
+    expect(harness.snapshots.at(-1)).toEqual({
+      state: { phase: "active", runId: 42 },
+      error: null
+    });
+    expect(harness.scheduled.size).toBe(1);
+  });
+
+  test("does not carry opening end events into later preview requests", async () => {
+    const first = deferred<PreviewResponse>();
+    let calls = 0;
+    const harness = controllerHarness(() => {
+      calls += 1;
+      return calls === 1
+        ? first.promise
+        : Promise.resolve({ runId: 43, closesAfterMs: 17_000 });
+    });
+    const starting = harness.controller.start();
+    harness.controller.nativeEnded(43);
+    first.resolve({ runId: 42, closesAfterMs: 17_000 });
+    await starting;
+    harness.controller.nativeEnded(42);
+
+    await harness.controller.start();
+
+    expect(harness.snapshots.at(-1)).toEqual({
+      state: { phase: "active", runId: 43 },
+      error: null
+    });
+    expect(harness.scheduled.size).toBe(1);
   });
 
   test("clears the matching preview automatically at the native close bound", async () => {
@@ -232,6 +302,15 @@ describe("developer pre-break cue preview", () => {
       new CustomEvent("native-end", { detail: null })
     ]) {
       expect(parseRunId(event, 42)).toBeNull();
+    }
+  });
+
+  test("accepts only safe native run IDs while the opening run is unknown", () => {
+    const parseRunId = developerCuePreviewModule.developerCuePreviewEndedRunId;
+    expect(parseRunId(new CustomEvent("native-end", { detail: { runId: 42 } }), null)).toBe(42);
+
+    for (const runId of [0, -1, 4.2, Number.MAX_SAFE_INTEGER + 1, "42", null]) {
+      expect(parseRunId(new CustomEvent("native-end", { detail: { runId } }), null)).toBeNull();
     }
   });
 

@@ -63,10 +63,11 @@ export function developerCuePreviewEndedRunId(
 ): number | null {
   if (!(event instanceof CustomEvent)) return null;
   const runId = (event.detail as { runId?: unknown } | null)?.runId;
+  // Opening has no run ID yet; the controller correlates these events with its response.
   return typeof runId === "number" &&
     Number.isSafeInteger(runId) &&
     runId > 0 &&
-    runId === activeRunId
+    (activeRunId === null || runId === activeRunId)
     ? runId
     : null;
 }
@@ -104,6 +105,7 @@ export function createDeveloperCuePreviewController(
   let error: string | null = null;
   let closeTimer: number | undefined;
   let destroyed = false;
+  const endedWhileOpening = new Set<number>();
 
   const publish = () => onChange({ state, error });
   const clearCloseTimer = () => {
@@ -127,11 +129,20 @@ export function createDeveloperCuePreviewController(
 
       state = nextState;
       error = null;
+      endedWhileOpening.clear();
       publish();
       const requestStartedAt = dependencies.now();
       try {
         const preview = await dependencies.showPreview();
         if (destroyed) return;
+        // Native preemption may arrive before the show response identifies this run.
+        const alreadyEnded = endedWhileOpening.has(preview.runId);
+        endedWhileOpening.clear();
+        if (alreadyEnded) {
+          state = initialDeveloperCuePreviewState();
+          publish();
+          return;
+        }
         state = activateDeveloperCuePreview(state, preview.runId);
         if (state.runId !== preview.runId) return;
         publish();
@@ -151,6 +162,7 @@ export function createDeveloperCuePreviewController(
         }
       } catch (value) {
         if (destroyed) return;
+        endedWhileOpening.clear();
         state = initialDeveloperCuePreviewState();
         error = value instanceof Error ? value.message : String(value);
         publish();
@@ -180,11 +192,17 @@ export function createDeveloperCuePreviewController(
     },
 
     nativeEnded(runId) {
+      if (destroyed) return;
+      if (state.phase === "opening") {
+        endedWhileOpening.add(runId);
+        return;
+      }
       clearAtCloseBound(runId);
     },
 
     destroy() {
       destroyed = true;
+      endedWhileOpening.clear();
       clearCloseTimer();
     }
   };
