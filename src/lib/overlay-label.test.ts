@@ -24,8 +24,24 @@ describe("parseWindowLabel", () => {
   test("parses the strict cue label protocol", () => {
     expect(parseWindowLabel("cue-42-1770000000000")).toEqual({
       kind: "cue",
-      parameters: { runId: 42, deadlineMs: 1_770_000_000_000 }
+      parameters: { runId: 42, deadlineMs: 1_770_000_000_000, mode: "scheduled" }
     });
+  });
+
+  test("parses preview cues without confusing preview for a run ID", () => {
+    expect(parseWindowLabel("cue-preview-43-1770000000000")).toEqual({
+      kind: "cue",
+      parameters: { runId: 43, deadlineMs: 1_770_000_000_000, mode: "preview" }
+    });
+  });
+
+  test("passes label-derived mode and trusted native platform into the cue", async () => {
+    const source = await Bun.file(new URL("../routes/+page.svelte", import.meta.url)).text();
+
+    expect(source).toContain("mode={cueParameters.mode}");
+    expect(source).toContain("platform={cuePlatform}");
+    expect(source).toContain("window.__UNFOCUS_PRE_BREAK_CUE_PLATFORM__");
+    expect(source).not.toContain("userAgent");
   });
 
   test.each([
@@ -52,7 +68,13 @@ describe("parseWindowLabel", () => {
     "cue-0-1770000000000",
     "cue-1-0",
     "cue-9007199254740992-1770000000000",
-    "cue-1-9007199254740992"
+    "cue-1-9007199254740992",
+    "cue-preview",
+    "cue-preview-01-1770000000000",
+    "cue-preview-0-1770000000000",
+    "cue-preview-1-0",
+    "cue-preview-1-1770000000000-extra",
+    "cue-other-1-1770000000000"
   ])("routes malformed cue label %s to an inert cue surface", (label) => {
     expect(parseWindowLabel(label).kind).toBe("invalid-cue");
   });

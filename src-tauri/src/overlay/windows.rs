@@ -96,17 +96,20 @@ fn overlay_visible_on_all_workspaces(target_is_macos: bool) -> bool {
     target_is_macos
 }
 
-fn overlay_waits_for_decoded_scene(target_is_linux: bool, initially_visible: bool) -> bool {
-    target_is_linux && !initially_visible
+fn overlay_waits_for_decoded_scene(
+    target_is_linux: bool,
+    target_is_macos: bool,
+    initially_visible: bool,
+) -> bool {
+    (target_is_linux || target_is_macos) && !initially_visible
 }
 
 fn overlay_window_config(label: &str) -> WindowConfig {
     WindowConfig {
         label: label.to_owned(),
         url: WebviewUrl::App("index.html".into()),
-        // Linux WebKit windows are warmed while hidden so the cue hands off
-        // directly to a painted scene instead of exposing the native ground.
-        // macOS panels already use the same hidden-then-order path.
+        // Warm the mounted scene while hidden. On macOS this also ensures
+        // the keyboard listener exists before the panel receives focus.
         visible: !cfg!(any(target_os = "linux", target_os = "macos")),
         visible_on_all_workspaces: overlay_visible_on_all_workspaces(cfg!(target_os = "macos")),
         ..Default::default()
@@ -382,8 +385,11 @@ fn build_overlay_windows(
             let size = monitor.size();
             let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
             let window_config = overlay_window_config(label);
-            let waits_for_decoded_scene =
-                overlay_waits_for_decoded_scene(cfg!(target_os = "linux"), window_config.visible);
+            let waits_for_decoded_scene = overlay_waits_for_decoded_scene(
+                cfg!(target_os = "linux"),
+                cfg!(target_os = "macos"),
+                window_config.visible,
+            );
             if waits_for_decoded_scene {
                 OVERLAY_SCENE_READINESS.register(label, ready_sender.clone())?;
             }
@@ -481,9 +487,9 @@ fn await_overlay_startup(
 ) -> Result<(), String> {
     let total = built.windows.len();
     let mut ready_receivers = built.ready_receivers.into_iter();
-    // On staged platforms every native panel stays hidden until the complete
-    // monitor set is ready. Linux additionally waits for each local scene to
-    // decode, so a later failure cannot expose an unpainted or partial desk.
+    // On staged platforms every native panel stays hidden until every scene
+    // is mounted and decoded. A later failure cannot expose a partial desk,
+    // and macOS keyboard focus is assigned only after handlers are ready.
     let startup_result = complete_overlay_startup(
         total,
         |index| {
@@ -533,6 +539,7 @@ fn start_overlay(
     } else if controller.has_active_run() || overlay_run_exists(app, "overlay-") {
         return Err("another overlay run is already active".into());
     }
+    let startup_reservation = controller.begin_startup();
 
     // TAO's GTK monitor conversion reads X11 workarea properties directly.
     // Always perform that operation on the application thread, even when an
@@ -554,17 +561,20 @@ fn start_overlay(
         plan.run_id, plan.duration_seconds
     );
 
-    let registration = controller.register(OverlayRunLifecycle {
-        run_id: plan.run_id,
-        prefix: prefix.clone(),
-        completes_at,
-        closes_at,
-        dismiss_at: None,
-        next_close_attempt_at: None,
-        close_failures: 0,
-        completed: false,
-        closing_emitted: false,
-    });
+    let registration = controller.register(
+        OverlayRunLifecycle {
+            run_id: plan.run_id,
+            prefix: prefix.clone(),
+            completes_at,
+            closes_at,
+            dismiss_at: None,
+            next_close_attempt_at: None,
+            close_failures: 0,
+            completed: false,
+            closing_emitted: false,
+        },
+        startup_reservation,
+    );
     finish_overlay_startup(registration, || {
         rollback_overlay_startup(
             app,
@@ -574,7 +584,6 @@ fn start_overlay(
             "overlay lifecycle registration failed",
         )
     })?;
-
     Ok(total)
 }
 
@@ -657,7 +666,20 @@ mod tests {
     }
 
     #[test]
-    fn all_windows_finish_loading_before_the_run_is_ordered() {
+    fn hidden_native_overlays_wait_for_the_mounted_scene() {
+        let config = overlay_window_config("overlay-readiness-test");
+        assert_eq!(
+            overlay_waits_for_decoded_scene(
+                cfg!(target_os = "linux"),
+                cfg!(target_os = "macos"),
+                config.visible,
+            ),
+            cfg!(any(target_os = "linux", target_os = "macos")),
+        );
+    }
+
+    #[test]
+    fn all_scenes_are_ready_before_the_run_is_revealed_and_focused() {
         let events = RefCell::new(Vec::new());
 
         complete_overlay_startup(
@@ -667,7 +689,7 @@ mod tests {
                 Ok(())
             },
             || {
-                events.borrow_mut().push("order-all".to_owned());
+                events.borrow_mut().push("reveal-and-focus".to_owned());
                 Ok(())
             },
             || {
@@ -677,7 +699,10 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(events.into_inner(), ["ready-0", "ready-1", "order-all"]);
+        assert_eq!(
+            events.into_inner(),
+            ["ready-0", "ready-1", "reveal-and-focus"]
+        );
     }
 
     #[test]
@@ -853,8 +878,10 @@ mod tests {
             !cfg!(any(target_os = "linux", target_os = "macos")),
             "Linux and macOS must warm overlays before revealing them"
         );
-        assert!(overlay_waits_for_decoded_scene(true, false));
-        assert!(!overlay_waits_for_decoded_scene(false, false));
-        assert!(!overlay_waits_for_decoded_scene(true, true));
+        assert!(overlay_waits_for_decoded_scene(true, false, false));
+        assert!(overlay_waits_for_decoded_scene(false, true, false));
+        assert!(!overlay_waits_for_decoded_scene(false, false, false));
+        assert!(!overlay_waits_for_decoded_scene(true, false, true));
+        assert!(!overlay_waits_for_decoded_scene(false, true, true));
     }
 }

@@ -13,6 +13,18 @@ released versions link to their GitHub release.
   on the primary display. It appears briefly one minute before the break,
   clears out of the way, returns for the final ten seconds, and stays visible
   until the painted multi-monitor break overlay is ready.
+- macOS Preview builds now offer the same optional scheduled pre-break cue as
+  black wings around the active display’s camera notch, with a
+  compact top-center pill fallback, empty mint progress ring, and soft-white
+  final seconds countdown. A compact skip-forward control briefly confirms a skip,
+  then retracts without moving the next break off schedule. The panel stays
+  nonactivating and accepts clicks only over the skip target. This is early
+  testing only; macOS remains Preview and has not completed physical
+  multi-monitor qualification.
+- Developer mode on macOS now includes a 17-second notch-cue preview. It
+  shows the cue's four-second heads-up, two-second quiet interval, ten-second
+  horizon, and one-second handoff without changing reminder timing, probes,
+  overlays, settings, or reflection data. Its skip control dismisses only the preview.
 
 ### Changed
 

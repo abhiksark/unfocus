@@ -9,6 +9,9 @@ mod sway;
 #[cfg(any(target_os = "windows", test))]
 mod windows;
 
+#[cfg(target_os = "macos")]
+pub(crate) use macos::frontmost_window_bounds;
+
 use std::{
     io,
     sync::{Arc, Mutex},

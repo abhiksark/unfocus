@@ -37,7 +37,6 @@ use std::{
     collections::VecDeque,
     io,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError},
         Arc, Mutex,
     },
@@ -73,11 +72,20 @@ struct OverlayRunPayload {
 
 #[derive(Debug)]
 enum OverlayCommand {
-    Register(OverlayRunLifecycle),
+    Register {
+        run: OverlayRunLifecycle,
+        startup: OverlayStartupReservation,
+    },
     Dismiss(u64),
     CancelAll,
-    SiblingClosed { run_id: u64, window_label: String },
-    RetryStartupCleanup { run_id: u64, prefix: String },
+    SiblingClosed {
+        run_id: u64,
+        window_label: String,
+    },
+    RetryStartupCleanup {
+        run_id: u64,
+        prefix: String,
+    },
 }
 
 #[derive(Debug)]
@@ -284,11 +292,94 @@ where
     }
 }
 
+#[derive(Debug, Default)]
+struct OverlaySurfaceOccupancy {
+    state: Mutex<OverlaySurfaceState>,
+}
+
+#[derive(Debug, Default)]
+struct OverlaySurfaceState {
+    active: bool,
+    starting: usize,
+}
+
+impl OverlaySurfaceOccupancy {
+    fn begin_startup(self: &Arc<Self>) -> OverlayStartupReservation {
+        self.state().starting += 1;
+        OverlayStartupReservation {
+            occupancy: Arc::clone(self),
+            starting: true,
+        }
+    }
+
+    fn is_occupied(&self) -> bool {
+        let state = self.state();
+        state.active || state.starting > 0
+    }
+
+    fn set_active(&self, active: bool) {
+        self.state().active = active;
+    }
+
+    fn promote_startup(&self) {
+        let mut state = self.state();
+        state.active = true;
+        debug_assert!(state.starting > 0);
+        state.starting = state.starting.saturating_sub(1);
+    }
+
+    fn release_startup(&self) {
+        let mut state = self.state();
+        debug_assert!(state.starting > 0);
+        state.starting = state.starting.saturating_sub(1);
+    }
+
+    fn state(&self) -> std::sync::MutexGuard<'_, OverlaySurfaceState> {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    #[cfg(test)]
+    fn snapshot(&self) -> (usize, bool) {
+        let state = self.state();
+        (state.starting, state.active)
+    }
+}
+
+#[derive(Debug)]
+struct OverlayStartupReservation {
+    occupancy: Arc<OverlaySurfaceOccupancy>,
+    starting: bool,
+}
+
+impl OverlayStartupReservation {
+    fn promote(mut self) {
+        if self.starting {
+            self.occupancy.promote_startup();
+            self.starting = false;
+        }
+    }
+
+    fn release_startup(&mut self) {
+        if self.starting {
+            self.occupancy.release_startup();
+            self.starting = false;
+        }
+    }
+}
+
+impl Drop for OverlayStartupReservation {
+    fn drop(&mut self) {
+        self.release_startup();
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct OverlayController {
     sender: SyncSender<OverlayCommand>,
     close_origins: OverlayCloseOrigins,
-    active_runs: Arc<AtomicUsize>,
+    occupancy: Arc<OverlaySurfaceOccupancy>,
 }
 
 impl OverlayController {
@@ -296,22 +387,26 @@ impl OverlayController {
         let (sender, receiver) = mpsc::sync_channel(OVERLAY_COMMAND_CAPACITY);
         let close_origins = OverlayCloseOrigins::default();
         let worker_close_origins = close_origins.clone();
-        let active_runs = Arc::new(AtomicUsize::new(0));
-        let worker_active_runs = Arc::clone(&active_runs);
+        let occupancy = Arc::new(OverlaySurfaceOccupancy::default());
+        let worker_occupancy = Arc::clone(&occupancy);
         std::thread::Builder::new()
             .name("unfocus-overlays".into())
             .spawn(move || {
-                run_overlay_worker(app, receiver, worker_close_origins, worker_active_runs);
+                run_overlay_worker(app, receiver, worker_close_origins, worker_occupancy);
             })?;
         Ok(Self {
             sender,
             close_origins,
-            active_runs,
+            occupancy,
         })
     }
 
     pub(crate) fn has_active_run(&self) -> bool {
-        self.active_runs.load(Ordering::Acquire) > 0
+        self.occupancy.is_occupied()
+    }
+
+    fn begin_startup(&self) -> OverlayStartupReservation {
+        self.occupancy.begin_startup()
     }
 
     fn send(&self, command: OverlayCommand) -> Result<(), String> {
@@ -321,8 +416,15 @@ impl OverlayController {
         })
     }
 
-    fn register(&self, lifecycle: OverlayRunLifecycle) -> Result<(), String> {
-        self.send(OverlayCommand::Register(lifecycle))
+    fn register(
+        &self,
+        lifecycle: OverlayRunLifecycle,
+        startup: OverlayStartupReservation,
+    ) -> Result<(), String> {
+        self.send(OverlayCommand::Register {
+            run: lifecycle,
+            startup,
+        })
     }
 
     fn dismiss(&self, run_id: u64) -> Result<(), String> {
@@ -406,6 +508,25 @@ where
     }
 }
 
+fn register_overlay_run(
+    runs: &mut Vec<OverlayRunLifecycle>,
+    run: OverlayRunLifecycle,
+    startup: OverlayStartupReservation,
+    run_exists: bool,
+) {
+    if !run_exists {
+        runs.retain(|existing| existing.run_id != run.run_id);
+        return;
+    }
+
+    // A revealed overlay can accept dismissal before startup registers it.
+    // Keep that lifecycle's fade, emitted events, and close retry state intact.
+    if !runs.iter().any(|existing| existing.run_id == run.run_id) {
+        runs.push(run);
+    }
+    startup.promote();
+}
+
 fn handle_overlay_command(
     app: &AppHandle,
     runs: &mut Vec<OverlayRunLifecycle>,
@@ -414,9 +535,9 @@ fn handle_overlay_command(
     command: OverlayCommand,
 ) {
     match command {
-        OverlayCommand::Register(run) => {
-            runs.retain(|existing| existing.run_id != run.run_id);
-            runs.push(run);
+        OverlayCommand::Register { run, startup } => {
+            let run_exists = overlay_run_exists(app, &run.prefix);
+            register_overlay_run(runs, run, startup, run_exists);
         }
         OverlayCommand::Dismiss(run_id) => {
             if let Some(run) = runs.iter_mut().find(|run| run.run_id == run_id) {
@@ -645,7 +766,7 @@ fn run_overlay_worker(
     app: AppHandle,
     receiver: Receiver<OverlayCommand>,
     close_origins: OverlayCloseOrigins,
-    active_runs: Arc<AtomicUsize>,
+    occupancy: Arc<OverlaySurfaceOccupancy>,
 ) {
     let mut runs = Vec::new();
     let mut pending_cleanups = Vec::new();
@@ -674,21 +795,23 @@ fn run_overlay_worker(
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => {
-                active_runs.store(0, Ordering::Release);
+                occupancy.set_active(false);
                 break;
             }
         }
 
-        active_runs.store(
-            runs.len() + pending_cleanups.len() + pending_startup_cleanups.len(),
-            Ordering::Release,
+        occupancy.set_active(
+            !runs.is_empty()
+                || !pending_cleanups.is_empty()
+                || !pending_startup_cleanups.is_empty(),
         );
         process_startup_overlay_cleanups(&app, &close_origins, &mut pending_startup_cleanups);
         process_unexpected_overlay_cleanups(&app, &close_origins, &mut runs, &mut pending_cleanups);
         process_overlay_runs(&app, &close_origins, &mut runs, Instant::now());
-        active_runs.store(
-            runs.len() + pending_cleanups.len() + pending_startup_cleanups.len(),
-            Ordering::Release,
+        occupancy.set_active(
+            !runs.is_empty()
+                || !pending_cleanups.is_empty()
+                || !pending_startup_cleanups.is_empty(),
         );
     }
 }
@@ -749,6 +872,179 @@ mod tests {
         sync::{Arc, Mutex},
         time::Duration,
     };
+
+    fn registration_run(run_id: u64, starts_at: Instant) -> OverlayRunLifecycle {
+        let completes_at = starts_at + Duration::from_secs(20);
+        OverlayRunLifecycle {
+            run_id,
+            prefix: format!("overlay-{run_id}-"),
+            completes_at,
+            closes_at: completes_at + lifecycle::OVERLAY_COMPLETION_GRACE,
+            dismiss_at: None,
+            next_close_attempt_at: None,
+            close_failures: 0,
+            completed: false,
+            closing_emitted: false,
+        }
+    }
+
+    #[test]
+    fn registration_preserves_a_dismissal_accepted_before_registration() {
+        let now = Instant::now();
+        let occupancy = Arc::new(OverlaySurfaceOccupancy::default());
+        let mut pending = registration_run(7, now);
+        assert!(pending.begin_dismiss(now));
+        let mut runs = vec![pending];
+
+        register_overlay_run(
+            &mut runs,
+            registration_run(7, now),
+            occupancy.begin_startup(),
+            true,
+        );
+
+        assert_eq!(runs.len(), 1);
+        assert_eq!(occupancy.snapshot(), (0, true));
+        assert_eq!(
+            runs[0].advance(now + OVERLAY_DISMISS_DELAY),
+            lifecycle::OverlayLifecycleUpdate {
+                emit_complete: false,
+                emit_closing: false,
+                close: true,
+            }
+        );
+    }
+
+    #[test]
+    fn registration_preserves_pending_close_retry_and_emitted_events() {
+        let now = Instant::now();
+        let occupancy = Arc::new(OverlaySurfaceOccupancy::default());
+        let mut pending = registration_run(7, now);
+        pending.completed = true;
+        pending.begin_dismiss(now);
+        let dismissed_at = now + OVERLAY_DISMISS_DELAY;
+        assert!(pending.defer_close_retry(dismissed_at));
+        let mut runs = vec![pending];
+
+        register_overlay_run(
+            &mut runs,
+            registration_run(7, now),
+            occupancy.begin_startup(),
+            true,
+        );
+
+        assert_eq!(runs[0].close_failures, 1);
+        assert!(runs[0].completed);
+        assert!(runs[0].closing_emitted);
+        assert!(!runs[0].advance(dismissed_at).close);
+        assert!(
+            runs[0]
+                .advance(dismissed_at + overlay_close_retry_delay(1))
+                .close
+        );
+    }
+
+    #[test]
+    fn registration_of_another_run_preserves_its_original_deadlines() {
+        let now = Instant::now();
+        let occupancy = Arc::new(OverlaySurfaceOccupancy::default());
+        let mut pending = registration_run(7, now);
+        pending.begin_dismiss(now);
+        let mut runs = vec![pending];
+        let new_run = registration_run(8, now + Duration::from_secs(3));
+        let completes_at = new_run.completes_at;
+        let closes_at = new_run.closes_at;
+
+        register_overlay_run(&mut runs, new_run, occupancy.begin_startup(), true);
+
+        assert_eq!(runs.len(), 2);
+        assert!(runs[0].advance(now + OVERLAY_DISMISS_DELAY).close);
+        assert_eq!(runs[1].run_id, 8);
+        assert_eq!(runs[1].completes_at, completes_at);
+        assert_eq!(runs[1].closes_at, closes_at);
+        assert_eq!(runs[1].dismiss_at, None);
+        assert!(!runs[1].advance(now + OVERLAY_DISMISS_DELAY).close);
+        assert!(runs[1].advance(completes_at).emit_complete);
+        assert!(runs[1].advance(closes_at).close);
+    }
+
+    #[test]
+    fn registration_after_windows_close_releases_startup_without_resurrection() {
+        let now = Instant::now();
+        let occupancy = Arc::new(OverlaySurfaceOccupancy::default());
+        let mut runs = Vec::new();
+        let startup = occupancy.begin_startup();
+        assert!(occupancy.is_occupied());
+
+        register_overlay_run(&mut runs, registration_run(7, now), startup, false);
+
+        assert!(runs.is_empty());
+        assert_eq!(occupancy.snapshot(), (0, false));
+    }
+
+    #[test]
+    fn registration_of_a_closed_run_removes_only_its_stale_lifecycle() {
+        let now = Instant::now();
+        let occupancy = Arc::new(OverlaySurfaceOccupancy::default());
+        let mut pending = registration_run(7, now);
+        pending.begin_dismiss(now);
+        let mut runs = vec![pending, registration_run(8, now)];
+
+        register_overlay_run(
+            &mut runs,
+            registration_run(7, now),
+            occupancy.begin_startup(),
+            false,
+        );
+
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].run_id, 8);
+        assert_eq!(runs[0].dismiss_at, None);
+        assert_eq!(occupancy.snapshot().0, 0);
+    }
+
+    #[test]
+    fn overlay_startup_counts_as_occupied_before_lifecycle_registration() {
+        let occupancy = Arc::new(OverlaySurfaceOccupancy::default());
+
+        let startup = occupancy.begin_startup();
+
+        assert!(occupancy.is_occupied());
+        startup.promote();
+        assert!(occupancy.is_occupied());
+        occupancy.set_active(false);
+        assert!(!occupancy.is_occupied());
+    }
+
+    #[test]
+    fn startup_promotion_is_one_linearized_occupancy_transition() {
+        let occupancy = Arc::new(OverlaySurfaceOccupancy::default());
+        let startup = occupancy.begin_startup();
+        let state_guard = occupancy.state();
+        let reader_occupancy = Arc::clone(&occupancy);
+        let (ready_sender, ready_receiver) = mpsc::sync_channel(2);
+        let reader_ready = ready_sender.clone();
+
+        std::thread::scope(|scope| {
+            let promoter = scope.spawn(move || {
+                ready_sender.send(()).unwrap();
+                startup.promote();
+            });
+            let reader = scope.spawn(move || {
+                reader_ready.send(()).unwrap();
+                reader_occupancy.is_occupied()
+            });
+            ready_receiver.recv().unwrap();
+            ready_receiver.recv().unwrap();
+            drop(state_guard);
+
+            promoter.join().unwrap();
+            assert!(reader.join().unwrap());
+        });
+
+        assert_eq!(occupancy.snapshot(), (0, true));
+        assert!(occupancy.is_occupied());
+    }
 
     #[test]
     fn a_full_lifecycle_queue_delivers_the_command_from_a_background_sender() {

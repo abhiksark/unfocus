@@ -14,11 +14,11 @@ use std::ffi::c_void;
 /// Only the macOS probe produces these, but the comparison logic below stays
 /// platform-independent so it can be unit tested on any host.
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct ScreenRect {
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
+pub(crate) struct ScreenRect {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) width: f64,
+    pub(crate) height: f64,
 }
 
 /// Quartz reports geometry as floating point points, and a fullscreen window's
@@ -130,7 +130,7 @@ fn active_display_bounds() -> Result<Vec<ScreenRect>, String> {
 /// `CGWindowListCopyWindowInfo` returns on-screen windows in front-to-back
 /// order, so the first layer-0 entry is the active window.
 #[cfg(target_os = "macos")]
-fn frontmost_window_bounds() -> Result<Option<ScreenRect>, String> {
+pub(crate) fn frontmost_window_bounds() -> Result<Option<ScreenRect>, String> {
     let options =
         CGWindowListOption::OptionOnScreenOnly | CGWindowListOption::ExcludeDesktopElements;
     let windows = CGWindowListCopyWindowInfo(options, NULL_WINDOW)

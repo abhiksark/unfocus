@@ -15,6 +15,7 @@ export type OverlayParameters = {
 export type CueParameters = {
   runId: number;
   deadlineMs: number;
+  mode: "scheduled" | "preview";
 };
 
 export type WindowRoute =
@@ -45,12 +46,19 @@ function integerField(
 export function parseWindowLabel(label: string): WindowRoute {
   if (label === "cue" || label.startsWith("cue-")) {
     const parts = label.split("-");
-    if (parts.length !== 3 || parts[0] !== "cue") {
+    const mode = parts[1] === "preview" ? "preview" : "scheduled";
+    const expectedParts = mode === "preview" ? 4 : 3;
+    if (parts.length !== expectedParts || parts[0] !== "cue") {
       return { kind: "invalid-cue", reason: "cue labels require exactly two fields" };
     }
 
-    const runId = integerField(parts[1], "run ID", 1, Number.MAX_SAFE_INTEGER);
-    const deadlineMs = integerField(parts[2], "deadline", 1, Number.MAX_SAFE_INTEGER);
+    const runId = integerField(parts[mode === "preview" ? 2 : 1], "run ID", 1, Number.MAX_SAFE_INTEGER);
+    const deadlineMs = integerField(
+      parts[mode === "preview" ? 3 : 2],
+      "deadline",
+      1,
+      Number.MAX_SAFE_INTEGER
+    );
     if (typeof runId === "string" || typeof deadlineMs === "string") {
       const invalid = [runId, deadlineMs].find(
         (value): value is string => typeof value === "string"
@@ -60,7 +68,7 @@ export function parseWindowLabel(label: string): WindowRoute {
         reason: invalid ?? "cue label is invalid"
       };
     }
-    return { kind: "cue", parameters: { runId, deadlineMs } };
+    return { kind: "cue", parameters: { runId, deadlineMs, mode } };
   }
 
   if (!label.startsWith("overlay-")) return { kind: "dashboard" };

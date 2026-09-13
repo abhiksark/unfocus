@@ -32,10 +32,16 @@ interface to watch. When a break is due, Unfocus places the same calm, static
 landscape across every monitor and asks you to focus on something far away. As
 the break ends, a warm amber light signals that it is time to return.
 
-On qualified Ubuntu X11 sessions, an optional click-through heads-up appears
+On qualified Ubuntu X11 sessions, an optional click-through card appears
 briefly on the primary display one minute before a scheduled break, clears out
 of the way, then returns for the final ten-second countdown. At zero it stays
-visible until the full break scene is ready.
+visible until the full break scene is ready. On macOS Preview builds, the same
+optional cue expands black wings around the camera notch on the display you
+are using, with an empty mint countdown ring and soft-white timing. Displays
+without a notch use a compact top-center pill. The small skip-forward button beside
+the timing skips this break and keeps the following break on schedule. It briefly
+confirms “Skipped,” then retracts. Only that target accepts clicks; the panel
+does not activate or take keyboard focus.
 
 The dashboard then reflects the rhythm of your day using presence and break
 outcomes. It does not grade your productivity, gamify consistency, or use that
@@ -46,8 +52,9 @@ history to control the reminder timer.
 ### Breaks that feel like breaks
 
 - Covers every monitor with a synchronized full-screen break
-- Gives scheduled breaks on Ubuntu X11 an optional visual-only, click-through
-  heads-up and final ten-second countdown on the primary display
+- Gives scheduled breaks an optional pre-break cue:
+  a card and final ten-second countdown on qualified Ubuntu X11, or notch
+  wings with a final countdown and compact skip control on the active display in macOS Preview
 - Uses a bundled, first-party landscape that stays still throughout the break
 - Selects one cool-biased palette from local device time and holds it across
   every display; amber light signals that the break is nearly complete
@@ -149,7 +156,7 @@ built.
 | Platform | Status | Notes |
 | --- | --- | --- |
 | Linux X11 | **Qualified** | Synchronized multi-monitor overlays, idle detection, fullscreen detection, and AppIndicator tray support. Ubuntu X11 also shows a primary-display pre-break cue. Ubuntu is the primary test environment. |
-| macOS 11+ | **Preview** | Idle and fullscreen probes work interactively. Physical multi-monitor acceptance is not complete. |
+| macOS 11+ | **Preview** | Idle and fullscreen probes work interactively; scheduled breaks also offer the notch-based pre-break cue. Physical multi-monitor acceptance is not complete. |
 | Windows x64 | **Early build** | Idle and fullscreen probes are implemented. Interactive multi-monitor qualification is pending. |
 | Linux Wayland | **Unsupported** | Default packages do not provide Wayland probes. |
 

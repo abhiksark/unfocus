@@ -26,12 +26,16 @@ use overlay::{
     close_overlay_test, overlay_run_id_from_label, overlay_scene_ready, show_overlay_test,
     OverlayCloseEvent, OverlayController,
 };
-use pre_break_cue::set_pre_break_cue_visibility;
+use pre_break_cue::{
+    close_pre_break_cue_test, prepare_pre_break_cue, set_pre_break_cue_interactive,
+    set_pre_break_cue_visibility, show_pre_break_cue_test, skip_pre_break_cue,
+    PreBreakCueController,
+};
 use probes::ProbeCache;
 use reminder::{
     get_reminder_settings, get_reminder_status, pause_reminders, reset_reminder_settings,
     resume_reminders, save_reminder_settings, start_scheduler as start_reminder_scheduler,
-    take_break_now, ReminderSettingsManager,
+    take_break_now, ReminderPresentationControllers, ReminderSettingsManager,
 };
 use std::io;
 use tauri::Manager;
@@ -123,6 +127,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         BreakLedgerHandle::default()
     });
     let overlay_controller = OverlayController::start(app.handle().clone())?;
+    let pre_break_cue_controller = PreBreakCueController::default();
     let tray_status = TrayStatus::default();
     if !app.manage(settings_manager.clone()) {
         return Err(io::Error::other("reminder settings were already managed").into());
@@ -139,6 +144,9 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if !app.manage(overlay_controller.clone()) {
         return Err(io::Error::other("overlay controller was already managed").into());
     }
+    if !app.manage(pre_break_cue_controller.clone()) {
+        return Err(io::Error::other("pre-break cue controller was already managed").into());
+    }
     if !app.manage(tray_status.clone()) {
         return Err(io::Error::other("tray status was already managed").into());
     }
@@ -147,7 +155,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         probe_cache,
         activity_tracker,
         break_ledger,
-        overlay_controller.clone(),
+        ReminderPresentationControllers::new(overlay_controller.clone(), pre_break_cue_controller),
         settings_manager,
         tray_status.clone(),
     )?;
@@ -237,8 +245,13 @@ pub fn run() {
             take_break_now,
             show_overlay_test,
             close_overlay_test,
+            show_pre_break_cue_test,
+            close_pre_break_cue_test,
             overlay_scene_ready,
             set_pre_break_cue_visibility,
+            prepare_pre_break_cue,
+            skip_pre_break_cue,
+            set_pre_break_cue_interactive,
             open_author_website
         ])
         .run(tauri::generate_context!())

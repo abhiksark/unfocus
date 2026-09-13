@@ -52,6 +52,11 @@ orchestration, OS probes, timing, and diagnostics.
   owns canonical labels, run IDs, bounds, deadlines, and caller authorization;
   `src/overlay/windows.rs` owns monitor windows, targeted events, sibling
   teardown, and startup-preview scheduling.
+- `src/pre_break_cue.rs` owns scheduled cue reconciliation, cue labels,
+  platform initialization, native cue-window lifecycle, and the main-window
+  Developer preview commands. Scheduled labels are `cue-<run>-<deadline>`;
+  preview labels are `cue-preview-<run>-<deadline>`. Their Rust and TypeScript
+  parsers must stay synchronized.
 
 ## Activity history: hot and cold storage
 
@@ -154,8 +159,15 @@ orchestration, OS probes, timing, and diagnostics.
 - Compute the deadline in Rust and encode it in the window label so every
   display derives presentation from the same clock.
 - If any monitor window fails to build or become ready, tear down the whole
-  run immediately. Linux windows stay hidden until their bundled scene has
-  decoded; never leave an unpainted or partial multi-monitor cover.
+  run immediately. Linux and macOS windows stay hidden until their mounted
+  frontend reports its bundled scene decoded; never leave an unpainted or
+  partial multi-monitor cover.
+- On macOS, reveal every overlay before giving index 0 keyboard ownership.
+  Make the actual WKWebView (not its container) first responder and verify
+  native key status. A focus failure uses the same whole-run startup rollback.
+  Order a closing panel out while it is still an NSPanel before restoring its
+  window class, so AppKit can release temporary focus. Never force activation
+  of a saved app or install a global Space shortcut.
 - Closing one overlay closes its siblings; closing one through the window
   manager (or losing a display that hosted an overlay) must never strand the
   rest. Unexpected window loss ends the entire run so the desk is never
@@ -168,6 +180,51 @@ orchestration, OS probes, timing, and diagnostics.
   its own label. Both sides are required to prevent cross-run delivery.
 - Multi-monitor acceptance is a real-hardware checklist under `plans/` (local
   only). Do not claim a platform multi-monitor-qualified without that evidence.
+
+## Pre-break cue lifecycle
+
+- A scheduled cue is eligible only in its one-minute lead window and must not
+  alter probe decisions, overlay lifecycle, settings, or reflection data. Only
+  its explicit macOS skip action advances the working deadline to the following
+  scheduled break. Reminder actions and the scheduled break cancel the cue.
+- Initialize `window.__UNFOCUS_PRE_BREAK_CUE_PLATFORM__` natively when the cue
+  window is built. The frontend may use only that trusted `macos`/`linux`
+  context to choose its presentation; it must never derive platform behavior
+  from a label.
+- On qualified X11, retain the primary-display 456×160 card with the final
+  ten-second countdown. On macOS, derive the camera notch from AppKit safe-area
+  and auxiliary-area geometry on macOS 12+, with 64-point black wings and
+  9-point transparent margins for their curved shoulders. Use a
+  200×36 pill centered 12 points below the work-area top when no notch is usable.
+  `prepare_pre_break_cue` authorizes cue labels, hides, positions, and returns
+  layout for painting before reveal. Choose the
+  active display from the frontmost-window overlap, falling back to primary on
+  unavailable or unusable information. This is implementation behavior, not
+  physical multi-monitor, Spaces, or hotplug qualification.
+- The macOS cue is a Status-level nonactivating `NSPanel`: it cannot become key
+  or main, accepts clicks only on its compact skip target, and is configured to join all Spaces and act
+  as a full-screen auxiliary. Keep the native background transparent without
+  material or shadow. Disable AppKit order-in/order-out animations so the
+  camera-aligned window stays fixed. Disable background WebKit throttling for
+  short-lived cues where supported. Keep the rest click-through and avoid activation.
+  `pre_break_cue/interaction.rs` polls window-local AppKit pointer coordinates
+  only for the cue lifetime, without event monitors or input permissions. It
+  bounds clicks to the fixed target after expansion and disables them on
+  cancellation, quiet, confirmation, and handoff.
+- `skip_pre_break_cue` authorizes the actual current cue run. Scheduled skips
+  run on the reminder scheduler and reject stale revisions, elapsed deadlines,
+  and active overlays. Relative mode preserves the next start including the
+  skipped break duration; sync mode advances one grid interval. Preview skip
+  retires only its preview. Native cleanup bounds the confirmation lifetime.
+- Scheduled handoff retracts asynchronously after overlay presentation; never
+  delay the overlay or scheduler for this animation. Cancellation closes immediately.
+- The macOS-only `show_pre_break_cue_test` and `close_pre_break_cue_test`
+  commands authorize only `main`. Preview uses a fixed 17-second
+  `4 + 2 + 10 + 1` heads-up/quiet/horizon/handoff lifecycle and closes itself.
+  It must not change timer, probes, overlays, saved settings, or reflection.
+- One cue occupancy is shared: an active overlay rejects preview startup, and
+  a production scheduled cue preempts and closes a preview. Preserve these
+  precedence rules when changing cue creation or teardown.
 
 ## Tray assets
 

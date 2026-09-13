@@ -6,6 +6,7 @@ import {
   focusProgress,
   formatMinuteDuration,
   formatSyncPreview,
+  preBreakCueAvailable,
   startSyncPreviewClock,
   syncPreviewWorkMinutes,
   type ConsumerWarningInput
@@ -50,6 +51,32 @@ const report: DiagnosticsReport = {
   fullscreenError: null,
   tray: { available: true, error: null }
 };
+
+describe("pre-break cue availability", () => {
+  test("exposes the cue on Quartz macOS and qualified Linux X11 only", () => {
+    expect(
+      preBreakCueAvailable({
+        ...report,
+        operatingSystem: "macos",
+        sessionType: null,
+        probeBackend: { kind: "quartz" }
+      })
+    ).toBe(true);
+    expect(preBreakCueAvailable({ ...report, probeBackend: { kind: "x11" } })).toBe(true);
+    expect(
+      preBreakCueAvailable({ ...report, sessionType: "wayland", probeBackend: { kind: "unsupported" } })
+    ).toBe(false);
+    expect(
+      preBreakCueAvailable({
+        ...report,
+        operatingSystem: "windows",
+        sessionType: null,
+        probeBackend: { kind: "win32" }
+      })
+    ).toBe(false);
+    expect(preBreakCueAvailable(null)).toBe(false);
+  });
+});
 
 function warningInput(overrides: Partial<ConsumerWarningInput> = {}): ConsumerWarningInput {
   return {
