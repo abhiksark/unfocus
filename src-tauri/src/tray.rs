@@ -25,6 +25,11 @@ const PREVIEW_MENU_ID: &str = "unfocus.tray.preview";
 const QUIT_MENU_ID: &str = "unfocus.tray.quit";
 const PREVIEW_DURATION_SECONDS: u64 = 8;
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+const TRAY_TOOLTIP: &str = "Unfocus eye-break reminder";
+#[cfg(target_os = "macos")]
+const TRAY_ACCESSIBILITY_LABEL: &str = "Unfocus reminder";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrayAction {
     Pause,
@@ -368,6 +373,27 @@ fn handle_tray_menu_event(app: &tauri::AppHandle, menu_id: &str) {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn configure_tray_accessibility(tray: &TrayIcon) -> tauri::Result<()> {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSAccessibility;
+    use objc2_foundation::NSString;
+
+    tray.with_inner_tray_icon(|inner| -> std::io::Result<()> {
+        let item = inner
+            .ns_status_item()
+            .ok_or_else(|| std::io::Error::other("macOS tray status item is unavailable"))?;
+        let main_thread = MainThreadMarker::new()
+            .ok_or_else(|| std::io::Error::other("macOS tray setup is not on the main thread"))?;
+        let button = item
+            .button(main_thread)
+            .ok_or_else(|| std::io::Error::other("macOS tray status item has no button"))?;
+        button.setAccessibilityLabel(Some(&NSString::from_str(TRAY_ACCESSIBILITY_LABEL)));
+        Ok(())
+    })?
+    .map_err(Into::into)
+}
+
 fn install_controller(
     app: &tauri::App,
     tray_status: &TrayStatus,
@@ -393,14 +419,20 @@ fn install_controller(
     // programmable left-click menu behavior. Required information therefore
     // lives in the menu, and only platforms that implement these options get
     // them configured.
-    #[cfg(not(target_os = "linux"))]
-    let builder = builder
-        .tooltip("Unfocus eye-break reminder")
-        .show_menu_on_left_click(false);
+    #[cfg(target_os = "macos")]
+    let builder = builder.tooltip(TRAY_TOOLTIP).show_menu_on_left_click(true);
+    #[cfg(target_os = "windows")]
+    let builder = builder.tooltip(TRAY_TOOLTIP).show_menu_on_left_click(false);
 
     let tray = builder
         .on_menu_event(|app, event| handle_tray_menu_event(app, event.id.as_ref()))
         .build(app)?;
+    #[cfg(target_os = "macos")]
+    if let Err(error) = configure_tray_accessibility(&tray) {
+        // Tauri retains a registered clone; dropping only our handle leaves it alive.
+        drop(app.remove_tray_by_id(tray.id()));
+        return Err(error);
+    }
     health.mark_installed();
 
     let subscription = tray_status.subscribe();

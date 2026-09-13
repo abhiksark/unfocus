@@ -26,7 +26,7 @@ wayland-sway = ["dep:wayland-client", "dep:wayland-protocols", "dep:rustix"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "~2.11.5", features = ["tray-icon", "image-png"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
@@ -48,6 +48,21 @@ wayland-protocols = { version = "0.32", default-features = false, features = [
 ], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { version = "0.6", default-features = false, features = ["std"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "NSAccessibilityProtocols",
+  "NSButton",
+  "NSControl",
+  "NSResponder",
+  "NSStatusBarButton",
+  "NSStatusItem",
+  "NSView",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = [
+  "std",
+  "NSString",
+] }
 objc2-core-graphics = "0.3"
 objc2-core-foundation = { version = "0.3", features = [
   "CFArray",

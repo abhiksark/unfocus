@@ -4078,8 +4078,11 @@ version = "0.6.0-beta.2"
 dependencies = [
  "base64 0.22.1",
  "minisign-verify",
+ "objc2",
+ "objc2-app-kit",
  "objc2-core-foundation",
  "objc2-core-graphics",
+ "objc2-foundation",
  "rustix",
  "serde",
  "serde_json",
