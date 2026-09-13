@@ -78,6 +78,11 @@ plans/            Local working notes only (gitignored; not tracked docs)
   cannot keep running.
 - Dashboard has consumer mode (default) and developer mode (platform signals,
   monitors, raw probe errors). Mode is remembered on device.
+- On macOS, `tray-panel` is a reusable compact menu-bar surface with narrow
+  `tray_panel_state`, `tray_panel_action`, and `tray_panel_ready` commands.
+  It reads authoritative reminder state; the scheduler owns its cancellable
+  three-second manual-break preparation. Hiding or reopening the panel never
+  restarts that request. The regular dashboard Take a break remains immediate.
 - Consumer mode also has a transient History view in the main window. It shows
   the newest 90 local days in a compact Monday-aligned active-minutes calendar
   following the saved Day starts preference. Selecting one day loads its

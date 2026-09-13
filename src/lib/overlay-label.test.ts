@@ -79,3 +79,10 @@ describe("parseWindowLabel", () => {
     expect(parseWindowLabel(label).kind).toBe("invalid-cue");
   });
 });
+
+test("only exact main and tray-panel labels route to application surfaces", () => {
+  expect(parseWindowLabel("tray-panel")).toEqual({ kind: "tray-panel" });
+  for (const label of ["tray-panel-1", "unknown", "", "main-2"]) {
+    expect(parseWindowLabel(label)).toEqual({ kind: "invalid-window" });
+  }
+});

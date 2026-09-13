@@ -233,6 +233,13 @@ orchestration, OS probes, timing, and diagnostics.
 
 ## Tray assets
 
+- `tray/panel.rs` owns the macOS keyboard-capable compact panel, its tray-anchor
+  geometry, readiness, opening generations, and exact caller authorization.
+  Panel visibility does not own reminder timing. `reminder/manual_preparation.rs`
+  holds the ephemeral three-second preparation state, advanced by the existing
+  scheduler with injected clocks and invalidated by superseding state changes.
+  Every Mac overlay reveal hides the panel before assigning overlay focus.
+  Keep Linux and Windows on their existing native menu path.
 - macOS embeds `icons/tray/tray-template.png` as a black-and-alpha template
   image. Other platforms embed `icons/tray/tray-light.png` as white-and-alpha.
   Unit tests enforce both invariants.

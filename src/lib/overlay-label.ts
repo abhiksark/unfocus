@@ -20,6 +20,8 @@ export type CueParameters = {
 
 export type WindowRoute =
   | { kind: "dashboard" }
+  | { kind: "tray-panel" }
+  | { kind: "invalid-window" }
   | { kind: "overlay"; parameters: OverlayParameters }
   | { kind: "cue"; parameters: CueParameters }
   | { kind: "invalid-overlay"; reason: string }
@@ -44,6 +46,8 @@ function integerField(
 }
 
 export function parseWindowLabel(label: string): WindowRoute {
+  if (label === "main") return { kind: "dashboard" };
+  if (label === "tray-panel") return { kind: "tray-panel" };
   if (label === "cue" || label.startsWith("cue-")) {
     const parts = label.split("-");
     const mode = parts[1] === "preview" ? "preview" : "scheduled";
@@ -71,7 +75,7 @@ export function parseWindowLabel(label: string): WindowRoute {
     return { kind: "cue", parameters: { runId, deadlineMs, mode } };
   }
 
-  if (!label.startsWith("overlay-")) return { kind: "dashboard" };
+  if (!label.startsWith("overlay-")) return { kind: "invalid-window" };
 
   const parts = label.split("-");
   if (parts.length !== 6 || parts[0] !== "overlay") {

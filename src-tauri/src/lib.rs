@@ -47,6 +47,7 @@ use reminder::{
 };
 use std::io;
 use tauri::Manager;
+use tray::panel::{tray_panel_action, tray_panel_ready, tray_panel_state};
 use tray::{dashboard_close_action, DashboardCloseAction, TrayRuntime, TrayStatus};
 
 fn authorize_main_caller(label: &str) -> Result<(), String> {
@@ -212,6 +213,8 @@ fn handle_overlay_window_event(window: &tauri::Window, event: &tauri::WindowEven
 fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
     if window.label() == "main" {
         handle_main_window_event(window, event);
+    } else if window.label() == tray::panel::LABEL {
+        tray::panel::window_event(window, event);
     } else if let Some(run_id) = overlay_run_id_from_label(window.label()) {
         handle_overlay_window_event(window, event, run_id);
     }
@@ -233,6 +236,9 @@ pub fn run() {
         .setup(setup_app)
         .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
+            tray_panel_state,
+            tray_panel_action,
+            tray_panel_ready,
             get_diagnostics,
             get_today_activity,
             get_activity_range,

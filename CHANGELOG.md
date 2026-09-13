@@ -9,6 +9,11 @@ released versions link to their GitHub release.
 
 ### Added
 
+- macOS Preview builds now offer a compact menu-bar panel with reminder status,
+  a 30-minute pause, and manual breaks with a cancellable three-second start.
+  Closing the panel leaves a requested break pending; reopening does not restart
+  the countdown. The menu-bar icon remains icon-only. Physical qualification
+  remains limited to the Mac configurations explicitly tested.
 - Scheduled breaks on Ubuntu X11 now offer an optional click-through heads-up
   on the primary display. It appears briefly one minute before the break,
   clears out of the way, returns for the final ten seconds, and stays visible
