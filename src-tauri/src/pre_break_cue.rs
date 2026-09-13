@@ -70,10 +70,12 @@ pub(crate) fn pre_break_cue_platform_enabled(
     qualified_x11_session || target_is_macos
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn pre_break_cue_visible_on_all_workspaces(target_is_macos: bool) -> bool {
     target_is_macos
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct CuePanelPolicy {
     level: i64,
@@ -85,6 +87,7 @@ struct CuePanelPolicy {
     ignores_pointer_events: bool,
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn cue_panel_policy() -> CuePanelPolicy {
     CuePanelPolicy {
         level: 25,
@@ -214,6 +217,7 @@ fn request_cue_handoff(app: &AppHandle, label: String) {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn abort_cue_window(window: &WebviewWindow, reason: &'static str) {
     request_cue_window_close(window.app_handle(), window.label().to_owned(), reason);
 }
@@ -319,6 +323,7 @@ fn macos_notch_placement(monitor: &Monitor) -> Option<(CueGeometry, CueLayout)> 
     )
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct DisplayRect {
     x: f64,
@@ -328,12 +333,14 @@ struct DisplayRect {
     primary: bool,
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn intersection_area(left: DisplayRect, right: DisplayRect) -> f64 {
     let width = (left.x + left.width).min(right.x + right.width) - left.x.max(right.x);
     let height = (left.y + left.height).min(right.y + right.height) - left.y.max(right.y);
     width.max(0.0) * height.max(0.0)
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn select_active_display_index(displays: &[DisplayRect], window: Option<DisplayRect>) -> usize {
     let primary = displays
         .iter()
@@ -357,6 +364,7 @@ fn select_active_display_index(displays: &[DisplayRect], window: Option<DisplayR
     }
 }
 
+#[cfg(target_os = "macos")]
 fn display_rect(monitor: &Monitor, primary: bool) -> Option<DisplayRect> {
     let scale = monitor.scale_factor();
     if !scale.is_finite() || scale <= 0.0 {
@@ -371,6 +379,7 @@ fn display_rect(monitor: &Monitor, primary: bool) -> Option<DisplayRect> {
     })
 }
 
+#[cfg(target_os = "macos")]
 fn same_display(left: &Monitor, right: &Monitor) -> bool {
     left.position() == right.position() && left.size() == right.size()
 }
@@ -1424,6 +1433,8 @@ fn create_cue_window(
         })
         .build()
         .map_err(|error| format!("could not build the cue window: {error}"))?;
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
     #[cfg(target_os = "macos")]
     if let Err(error) = configure_macos_cue_panel(&window) {
         let _ = window.close();
