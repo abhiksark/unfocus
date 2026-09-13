@@ -9,13 +9,22 @@
   import { deviceGridOffsetMinutes } from "$lib/break-grid";
   import {
     consumerReminderPresentation,
-    consumerWarning
+    consumerWarning,
+    preBreakCueAvailable as isPreBreakCueAvailable
   } from "$lib/consumer-dashboard";
   import {
     readDashboardMode,
     writeDashboardMode,
     type DashboardMode
   } from "$lib/dashboard-mode";
+  import {
+    createDeveloperCuePreviewController,
+    DEVELOPER_CUE_PREVIEW_ENDED_EVENT,
+    developerCuePreviewEndedRunId,
+    initialDeveloperCuePreviewState,
+    type DeveloperCuePreviewResponse,
+    type DeveloperCuePreviewState
+  } from "$lib/developer-cue-preview";
   import {
     DEFAULT_DAY_START_HOUR,
     readDayStartHour,
@@ -24,6 +33,7 @@
   import type { DiagnosticsReport } from "$lib/diagnostics";
   import { historyActivationUsesKeyboard } from "$lib/history";
   import { parseWindowLabel } from "$lib/overlay-label";
+  import { preBreakCuePlatformFromNativeContext } from "$lib/pre-break-cue";
   import {
     loadAuthoritativeReminderSettings,
     reminderSettingsRecovery,
@@ -75,6 +85,9 @@
   const windowRoute = parseWindowLabel(getCurrentWindow().label);
   const overlayParameters = windowRoute.kind === "overlay" ? windowRoute.parameters : null;
   const cueParameters = windowRoute.kind === "cue" ? windowRoute.parameters : null;
+  const cuePlatform = preBreakCuePlatformFromNativeContext(
+    window.__UNFOCUS_PRE_BREAK_CUE_PLATFORM__
+  );
   document.documentElement.classList.toggle(
     "cue-window",
     windowRoute.kind === "cue" || windowRoute.kind === "invalid-cue"
@@ -95,6 +108,8 @@
   let authorWebsiteError = $state(false);
   let refreshing = $state(false);
   let overlayRunning = $state(false);
+  let cuePreviewState = $state<DeveloperCuePreviewState>(initialDeveloperCuePreviewState());
+  let cuePreviewError = $state<string | null>(null);
   let timingEditorExpanded = $state(false);
   let savedSettings = $state<ReminderSettings | null>(null);
   let settingsStorageHealth = $state<StorageLoadHealth | null>(null);
@@ -148,6 +163,20 @@
   function errorMessage(value: unknown): string {
     return value instanceof Error ? value.message : String(value);
   }
+
+  const cuePreviewController = createDeveloperCuePreviewController(
+    {
+      showPreview: () => invoke<DeveloperCuePreviewResponse>("show_pre_break_cue_test"),
+      closePreview: (runId) => invoke("close_pre_break_cue_test", { runId }),
+      now: () => performance.now(),
+      schedule: (callback, delayMs) => window.setTimeout(callback, delayMs),
+      cancel: (timerId) => window.clearTimeout(timerId)
+    },
+    (snapshot) => {
+      cuePreviewState = snapshot.state;
+      cuePreviewError = snapshot.error;
+    }
+  );
 
   function requestDiagnostics() {
     diagnosticsCurrentSuccessful = false;
@@ -205,10 +234,7 @@
       authoritativeSettingsHealth
     )
   );
-  const preBreakCueAvailable = $derived(
-    report?.probeBackend?.kind === "x11" ||
-      (report?.operatingSystem === "linux" && report.sessionType?.toLowerCase() === "x11")
-  );
+  const preBreakCueAvailable = $derived(isPreBreakCueAvailable(report));
   const warning = $derived(
     consumerWarning({
       report,
@@ -490,6 +516,14 @@
     } finally {
       overlayRunning = false;
     }
+  }
+
+  async function runPreBreakCuePreview() {
+    await cuePreviewController.start();
+  }
+
+  async function closePreBreakCuePreview() {
+    await cuePreviewController.close();
   }
 
   function reminderSuccessMessage(command: ReminderActionCommand): string {
@@ -937,8 +971,15 @@
     updatePolling();
     void loadReminderSettings();
     document.addEventListener("visibilitychange", updatePolling);
+    const cueEnded = (event: Event) => {
+      const runId = developerCuePreviewEndedRunId(event, cuePreviewState.runId);
+      if (runId !== null) cuePreviewController.nativeEnded(runId);
+    };
+    window.addEventListener(DEVELOPER_CUE_PREVIEW_ENDED_EVENT, cueEnded);
     return () => {
       stopPolling();
+      cuePreviewController.destroy();
+      window.removeEventListener(DEVELOPER_CUE_PREVIEW_ENDED_EVENT, cueEnded);
       document.removeEventListener("visibilitychange", updatePolling);
     };
   });
@@ -954,7 +995,11 @@
 <svelte:window onkeydown={handleSafeModeKeydown} />
 
 {#if cueParameters}
-  <PreBreakCue deadlineMs={cueParameters.deadlineMs} />
+  <PreBreakCue
+    deadlineMs={cueParameters.deadlineMs}
+    mode={cueParameters.mode}
+    platform={cuePlatform}
+  />
 {:else if windowRoute.kind === "invalid-cue"}
   <main class="invalid-cue" aria-hidden="true"></main>
 {:else if overlayParameters}
@@ -993,6 +1038,8 @@
     {reminderActionResult}
     {refreshing}
     {overlayRunning}
+    {cuePreviewState}
+    {cuePreviewError}
     {workMinutesInput}
     {breakSecondsInput}
     {savedSettings}
@@ -1013,6 +1060,8 @@
     onPauseAction={runPauseAction}
     onTakeBreak={() => void runReminderAction("take_break_now")}
     onPreview={() => void runOverlayTest()}
+    onCuePreview={() => void runPreBreakCuePreview()}
+    onCloseCuePreview={() => void closePreBreakCuePreview()}
     onWorkMinutesInput={updateWorkMinutes}
     onBreakSecondsInput={updateBreakSeconds}
     onSaveSettings={() => void saveReminderSettings()}

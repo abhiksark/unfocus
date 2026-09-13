@@ -55,12 +55,15 @@ plans/            Local working notes only (gitignored; not tracked docs)
   main window on a secondary launch; it does not start another tray or timer.
 - Window labels route the frontend: `main` is the dashboard;
   `overlay-<run>-<index>-<count>-<duration>-<deadline>` renders `BreakOverlay`;
-  `cue-<run>-<deadline>` renders `PreBreakCue`. Labels are the only channel for
-  overlay and cue parameters; keep Rust and TypeScript parsers synchronized.
+  `cue-<run>-<deadline>` renders a scheduled `PreBreakCue`; and
+  `cue-preview-<run>-<deadline>` renders its Developer preview. Labels are the
+  only channel for overlay and cue parameters; keep Rust and TypeScript parsers
+  synchronized. Native initialization supplies the cue platform context, not a
+  label or other frontend-controlled value.
 - Reminder defaults: 20-minute work interval, 20-second break. Valid ranges:
   work 1–120 minutes, break 3–30 seconds. Settings live in local app config as
   `reminder-settings.json` (schema v4; includes bounded pause expiry,
-  opt-in cross-device sync, and the Ubuntu X11 pre-break heads-up preference).
+  opt-in cross-device sync, and the pre-break cue preference).
 - Local reflection data also lives in app config as a 24-hour hot
   `activity-history.json`, fixed 30-day epoch
   `activity-archive-<key>.json` chunks, and a `break-events.json` ledger.
@@ -87,10 +90,14 @@ plans/            Local working notes only (gitignored; not tracked docs)
   `get_reminder_settings`, `get_reminder_status`, `save_reminder_settings`,
   `reset_reminder_settings`, `pause_reminders`, `resume_reminders`,
   `take_break_now`, `show_overlay_test`, `close_overlay_test`,
+  `show_pre_break_cue_test`, `close_pre_break_cue_test`,
   `open_author_website`. Valid overlay labels can also call
-  `overlay_scene_ready` to release hidden Linux windows after the local scene
-  decodes; valid cue labels can call `set_pre_break_cue_visibility` to make the
+  `overlay_scene_ready` to release hidden Linux and macOS windows after the local scene
+  decodes; valid cue labels can call `prepare_pre_break_cue` for native notch layout and
+  `set_pre_break_cue_visibility` to make the
   native window follow the heads-up, quiet, countdown, and handoff stages.
+  On macOS, `set_pre_break_cue_interactive` enables only the compact skip target;
+  `skip_pre_break_cue` skips the current scheduled break or dismisses its preview.
   Overlay windows only get the minimal event/window permissions in
   `capabilities/overlay.json`; cue windows have no capability permissions.
 - `open_author_website` hands a hard-coded address to the desktop's default
@@ -102,7 +109,9 @@ plans/            Local working notes only (gitignored; not tracked docs)
 
 - Linux X11 is the only qualified backend. macOS idle and fullscreen probes
   have been verified interactively but have not passed a multi-monitor
-  acceptance run. Wayland remains unsupported in default packages; an opt-in
+  acceptance run. The macOS notch-based pre-break cue is likewise Preview-only;
+  do not claim physical multi-monitor, Spaces, or hotplug qualification for
+  it. Wayland remains unsupported in default packages; an opt-in
   `wayland-sway` Cargo feature scaffolds a Sway 1.11+ candidate only and must
   not be described as qualified. Windows has idle and fullscreen probes in
   code, with interactive multi-monitor qualification still pending. Never

@@ -13,7 +13,9 @@ use crate::{
         show_overlay, show_overlay_if_idle, OverlayController, MAX_OVERLAY_DURATION_SECONDS,
         MIN_OVERLAY_DURATION_SECONDS,
     },
-    pre_break_cue::{PreBreakCue, CUE_LEAD_MILLISECONDS},
+    pre_break_cue::{
+        pre_break_cue_platform_enabled, PreBreakCue, PreBreakCueController, CUE_LEAD_MILLISECONDS,
+    },
     probes::{qualified_x11_session, ProbeCache, ProbeReading, ProbeSnapshot},
     storage_recovery::{
         canonical_bytes_unchanged, create_new_file_with_permissions, existing_file_permissions,
@@ -825,6 +827,7 @@ pub(crate) enum ReminderAction {
     Pause,
     Resume,
     TakeBreakNow,
+    SkipCue(u64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -911,7 +914,12 @@ struct ReminderControlRequest {
 
 impl ReminderControlRequest {
     fn cancels_pre_break_cue(&self) -> bool {
-        matches!(self.command, ReminderControlCommand::Action(_))
+        matches!(
+            self.command,
+            ReminderControlCommand::Action(
+                ReminderAction::Pause | ReminderAction::Resume | ReminderAction::TakeBreakNow
+            )
+        )
     }
 }
 
@@ -946,7 +954,7 @@ impl ReminderControl {
         })
     }
 
-    fn request(&self, action: ReminderAction) -> Result<ReminderStatus, String> {
+    pub(crate) fn request(&self, action: ReminderAction) -> Result<ReminderStatus, String> {
         self.ensure_action_available(action)?;
         let (response, receiver) = mpsc::sync_channel(1);
         let attempt_id = self.next_attempt_id();
@@ -1002,7 +1010,7 @@ impl ReminderControl {
         let available = match action {
             ReminderAction::Pause => snapshot.phase == TrayPhase::Working,
             ReminderAction::Resume => snapshot.phase == TrayPhase::Paused,
-            ReminderAction::TakeBreakNow => {
+            ReminderAction::TakeBreakNow | ReminderAction::SkipCue(_) => {
                 snapshot.phase == TrayPhase::Working && !snapshot.overlay_active
             }
         };
@@ -1193,6 +1201,7 @@ fn system_time_from_unix_seconds(secs: i64) -> SystemTime {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WorkDeadline {
     Relative,
+    Monotonic(Duration),
     Wall(SystemTime),
 }
 
@@ -1354,6 +1363,31 @@ impl ReminderTimer {
         true
     }
 
+    fn skip_upcoming(&mut self, revision: u64, now: Duration, wall_now: SystemTime) -> bool {
+        if self.phase != ReminderPhase::Working || self.state_revision != revision {
+            return false;
+        }
+        let remaining = self
+            .tray_snapshot(now, wall_now, 0, false)
+            .remaining_milliseconds;
+        if !remaining.is_some_and(|ms| (1..=CUE_LEAD_MILLISECONDS).contains(&ms)) {
+            return false;
+        }
+        // Preserve the next scheduled start, including the skipped break's duration
+        // in relative mode. Sync mode stays on its existing shared grid.
+        self.work_deadline = match self.work_deadline {
+            WorkDeadline::Relative => WorkDeadline::Monotonic(
+                self.phase_started_at + self.settings.work_interval() * 2 + self.break_duration(),
+            ),
+            WorkDeadline::Monotonic(due) => {
+                WorkDeadline::Monotonic(due + self.settings.work_interval() + self.break_duration())
+            }
+            WorkDeadline::Wall(due) => WorkDeadline::Wall(due + self.settings.work_interval()),
+        };
+        self.state_revision = self.state_revision.wrapping_add(1);
+        true
+    }
+
     /// Credit a natural break after the timer has already entered `Break`.
     /// Used when idle probes show the user already rested long enough that
     /// showing a multi-monitor overlay would be wrong — and sitting in a
@@ -1388,6 +1422,7 @@ impl ReminderTimer {
                     now.saturating_sub(self.phase_started_at) >= self.settings.work_interval()
                 }
                 WorkDeadline::Wall(due) => wall_now >= due,
+                WorkDeadline::Monotonic(due) => now >= due,
             },
             ReminderPhase::Break => {
                 now.saturating_sub(self.phase_started_at) >= self.settings.break_duration()
@@ -1442,6 +1477,7 @@ impl ReminderTimer {
                             WorkDeadline::Wall(due) => {
                                 due.duration_since(wall_now).unwrap_or(Duration::ZERO)
                             }
+                            WorkDeadline::Monotonic(due) => due.saturating_sub(now),
                         },
                     ),
                     ReminderPhase::Break => (
@@ -1573,6 +1609,9 @@ fn execute_reminder_action(
                 );
             }
         }
+        ReminderAction::SkipCue(_) => {
+            return Err("cue skip requires scheduler authorization".into())
+        }
         ReminderAction::Pause | ReminderAction::Resume | ReminderAction::TakeBreakNow => {
             // Stale and repeated native events are explicit idempotent no-ops.
         }
@@ -1662,6 +1701,30 @@ fn present_scheduled_break(
     }
 }
 
+fn hold_scheduled_cue_until_presented<T>(
+    present: impl FnOnce() -> T,
+    close_scheduled_cue: impl FnOnce(),
+) -> T {
+    let presentation = present();
+    close_scheduled_cue();
+    presentation
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ReminderPresentationControllers {
+    overlay: OverlayController,
+    pre_break_cue: PreBreakCueController,
+}
+
+impl ReminderPresentationControllers {
+    pub(crate) fn new(overlay: OverlayController, pre_break_cue: PreBreakCueController) -> Self {
+        Self {
+            overlay,
+            pre_break_cue,
+        }
+    }
+}
+
 struct ReminderSchedulerContext {
     app: AppHandle,
     probe_cache: ProbeCache,
@@ -1673,6 +1736,7 @@ struct ReminderSchedulerContext {
     receiver: Receiver<ReminderControlRequest>,
     action_health: ReminderActionHealth,
     next_attempt_id: Arc<AtomicU64>,
+    pre_break_cue_controller: PreBreakCueController,
 }
 
 struct ReminderScheduler {
@@ -1787,6 +1851,7 @@ impl ReminderScheduler {
                 timer.tray_snapshot(Duration::ZERO, wall_now, runtime.settings_revision, false)
             });
         context.tray_status.publish(initial_snapshot);
+        let pre_break_cue_controller = context.pre_break_cue_controller.clone();
         Self {
             context,
             started_at,
@@ -1796,7 +1861,10 @@ impl ReminderScheduler {
             // clock-injected. `None` on the first iteration, so it never
             // rebases before there is a prior sample to diverge from.
             last_sample: None,
-            pre_break_cue: PreBreakCue::new(qualified_x11_session()),
+            pre_break_cue: PreBreakCue::new(
+                pre_break_cue_platform_enabled(qualified_x11_session(), cfg!(target_os = "macos")),
+                pre_break_cue_controller,
+            ),
         }
     }
 
@@ -1907,16 +1975,20 @@ impl ReminderScheduler {
         };
         match request.command {
             ReminderControlCommand::Action(action) => {
-                let result = execute_reminder_action(
-                    action,
-                    now,
-                    wall_now,
-                    timer,
-                    &self.context.settings_manager,
-                    &self.context.app,
-                    &self.context.overlay_controller,
-                    &self.context.break_ledger,
-                );
+                let result = if let ReminderAction::SkipCue(run_id) = action {
+                    self.skip_cue(run_id, now, wall_now)
+                } else {
+                    execute_reminder_action(
+                        action,
+                        now,
+                        wall_now,
+                        timer,
+                        &self.context.settings_manager,
+                        &self.context.app,
+                        &self.context.overlay_controller,
+                        &self.context.break_ledger,
+                    )
+                };
                 match &result {
                     Ok(()) => self.context.action_health.clear(request.attempt_id),
                     Err(error) => self
@@ -1928,6 +2000,25 @@ impl ReminderScheduler {
             }
             ReminderControlCommand::SynchronizeSettings => Some(Ok(())),
         }
+    }
+
+    fn skip_cue(&mut self, run_id: u64, now: Duration, wall_now: SystemTime) -> Result<(), String> {
+        let revision = self
+            .pre_break_cue
+            .skippable_revision(run_id)
+            .ok_or("this cue is no longer current")?;
+        let Some(timer) = self.runtime.timer_mut() else {
+            return Err(
+                "automatic reminders are unavailable until saved timing is recovered".into(),
+            );
+        };
+        if self.context.overlay_controller.has_active_run()
+            || !timer.skip_upcoming(revision, now, wall_now)
+        {
+            return Err("this break can no longer be skipped".into());
+        }
+        self.pre_break_cue.finish_skip(&self.context.app);
+        Ok(())
     }
 
     fn handle_transition(&mut self, now: Duration, wall_now: SystemTime) {
@@ -1956,14 +2047,24 @@ impl ReminderScheduler {
         let Some(timer) = self.runtime.timer_mut() else {
             return;
         };
+        self.pre_break_cue.cancel_preview(&self.context.app);
         let settings = timer.settings;
-        let Some(presentation) = present_scheduled_break(
-            &self.context.app,
-            &self.context.probe_cache,
-            &self.context.activity_tracker,
-            &self.context.overlay_controller,
-            timer.break_duration(),
-        ) else {
+        let presentation = hold_scheduled_cue_until_presented(
+            || {
+                present_scheduled_break(
+                    &self.context.app,
+                    &self.context.probe_cache,
+                    &self.context.activity_tracker,
+                    &self.context.overlay_controller,
+                    timer.break_duration(),
+                )
+            },
+            || {
+                self.pre_break_cue
+                    .close_scheduled(&self.context.app, "scheduled break started");
+            },
+        );
+        let Some(presentation) = presentation else {
             return;
         };
         let kind = match presentation {
@@ -2068,7 +2169,7 @@ pub(crate) fn start_scheduler(
     probe_cache: ProbeCache,
     activity_tracker: ActivityTrackerHandle,
     break_ledger: BreakLedgerHandle,
-    overlay_controller: OverlayController,
+    presentation_controllers: ReminderPresentationControllers,
     settings_manager: ReminderSettingsManager,
     tray_status: TrayStatus,
 ) -> io::Result<ReminderControl> {
@@ -2078,12 +2179,13 @@ pub(crate) fn start_scheduler(
         probe_cache,
         activity_tracker,
         break_ledger,
-        overlay_controller,
+        overlay_controller: presentation_controllers.overlay,
         settings_manager,
         tray_status,
         receiver,
         action_health: control.action_health.clone(),
         next_attempt_id: Arc::clone(&control.next_attempt_id),
+        pre_break_cue_controller: presentation_controllers.pre_break_cue,
     };
     std::thread::Builder::new()
         .name("unfocus-reminders".into())
@@ -2129,6 +2231,94 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn skip_preserves_the_next_relative_break_and_rejects_repeated_revision() {
+        let mut timer = ReminderTimer::with_defaults(Duration::ZERO);
+        let click = Duration::from_secs(1192);
+        assert!(timer.skip_upcoming(0, click, UNIX_EPOCH));
+        assert_eq!(timer.phase, ReminderPhase::Working);
+        assert_eq!(
+            timer.work_deadline,
+            WorkDeadline::Monotonic(Duration::from_secs(2420))
+        );
+        assert!(!timer.skip_upcoming(0, click, UNIX_EPOCH));
+        assert_eq!(
+            timer
+                .tray_snapshot(click, UNIX_EPOCH, 0, false)
+                .remaining_milliseconds,
+            Some(1_228_000)
+        );
+        assert_eq!(timer.tick(Duration::from_secs(1200), UNIX_EPOCH), None);
+        assert_eq!(timer.tick(Duration::from_secs(2419), UNIX_EPOCH), None);
+        assert_eq!(
+            timer.tick(Duration::from_secs(2420), UNIX_EPOCH),
+            Some(ReminderTransition::StartBreak)
+        );
+    }
+
+    #[test]
+    fn skip_preserves_the_sync_grid_without_grace_or_break_duration() {
+        let synced = ReminderSettings::try_new(20, 20, true, 0).unwrap();
+        let mut timer = ReminderTimer::new(Duration::ZERO, synced, UNIX_EPOCH);
+        assert!(timer.skip_upcoming(
+            0,
+            Duration::from_secs(1199),
+            UNIX_EPOCH + Duration::from_secs(1199)
+        ));
+        assert_eq!(
+            timer.work_deadline,
+            WorkDeadline::Wall(UNIX_EPOCH + Duration::from_secs(2400))
+        );
+        assert_eq!(
+            timer.tick(
+                Duration::from_secs(1200),
+                UNIX_EPOCH + Duration::from_secs(1200)
+            ),
+            None
+        );
+        assert_eq!(
+            timer.tick(
+                Duration::from_secs(2400),
+                UNIX_EPOCH + Duration::from_secs(2400)
+            ),
+            Some(ReminderTransition::StartBreak)
+        );
+    }
+
+    #[test]
+    fn skip_rejects_outside_lead_expired_paused_and_stale_cycles() {
+        for seconds in [0, 1139, 1200, 1201] {
+            let mut timer = ReminderTimer::with_defaults(Duration::ZERO);
+            assert!(!timer.skip_upcoming(0, Duration::from_secs(seconds), UNIX_EPOCH));
+            assert_eq!(timer.work_deadline, WorkDeadline::Relative);
+            assert_eq!(timer.state_revision, 0);
+        }
+        let mut timer = ReminderTimer::with_defaults(Duration::ZERO);
+        assert!(!timer.skip_upcoming(9, Duration::from_secs(1190), UNIX_EPOCH));
+        timer.pause(Duration::from_secs(1190));
+        assert!(!timer.skip_upcoming(timer.state_revision, Duration::from_secs(1191), UNIX_EPOCH));
+        timer.resume(Duration::from_secs(1192), UNIX_EPOCH);
+        assert!(!timer.skip_upcoming(0, Duration::from_secs(2380), UNIX_EPOCH));
+    }
+
+    #[test]
+    fn a_second_future_skip_and_later_manual_actions_keep_normal_timer_semantics() {
+        let mut timer = ReminderTimer::with_defaults(Duration::ZERO);
+        assert!(timer.skip_upcoming(0, Duration::from_secs(1190), UNIX_EPOCH));
+        assert!(timer.skip_upcoming(1, Duration::from_secs(2410), UNIX_EPOCH));
+        assert_eq!(
+            timer.work_deadline,
+            WorkDeadline::Monotonic(Duration::from_secs(3640))
+        );
+        assert!(timer.take_break_now(Duration::from_secs(2411)));
+        assert!(!timer.skip_upcoming(timer.state_revision, Duration::from_secs(2412), UNIX_EPOCH));
+        assert_eq!(
+            timer.tick(Duration::from_secs(2431), UNIX_EPOCH),
+            Some(ReminderTransition::EndBreak)
+        );
+        assert_eq!(timer.work_deadline, WorkDeadline::Relative);
     }
 
     fn settings(work_minutes: u64, break_seconds: u64) -> ReminderSettings {
@@ -2960,7 +3150,7 @@ mod tests {
     }
 
     #[test]
-    fn every_real_user_action_request_cancels_the_current_cue() {
+    fn timing_action_requests_cancel_the_current_cue() {
         for action in [
             ReminderAction::Pause,
             ReminderAction::Resume,
@@ -2973,6 +3163,17 @@ mod tests {
             };
             assert!(request.cancels_pre_break_cue(), "{action:?}");
         }
+    }
+
+    #[test]
+    fn a_skip_request_keeps_the_current_cue_for_scheduler_authorization() {
+        let request = ReminderControlRequest {
+            attempt_id: 1,
+            command: ReminderControlCommand::Action(ReminderAction::SkipCue(7)),
+            response: None,
+        };
+
+        assert!(!request.cancels_pre_break_cue());
     }
 
     #[test]
@@ -3292,6 +3493,8 @@ mod tests {
         assert!(!status.preview_enabled);
         assert!(control.dispatch(ReminderAction::Pause).is_err());
         assert!(control.dispatch(ReminderAction::TakeBreakNow).is_err());
+        assert!(control.dispatch(ReminderAction::SkipCue(7)).is_err());
+        assert!(control.request(ReminderAction::SkipCue(7)).is_err());
         assert!(matches!(
             receiver.try_recv(),
             Err(mpsc::TryRecvError::Empty)
@@ -3552,6 +3755,32 @@ mod tests {
             assert_eq!(
                 timer.tick(Duration::from_secs(63), UNIX_EPOCH),
                 Some(ReminderTransition::EndBreak)
+            );
+        }
+    }
+
+    #[test]
+    fn scheduled_cue_closes_only_after_overlay_readiness_returns_on_every_path() {
+        for presentation in [
+            Some(BreakPresentation::Show),
+            Some(BreakPresentation::NaturalIdle),
+            Some(BreakPresentation::SuppressFullscreen),
+            None,
+        ] {
+            let events = std::cell::RefCell::new(Vec::new());
+
+            let returned = hold_scheduled_cue_until_presented(
+                || {
+                    events.borrow_mut().push("presentation returned");
+                    presentation
+                },
+                || events.borrow_mut().push("scheduled cue closed"),
+            );
+
+            assert_eq!(returned, presentation);
+            assert_eq!(
+                events.into_inner(),
+                ["presentation returned", "scheduled cue closed"]
             );
         }
     }

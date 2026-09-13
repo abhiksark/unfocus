@@ -19,6 +19,10 @@
     type ReminderSettingsView
   } from "$lib/reminder-settings";
   import {
+    developerCuePreviewVisible,
+    type DeveloperCuePreviewState
+  } from "$lib/developer-cue-preview";
+  import {
     developerOverlayTestLabel,
     reminderCapabilityAvailable,
     type ReminderActionCommand,
@@ -52,6 +56,8 @@
     reminderActionResult: string | null;
     refreshing: boolean;
     overlayRunning: boolean;
+    cuePreviewState: DeveloperCuePreviewState;
+    cuePreviewError: string | null;
     workMinutesInput: string;
     breakSecondsInput: string;
     savedSettings: ReminderSettings | null;
@@ -72,6 +78,8 @@
     onPauseAction: () => void;
     onTakeBreak: () => void;
     onPreview: () => void;
+    onCuePreview: () => void;
+    onCloseCuePreview: () => void;
     onWorkMinutesInput: (value: string) => void;
     onBreakSecondsInput: (value: string) => void;
     onSaveSettings: () => void;
@@ -93,6 +101,8 @@
     reminderActionResult,
     refreshing,
     overlayRunning,
+    cuePreviewState,
+    cuePreviewError,
     workMinutesInput,
     breakSecondsInput,
     savedSettings,
@@ -113,6 +123,8 @@
     onPauseAction,
     onTakeBreak,
     onPreview,
+    onCuePreview,
+    onCloseCuePreview,
     onWorkMinutesInput,
     onBreakSecondsInput,
     onSaveSettings,
@@ -121,6 +133,7 @@
   }: Props = $props();
 
   const isMac = $derived(report?.operatingSystem === "macos");
+  const showCuePreview = $derived(isMac && developerCuePreviewVisible(report));
   const health = $derived(diagnosticsHealth(report, diagnosticsError));
   const healthLabel = $derived(diagnosticsHealthLabel(health));
   const backend = $derived(probeBackend(report));
@@ -297,6 +310,9 @@
   {/if}
   {#if overlayError}
     <div class="error" role="alert">Could not open the overlay: {overlayError}</div>
+  {/if}
+  {#if showCuePreview && cuePreviewError}
+    <div class="error" role="alert">Could not update the cue preview: {cuePreviewError}</div>
   {/if}
 
   <section class="panel storage-panel" aria-labelledby="storage-health-title">
@@ -567,6 +583,33 @@
       {developerOverlayTestLabel(reminderStatus, overlayRunning)}
     </button>
   </section>
+
+  {#if showCuePreview}
+    <section class="test-panel">
+      <div>
+        <p class="eyebrow">macOS cue preview</p>
+        <h2>Preview the notch cue</h2>
+        <p>
+          Opens the 17-second cue in its native macOS window. Skip dismisses only this preview. It does not change
+          reminder timing, saved settings, probes, overlays, or reflection data.
+        </p>
+      </div>
+      <button
+        class="primary"
+        type="button"
+        onclick={cuePreviewState.phase === "active" ? onCloseCuePreview : onCuePreview}
+        disabled={cuePreviewState.phase === "opening" || cuePreviewState.phase === "closing"}
+      >
+        {cuePreviewState.phase === "opening"
+          ? "Opening cue…"
+          : cuePreviewState.phase === "active"
+            ? "Close cue preview"
+            : cuePreviewState.phase === "closing"
+              ? "Closing cue…"
+              : "Run cue preview"}
+      </button>
+    </section>
+  {/if}
 
   <footer>
     {#if report?.tray.available === false}

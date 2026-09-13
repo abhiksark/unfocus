@@ -7,6 +7,16 @@ import type {
 import type { StorageLoadHealth } from "./storage-health";
 import { formatGridOffset, type GridPreview } from "./break-grid";
 
+export function preBreakCueAvailable(report: DiagnosticsReport | null): boolean {
+  if (report?.operatingSystem === "macos") {
+    return !report.probeBackend || report.probeBackend.kind === "quartz";
+  }
+  return (
+    report?.probeBackend?.kind === "x11" ||
+    (report?.operatingSystem === "linux" && report.sessionType?.toLowerCase() === "x11")
+  );
+}
+
 /** The saved rhythm line, noting sync only when it is on. */
 export function describeRhythm(settings: ReminderSettings): string {
   const base = `${settings.workMinutes} min focus → ${settings.breakSeconds} sec rest`;
