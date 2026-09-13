@@ -1,6 +1,7 @@
 <!-- src/routes/+page.svelte -->
 
 <script lang="ts">
+  import TrayPanel from "$lib/TrayPanel.svelte";
   import BreakOverlay from "$lib/BreakOverlay.svelte";
   import ConsumerDashboard from "$lib/ConsumerDashboard.svelte";
   import DeveloperDashboard from "$lib/DeveloperDashboard.svelte";
@@ -92,6 +93,8 @@
     "cue-window",
     windowRoute.kind === "cue" || windowRoute.kind === "invalid-cue"
   );
+
+  document.documentElement.classList.toggle("tray-panel-window", windowRoute.kind === "tray-panel");
 
   let dashboardMode = $state<DashboardMode>("consumer");
   let dashboardView = $state<"dashboard" | "history">("dashboard");
@@ -994,7 +997,11 @@
 
 <svelte:window onkeydown={handleSafeModeKeydown} />
 
-{#if cueParameters}
+{#if windowRoute.kind === "tray-panel"}
+  <TrayPanel />
+{:else if windowRoute.kind === "invalid-window"}
+  <main aria-hidden="true"></main>
+{:else if cueParameters}
   <PreBreakCue
     deadlineMs={cueParameters.deadlineMs}
     mode={cueParameters.mode}
@@ -1071,6 +1078,7 @@
 {:else}
   <div class="view-shell" hidden={dashboardView !== "dashboard"}>
     <ConsumerDashboard
+      operatingSystem={report?.operatingSystem ?? null}
       presentation={reminderPresentation}
       {warning}
       {reminderStatus}
@@ -1196,6 +1204,35 @@
     min-width: 320px;
     min-height: 100vh;
     background: var(--bg);
+  }
+
+  :global(html.tray-panel-window),
+  :global(html.tray-panel-window body) {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :global(:root.tray-panel-window) {
+      --bg: #f5f7f4;
+      --line: #dce3dc;
+      --line-2: #c8d2ca;
+      --ink: #1b2920;
+      --ink-2: #4e6155;
+      --ink-3: #617167;
+      --accent: #237541;
+      --warn: #805415;
+    }
+  }
+
+  @media (prefers-color-scheme: light) and (prefers-contrast: more) {
+    :global(:root.tray-panel-window) {
+      --ink-2: #273c2f;
+      --ink-3: #354c3d;
+      --line: #75877a;
+      --line-2: #526e5c;
+    }
   }
 
   :global(html.cue-window),

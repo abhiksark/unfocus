@@ -165,6 +165,7 @@ pub(super) fn order_overlay_panels(windows: &[WebviewWindow]) -> Result<(), Stri
     // transaction here rather than waiting on another main-thread operation.
     owner
         .with_webview(move |platform_webview| {
+            crate::tray::panel::hide_on_main(&panel_app);
             let result = resolve_order_and_focus(
                 labels,
                 &task_cancelled,

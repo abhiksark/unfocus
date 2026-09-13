@@ -1,6 +1,16 @@
 // src-tauri/src/reminder.rs
 
+#[cfg(any(target_os = "macos", test))]
+mod manual_preparation;
 mod schedule;
+#[cfg(target_os = "macos")]
+use manual_preparation::ManualPreparation;
+#[cfg(target_os = "macos")]
+pub(crate) use manual_preparation::ManualPreparationStatus;
+#[cfg(target_os = "macos")]
+use std::sync::atomic::AtomicBool;
+#[cfg(target_os = "macos")]
+type PreparationCache = Arc<Mutex<(ManualPreparationStatus, Instant)>>;
 
 use crate::{
     activity::{
@@ -899,10 +909,14 @@ impl ReminderStatus {
 
 type ReminderActionResponse = Result<TraySnapshot, String>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum ReminderControlCommand {
     Action(ReminderAction),
     SynchronizeSettings,
+    #[cfg(target_os = "macos")]
+    BeginManualPreparation(Arc<AtomicBool>),
+    #[cfg(target_os = "macos")]
+    CancelManualPreparation(u64),
 }
 
 #[derive(Debug)]
@@ -929,6 +943,8 @@ pub(crate) struct ReminderControl {
     action_health: ReminderActionHealth,
     tray_status: TrayStatus,
     next_attempt_id: Arc<AtomicU64>,
+    #[cfg(target_os = "macos")]
+    preparation_status: PreparationCache,
 }
 
 impl ReminderControl {
@@ -940,6 +956,11 @@ impl ReminderControl {
                 action_health: ReminderActionHealth::default(),
                 tray_status,
                 next_attempt_id: Arc::new(AtomicU64::new(0)),
+                #[cfg(target_os = "macos")]
+                preparation_status: Arc::new(Mutex::new((
+                    ManualPreparationStatus::default(),
+                    Instant::now(),
+                ))),
             },
             receiver,
         )
@@ -972,6 +993,61 @@ impl ReminderControl {
             })?;
         let snapshot = response?;
         Ok(ReminderStatus::from_snapshot(snapshot))
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn preparation_status(&self) -> ManualPreparationStatus {
+        let (mut status, sampled_at) = *self
+            .preparation_status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        status.remaining_milliseconds = status.remaining_milliseconds.map(|remaining| {
+            remaining
+                .saturating_sub(u64::try_from(sampled_at.elapsed().as_millis()).unwrap_or(u64::MAX))
+        });
+        status
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn begin_manual_preparation(&self) -> Result<ManualPreparationStatus, String> {
+        self.ensure_action_available(ReminderAction::TakeBreakNow)?;
+        self.request_preparation(ReminderControlCommand::BeginManualPreparation(Arc::new(
+            AtomicBool::new(true),
+        )))
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn cancel_manual_preparation(
+        &self,
+        id: u64,
+    ) -> Result<ManualPreparationStatus, String> {
+        self.request_preparation(ReminderControlCommand::CancelManualPreparation(id))
+    }
+
+    #[cfg(target_os = "macos")]
+    fn request_preparation(
+        &self,
+        command: ReminderControlCommand,
+    ) -> Result<ManualPreparationStatus, String> {
+        let valid = match &command {
+            ReminderControlCommand::BeginManualPreparation(valid) => Some(Arc::clone(valid)),
+            _ => None,
+        };
+        let (response, receiver) = mpsc::sync_channel(1);
+        self.send(ReminderControlRequest {
+            attempt_id: self.next_attempt_id(),
+            command,
+            response: Some(response),
+        })?;
+        receiver
+            .recv_timeout(REMINDER_CONTROL_TIMEOUT)
+            .map_err(|error| {
+                if let Some(valid) = valid {
+                    valid.store(false, Ordering::Release);
+                }
+                format!("reminder scheduler did not answer preparation: {error}")
+            })??;
+        Ok(self.preparation_status())
     }
 
     /// Wake the scheduler after a committed settings mutation without waiting
@@ -1736,6 +1812,8 @@ struct ReminderSchedulerContext {
     receiver: Receiver<ReminderControlRequest>,
     action_health: ReminderActionHealth,
     next_attempt_id: Arc<AtomicU64>,
+    #[cfg(target_os = "macos")]
+    preparation_status: PreparationCache,
     pre_break_cue_controller: PreBreakCueController,
 }
 
@@ -1746,6 +1824,10 @@ struct ReminderScheduler {
     control_connected: bool,
     last_sample: Option<(SystemTime, Duration)>,
     pre_break_cue: PreBreakCue,
+    #[cfg(target_os = "macos")]
+    manual_preparation: ManualPreparation,
+    #[cfg(target_os = "macos")]
+    preparation_request_valid: Option<Arc<AtomicBool>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1817,6 +1899,21 @@ impl ReminderSchedulerRuntime {
         self.timer.as_mut()?.tick(now, wall_now)
     }
 
+    #[cfg(any(target_os = "macos", test))]
+    fn preparation_revision(
+        &self,
+        overlay_active: bool,
+        authoritative_revision: Option<u64>,
+    ) -> Option<(u64, u64)> {
+        self.timer()
+            .filter(|timer| {
+                timer.phase == ReminderPhase::Working
+                    && !overlay_active
+                    && authoritative_revision == Some(self.settings_revision)
+            })
+            .map(|timer| (self.settings_revision, timer.state_revision))
+    }
+
     fn timer(&self) -> Option<&ReminderTimer> {
         self.timer.as_ref()
     }
@@ -1857,6 +1954,10 @@ impl ReminderScheduler {
             started_at,
             runtime,
             control_connected: true,
+            #[cfg(target_os = "macos")]
+            manual_preparation: ManualPreparation::default(),
+            #[cfg(target_os = "macos")]
+            preparation_request_valid: None,
             // Loop-local, not on `ReminderTimer`: the timer stays pure and
             // clock-injected. `None` on the first iteration, so it never
             // rebases before there is a prior sample to diverge from.
@@ -1893,6 +1994,8 @@ impl ReminderScheduler {
         }
         let action_result = self.execute_request(request.as_ref(), now, wall_now);
         self.handle_transition(now, wall_now);
+        #[cfg(target_os = "macos")]
+        self.process_manual_preparation(now, wall_now);
         let snapshot = self.snapshot_and_reconcile_cue(now, wall_now, &probes);
         self.context.tray_status.publish(snapshot.clone());
         Self::respond_to_request(request, action_result, snapshot);
@@ -1908,19 +2011,27 @@ impl ReminderScheduler {
             Err(RecvTimeoutError::Timeout) => None,
             Err(RecvTimeoutError::Disconnected) => {
                 self.control_connected = false;
+                #[cfg(target_os = "macos")]
+                self.manual_preparation.clear();
                 None
             }
         }
     }
 
     fn apply_latest_settings(&mut self, now: Duration, wall_now: SystemTime) {
-        reconcile_scheduler_iteration(
+        let reconciliation = reconcile_scheduler_iteration(
             &mut self.runtime,
             self.context.settings_manager.authoritative_snapshot(),
             now,
             wall_now,
             self.started_at,
         );
+        #[cfg(target_os = "macos")]
+        if reconciliation != SettingsReconciliation::Unchanged {
+            self.manual_preparation.clear();
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = reconciliation;
     }
 
     fn observe_activity(&self) -> ProbeSnapshot {
@@ -1951,6 +2062,11 @@ impl ReminderScheduler {
                 i64::try_from(now.saturating_sub(prev_mono).as_millis()).unwrap_or(i64::MAX);
             let tolerance_ms =
                 i64::try_from(CLOCK_DIVERGENCE_TOLERANCE.as_millis()).unwrap_or(i64::MAX);
+            #[cfg(target_os = "macos")]
+            if wall_delta_ms.abs_diff(mono_delta_ms) > 1_000 || mono_delta_ms > 1_000 {
+                // A three-second request must not replay after a stalled/suspended loop.
+                self.manual_preparation.clear();
+            }
             if wall_delta_ms.abs_diff(mono_delta_ms) > tolerance_ms.unsigned_abs() {
                 if let Some(timer) = self.runtime.timer_mut() {
                     timer.rebase_work_deadline(wall_now);
@@ -1968,12 +2084,18 @@ impl ReminderScheduler {
         wall_now: SystemTime,
     ) -> Option<Result<(), String>> {
         let request = request?;
+        #[cfg(target_os = "macos")]
+        let settings_revision = self.runtime.settings_revision;
+        #[cfg(target_os = "macos")]
+        if matches!(request.command, ReminderControlCommand::Action(_)) {
+            self.manual_preparation.clear();
+        }
         let Some(timer) = self.runtime.timer_mut() else {
             return Some(Err(
                 "automatic reminders are unavailable until saved timing is recovered".into(),
             ));
         };
-        match request.command {
+        match request.command.clone() {
             ReminderControlCommand::Action(action) => {
                 let result = if let ReminderAction::SkipCue(run_id) = action {
                     self.skip_cue(run_id, now, wall_now)
@@ -1999,6 +2121,30 @@ impl ReminderScheduler {
                 Some(result)
             }
             ReminderControlCommand::SynchronizeSettings => Some(Ok(())),
+            #[cfg(target_os = "macos")]
+            ReminderControlCommand::BeginManualPreparation(valid) => {
+                if !valid.load(Ordering::Acquire) {
+                    return Some(Err(
+                        "break preparation request expired before acceptance".into()
+                    ));
+                }
+                if timer.phase != ReminderPhase::Working
+                    || self.context.overlay_controller.has_active_run()
+                {
+                    return Some(Err("a break cannot be prepared in the current state".into()));
+                }
+                if self.manual_preparation.status(now).request_id.is_none() {
+                    self.preparation_request_valid = Some(valid);
+                }
+                Some(
+                    self.manual_preparation
+                        .begin(now, (settings_revision, timer.state_revision)),
+                )
+            }
+            #[cfg(target_os = "macos")]
+            ReminderControlCommand::CancelManualPreparation(id) => {
+                Some(self.manual_preparation.cancel(id))
+            }
         }
     }
 
@@ -2044,6 +2190,8 @@ impl ReminderScheduler {
     }
 
     fn start_scheduled_break(&mut self, now: Duration, wall_now: SystemTime) {
+        #[cfg(target_os = "macos")]
+        self.manual_preparation.clear();
         let Some(timer) = self.runtime.timer_mut() else {
             return;
         };
@@ -2082,6 +2230,57 @@ impl ReminderScheduler {
             let credited = timer.credit_natural_break(now, wall_now);
             debug_assert!(credited);
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn process_manual_preparation(&mut self, now: Duration, wall_now: SystemTime) {
+        let revision = self.runtime.preparation_revision(
+            self.context.overlay_controller.has_active_run(),
+            self.context
+                .settings_manager
+                .authoritative_snapshot()
+                .filter(|_| self.control_connected)
+                .map(|latest| latest.revision),
+        );
+        self.manual_preparation.reconcile(revision);
+        if self
+            .preparation_request_valid
+            .as_ref()
+            .is_some_and(|valid| !valid.load(Ordering::Acquire))
+        {
+            self.manual_preparation.clear();
+        }
+        if self.manual_preparation.take_due(now) {
+            self.pre_break_cue
+                .cancel(&self.context.app, "manual break preparation completed");
+            if let Some(timer) = self.runtime.timer_mut() {
+                let result = execute_reminder_action(
+                    ReminderAction::TakeBreakNow,
+                    now,
+                    wall_now,
+                    timer,
+                    &self.context.settings_manager,
+                    &self.context.app,
+                    &self.context.overlay_controller,
+                    &self.context.break_ledger,
+                );
+                let attempt_id = self
+                    .context
+                    .next_attempt_id
+                    .fetch_add(1, Ordering::Relaxed)
+                    .wrapping_add(1);
+                match result {
+                    Ok(()) => self.context.action_health.clear(attempt_id),
+                    Err(error) => self.context.action_health.record_failure(attempt_id, error),
+                }
+            }
+        }
+        *self
+            .context
+            .preparation_status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) =
+            (self.manual_preparation.status(now), Instant::now());
     }
 
     fn snapshot_and_reconcile_cue(
@@ -2185,6 +2384,8 @@ pub(crate) fn start_scheduler(
         receiver,
         action_health: control.action_health.clone(),
         next_attempt_id: Arc::clone(&control.next_attempt_id),
+        #[cfg(target_os = "macos")]
+        preparation_status: Arc::clone(&control.preparation_status),
         pre_break_cue_controller: presentation_controllers.pre_break_cue,
     };
     std::thread::Builder::new()
@@ -2199,6 +2400,86 @@ mod tests {
     use serde_json::json;
 
     static TEST_DIRECTORY_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn manual_preparation_cancel_and_failed_overlay_preserve_the_timer() {
+        let mut preparation = manual_preparation::ManualPreparation::default();
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20), UNIX_EPOCH);
+        let original = timer.tray_snapshot(Duration::ZERO, UNIX_EPOCH, 0, false);
+        preparation
+            .begin(Duration::ZERO, (0, timer.state_revision))
+            .unwrap();
+        let id = preparation.status(Duration::ZERO).request_id.unwrap();
+        preparation.cancel(id).unwrap();
+        assert_eq!(
+            timer.tray_snapshot(Duration::ZERO, UNIX_EPOCH, 0, false),
+            original
+        );
+        preparation
+            .begin(Duration::ZERO, (0, timer.state_revision))
+            .unwrap();
+        assert!(preparation.take_due(Duration::from_secs(3)));
+        assert!(
+            start_manual_break(&mut timer, Duration::from_secs(3), |_| Err(
+                "overlay failed".into()
+            ))
+            .is_err()
+        );
+        assert_eq!(
+            timer.tray_snapshot(Duration::ZERO, UNIX_EPOCH, 0, false),
+            original
+        );
+        assert!(!preparation.take_due(Duration::from_secs(4)));
+    }
+
+    #[test]
+    fn manual_preparation_scheduler_eligibility_rejects_collisions_and_mutations() {
+        let mut runtime = ReminderSchedulerRuntime {
+            timer: Some(ReminderTimer::new(
+                Duration::ZERO,
+                settings(1, 20),
+                UNIX_EPOCH,
+            )),
+            settings_revision: 4,
+        };
+        assert_eq!(runtime.preparation_revision(false, Some(4)), Some((4, 0)));
+        assert_eq!(runtime.preparation_revision(true, Some(4)), None);
+        assert_eq!(runtime.preparation_revision(false, None), None);
+        assert_eq!(runtime.preparation_revision(false, Some(5)), None);
+        let mut preparation = manual_preparation::ManualPreparation::default();
+        preparation
+            .begin(
+                Duration::from_secs(57),
+                runtime.preparation_revision(false, Some(4)).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            runtime.tick(
+                Duration::from_secs(60),
+                UNIX_EPOCH + Duration::from_secs(60)
+            ),
+            Some(ReminderTransition::StartBreak)
+        );
+        preparation.reconcile(runtime.preparation_revision(false, Some(4)));
+        assert!(!preparation.take_due(Duration::from_secs(60)));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 20), UNIX_EPOCH);
+        assert!(timer.pause(Duration::from_secs(1)));
+        runtime.timer = Some(timer);
+        assert_eq!(runtime.preparation_revision(false, Some(4)), None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn manual_preparation_unavailable_or_disconnected_control_is_rejected() {
+        let (control, receiver) = ReminderControl::channel(TrayStatus::default());
+        drop(receiver);
+        assert!(control.begin_manual_preparation().is_err());
+        assert!(control.cancel_manual_preparation(1).is_err());
+        assert_eq!(
+            control.preparation_status(),
+            ManualPreparationStatus::default()
+        );
+    }
 
     struct TestDirectory {
         path: PathBuf,

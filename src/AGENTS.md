@@ -75,6 +75,12 @@ as `export let` or `$:` reactive statements.
 
 ## Window routing and native events
 
+- `tray-panel` renders only `TrayPanel` on its native macOS window, with no
+  dashboard polling or preference initialization. Its visible-only status
+  reads and display clock cannot execute a break. Opening generations fence
+  stale responses; only the initiating opening shows the three-second
+  countdown and Cancel. Reopening a pending request shows normal status with
+  Take a break disabled. Unknown window labels render an inert surface.
 - Window labels route rendering:
   `overlay-<run>-<index>-<count>-<duration>-<deadline>` renders `BreakOverlay`,
   `cue-<run>-<deadline>` renders a scheduled `PreBreakCue`,

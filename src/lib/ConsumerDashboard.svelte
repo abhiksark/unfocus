@@ -102,6 +102,7 @@
     onTakeBreak: () => void;
     onPauseAction: () => void;
     onPreview: () => void;
+    operatingSystem?: string | null;
     onToggleTimingEditor: () => void;
     onWorkMinutesInput: (value: string) => void;
     onBreakSecondsInput: (value: string) => void;
@@ -162,6 +163,7 @@
     onTakeBreak,
     onPauseAction,
     onPreview,
+    operatingSystem = null,
     onToggleTimingEditor,
     onWorkMinutesInput,
     onBreakSecondsInput,
@@ -411,9 +413,11 @@
       >
         {timingEditorExpanded ? "Close" : "Edit timing"}
       </button>
-      <button class="btn-text" type="button" onclick={onPreview} disabled={previewDisabled}>
-        {previewLabel}
-      </button>
+      {#if operatingSystem !== null && operatingSystem !== "macos"}
+        <button class="btn-text" type="button" onclick={onPreview} disabled={previewDisabled}>
+          {previewLabel}
+        </button>
+      {/if}
     </div>
 
     {#if settingsRecovery.unavailable}

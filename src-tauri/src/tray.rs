@@ -1,4 +1,5 @@
 mod model;
+pub(crate) mod panel;
 
 pub(crate) use model::{TrayPhase, TraySnapshot, TrayStatus};
 
@@ -386,8 +387,30 @@ fn install_controller(
     let icon = Image::from_bytes(TRAY_ICON)?;
     let builder = TrayIconBuilder::new()
         .icon(icon)
-        .icon_as_template(cfg!(target_os = "macos"))
-        .menu(&menu);
+        .icon_as_template(cfg!(target_os = "macos"));
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.menu(&menu);
+    #[cfg(target_os = "macos")]
+    let builder = if let Err(error) = panel::install(app.handle()) {
+        eprintln!("Tray panel creation failed: {error}; using native menu");
+        builder.menu(&menu)
+    } else {
+        builder.on_tray_icon_event(|tray, event| {
+            if matches!(
+                event,
+                tauri::tray::TrayIconEvent::Click {
+                    button: tauri::tray::MouseButton::Left | tauri::tray::MouseButton::Right,
+                    button_state: tauri::tray::MouseButtonState::Up,
+                    ..
+                }
+            ) {
+                if let Err(error) = panel::toggle(tray) {
+                    eprintln!("Tray panel failed: {error}");
+                    reveal_dashboard(tray.app_handle());
+                }
+            }
+        })
+    };
 
     // The locked Linux tray backend explicitly does not support tooltips or
     // programmable left-click menu behavior. Required information therefore
@@ -396,19 +419,38 @@ fn install_controller(
     #[cfg(not(target_os = "linux"))]
     let builder = builder
         .tooltip("Unfocus eye-break reminder")
-        .show_menu_on_left_click(false);
+        .show_menu_on_left_click(cfg!(target_os = "macos"));
 
     let tray = builder
         .on_menu_event(|app, event| handle_tray_menu_event(app, event.id.as_ref()))
         .build(app)?;
+    #[cfg(target_os = "macos")]
+    if let Err(error) = tray.with_inner_tray_icon(|inner| {
+        use tauri_nspanel::{objc2_app_kit::NSAccessibility, objc2_foundation::NSString};
+        if let Some(item) = inner.ns_status_item() {
+            if let Some(button) =
+                tauri_nspanel::objc2::MainThreadMarker::new().and_then(|marker| item.button(marker))
+            {
+                button
+                    .setAccessibilityLabel(Some(&NSString::from_str("Unfocus eye-break reminder")));
+            }
+        }
+    }) {
+        app.remove_tray_by_id(tray.id());
+        return Err(error);
+    }
     health.mark_installed();
 
     let subscription = tray_status.subscribe();
     let worker_menu = mutable_menu.clone();
     let worker_health = health.clone();
-    std::thread::Builder::new()
+    if let Err(error) = std::thread::Builder::new()
         .name("unfocus-tray-status".into())
-        .spawn(move || run_status_worker(worker_menu, subscription, worker_health))?;
+        .spawn(move || run_status_worker(worker_menu, subscription, worker_health))
+    {
+        app.remove_tray_by_id(tray.id());
+        return Err(error.into());
+    }
 
     Ok(TrayController {
         _tray: tray,
