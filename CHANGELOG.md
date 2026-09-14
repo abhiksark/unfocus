@@ -7,7 +7,7 @@ released versions link to their GitHub release.
 
 ## [Unreleased]
 
-## [0.7.0-beta.1] - 2026-09-14
+## [0.7.0-beta.2] - 2026-09-14
 
 ### Added
 
@@ -57,6 +57,11 @@ released versions link to their GitHub release.
   keyboard focus, so Space and Escape can dismiss the screen without a prior
   click. Closing a break releases its native panel focus, and early dismissal
   cannot be overwritten by late startup registration.
+
+## [0.7.0-beta.1] - 2026-09-14
+
+Tagged but unpublished. Its changes are included in and superseded by
+[0.7.0-beta.2].
 
 ## [0.6.0-beta.2] - 2026-08-24
 
@@ -376,7 +381,8 @@ changes are included in and superseded by [0.4.0-alpha.1].
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
-[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.7.0-beta.1...HEAD
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.7.0-beta.2...HEAD
+[0.7.0-beta.2]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.2...v0.7.0-beta.2
 [0.7.0-beta.1]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.2...v0.7.0-beta.1
 [0.6.0-beta.2]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.1...v0.6.0-beta.2
 [0.6.0-beta.1]: https://github.com/abhiksark/unfocus/compare/v0.5.0-alpha.1...v0.6.0-beta.1
