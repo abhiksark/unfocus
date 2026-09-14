@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// scripts/inspect-linux-packages.js
 
 import { createHash } from "node:crypto";
 import {
@@ -956,7 +957,7 @@ export function parseRpmLayout(text) {
       throw new Error(`RPM package entry ${path} has invalid metadata`);
     }
     const expectedMode =
-      path === "/usr/lib/Unfocus" ? 0o040755 : path === "/usr/bin/unfocus" ? 0o100775 : 0o100664;
+      path === "/usr/lib/Unfocus" ? 0o040755 : path === "/usr/bin/unfocus" ? 0o100755 : 0o100644;
     if (mode !== expectedMode) {
       throw new Error(`RPM package entry ${path} has the wrong file type or permissions`);
     }
