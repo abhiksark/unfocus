@@ -133,7 +133,7 @@
   }: Props = $props();
 
   const isMac = $derived(report?.operatingSystem === "macos");
-  const showCuePreview = $derived(isMac && developerCuePreviewVisible(report));
+  const showCuePreview = $derived(developerCuePreviewVisible(report));
   const health = $derived(diagnosticsHealth(report, diagnosticsError));
   const healthLabel = $derived(diagnosticsHealthLabel(health));
   const backend = $derived(probeBackend(report));
@@ -587,10 +587,10 @@
   {#if showCuePreview}
     <section class="test-panel">
       <div>
-        <p class="eyebrow">macOS cue preview</p>
-        <h2>Preview the notch cue</h2>
+        <p class="eyebrow">Pre-break cue preview</p>
+        <h2>Preview the break cue</h2>
         <p>
-          Opens the 17-second cue in its native macOS window. Skip dismisses only this preview. It does not change
+          Opens the 17-second cue in its native window. Skip dismisses only this preview. It does not change
           reminder timing, saved settings, probes, overlays, or reflection data.
         </p>
       </div>

@@ -1,3 +1,5 @@
+// src/lib/developer-cue-preview.test.ts
+
 import { describe, expect, test } from "bun:test";
 import type { DiagnosticsReport } from "./diagnostics";
 import * as developerCuePreviewModule from "./developer-cue-preview";
@@ -86,8 +88,10 @@ const macReport: DiagnosticsReport = {
 };
 
 describe("developer pre-break cue preview", () => {
-  test("is visible only when diagnostics identify macOS", () => {
+  test("is visible on macOS and qualified X11, but not Wayland or unknown Linux", () => {
     expect(developerCuePreviewVisible(macReport)).toBe(true);
+    expect(developerCuePreviewVisible({ ...macReport, operatingSystem: "linux", sessionType: "x11" })).toBe(true);
+    expect(developerCuePreviewVisible({ ...macReport, operatingSystem: "linux", sessionType: "wayland" })).toBe(false);
     expect(developerCuePreviewVisible({ ...macReport, operatingSystem: "linux" })).toBe(false);
     expect(developerCuePreviewVisible(null)).toBe(false);
   });

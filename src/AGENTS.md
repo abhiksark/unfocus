@@ -1,3 +1,5 @@
+<!-- src/AGENTS.md -->
+
 # Frontend
 
 This file applies to `src/**` and frontend assets in `static/fonts/**`. Follow
@@ -96,7 +98,7 @@ as `export let` or `$:` reactive statements.
   readiness; page load does not guarantee a mounted keyboard handler or a
   decoded first frame. On macOS, the first overlay receives native keyboard
   focus only after all scenes are ready; the notch cue still never takes focus.
-- Before a macOS reveal, `prepare_pre_break_cue` returns native display layout
+- Before a cue reveal, `prepare_pre_break_cue` returns native display layout
   while the window is hidden. Apply it and paint before requesting visibility;
   discard stale preparations after cancellation. Layout never comes from a label.
 - `PreBreakCue` invokes `set_pre_break_cue_visibility` only when its visible
@@ -112,10 +114,10 @@ as `export let` or `$:` reactive statements.
   skip confirms for 450 ms and retracts for 350 ms; a failed request never claims
   success. Preview skips only dismiss that preview; scheduled skips preserve
   the following break deadline. Qualified
-  X11 keeps its 456×160 primary-display card and visible countdown. Do not
-  merge these presentation paths or infer macOS qualification from this code.
-- The macOS-only Developer preview has the fixed 17-second `4 + 2 + 10 + 1`
-  heads-up/quiet/horizon/handoff lifecycle. It is main-window-only and must
+  X11 uses the same compact 200×36 pill on the primary display, 12 logical
+  points below the work-area top. Do not infer macOS qualification from this code.
+- The macOS and qualified X11 Developer preview has the fixed 17-second
+  `4 + 2 + 10 + 1` heads-up/quiet/horizon/handoff lifecycle. It is main-window-only and must
   not change reminder timing, probe behavior, overlays, settings, or
   reflection data. A scheduled cue preempts a preview; an active overlay
   prevents a preview from starting.

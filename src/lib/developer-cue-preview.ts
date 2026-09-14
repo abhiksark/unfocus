@@ -1,3 +1,6 @@
+// src/lib/developer-cue-preview.ts
+
+import { preBreakCueAvailable } from "./consumer-dashboard";
 import type { DiagnosticsReport } from "./diagnostics";
 
 export type DeveloperCuePreviewPhase = "idle" | "opening" | "active" | "closing";
@@ -10,7 +13,7 @@ export type DeveloperCuePreviewState = {
 };
 
 export function developerCuePreviewVisible(report: DiagnosticsReport | null): boolean {
-  return report?.operatingSystem === "macos";
+  return preBreakCueAvailable(report);
 }
 
 export function initialDeveloperCuePreviewState(): DeveloperCuePreviewState {

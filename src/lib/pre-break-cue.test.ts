@@ -116,7 +116,7 @@ describe("pre-break cue", () => {
     expect(preBreakCueAnimationDelayMs(6_250, "preview")).toBe(-4_750);
   });
 
-  test("uses compact notch copy and counts down without changing the Linux model", () => {
+  test("uses compact notch copy and counts down", () => {
     const deadline = 100_000;
     expect(preBreakCueViewFromPresentation("macos", preBreakCuePresentation(deadline, 40_000))).toEqual({
       surface: "notch", title: "Break in 1m", support: null, countdown: null
@@ -134,66 +134,15 @@ describe("pre-break cue", () => {
     expect(preBreakCueViewFromPresentation("macos", preBreakCuePresentation(17_000, 16_000, "preview"), "preview").countdown).toBeNull();
   });
 
-  test("preserves the Ubuntu X11 card copy and numeric final countdown", () => {
-    const deadline = 100_000;
-    expect(
-      preBreakCueViewFromPresentation(
-        "linux",
-        preBreakCuePresentation(deadline, 40_000)
-      )
-    ).toEqual({
-      surface: "card",
-      title: "Eye break in 1 minute",
-      support: "Finish your thought.",
-      countdown: null
-    });
-    expect(
-      preBreakCueViewFromPresentation(
-        "linux",
-        preBreakCuePresentation(deadline, 92_250)
-      )
-    ).toEqual({
-      surface: "card",
-      title: "Eye break",
-      support: "Finish your thought.",
-      countdown: 8
-    });
-    expect(
-      preBreakCueViewFromPresentation(
-        "linux",
-        preBreakCuePresentation(deadline, 100_000)
-      )
-    ).toEqual({
-      surface: "card",
-      title: "Look away",
-      support: "Rest your focus beyond the screen.",
-      countdown: null
-    });
-  });
-
-  test("feeds the preserved Ubuntu X11 view model into the Linux markup", async () => {
-    const source = await Bun.file(new URL("./PreBreakCue.svelte", import.meta.url)).text();
-    const linuxBranch =
-      source.split('{:else}\n      <div\n        class="cue-card"')[1]?.split("    {/if}")[0] ??
-      "";
-
-    expect(linuxBranch).toContain("{view.title}");
-    expect(linuxBranch).toContain("{view.support}");
-    expect(linuxBranch).toContain("{view.countdown}");
-  });
-
-  test("uses one fixed premium-hybrid card without a progress rail, expanding shell, or blur", async () => {
-    const source = await Bun.file(new URL("./PreBreakCue.svelte", import.meta.url)).text();
-
-    expect(source).toContain("width: min(336px, calc(100vw - 40px))");
-    expect(source).toContain("height: min(68px, calc(100vh - 40px))");
-    expect(source).toContain("border-radius: 24px");
-    expect(source).toContain("{#if nativeVisible}");
-    expect(source).toContain('invoke("set_pre_break_cue_visibility", { visible })');
-    expect(source).toContain("animation: cue-card-arrive 160ms ease both");
-    expect(source).not.toContain("cue-progress");
-    expect(source).not.toContain("class:countdown");
-    expect(source).not.toMatch(/^\s+filter:/m);
+  test("Linux shares the compact countdown, including the preview handoff second", () => {
+    for (const mode of ["scheduled", "preview"] as const) {
+      for (const now of [0, 1_000, 4_000, 6_000, 10_000, 16_000, 17_000]) {
+        const presentation = preBreakCuePresentation(17_000, now, mode);
+        const mac = preBreakCueViewFromPresentation("macos", presentation, mode);
+        expect(preBreakCueViewFromPresentation("linux", presentation, mode))
+          .toEqual({ ...mac, surface: "pill" });
+      }
+    }
   });
 
   test("reserves the physical camera gap and prepares native geometry before reveal", async () => {
@@ -227,15 +176,6 @@ describe("pre-break cue", () => {
 
     expect(source).toContain("$effect.pre(() =>");
     expect(source).toContain("animationDelayMs = preBreakCueAnimationDelayMs(remainingMs, mode)");
-  });
-
-  test("keeps reduced motion to short opacity and color fades", async () => {
-    const source = await Bun.file(new URL("./PreBreakCue.svelte", import.meta.url)).text();
-    const reducedMotion = source.split("@media (prefers-reduced-motion: reduce)")[1];
-
-    expect(reducedMotion).toContain("animation: cue-card-arrive 120ms linear both");
-    expect(reducedMotion).toContain("border-color 120ms linear");
-    expect(reducedMotion).not.toContain("blur");
   });
 
   test("keeps reduced-motion macOS transitions to a short opacity fade", async () => {

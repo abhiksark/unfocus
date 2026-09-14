@@ -47,13 +47,14 @@ interface to watch. When a break is due, Unfocus places the same calm, static
 landscape across every monitor and asks you to focus on something far away. As
 the break ends, a warm amber light signals that it is time to return.
 
-On qualified Ubuntu X11 sessions, an optional click-through card appears
+On qualified Ubuntu X11 sessions, an optional compact pill appears
 briefly on the primary display one minute before a scheduled break, clears out
 of the way, then returns for the final ten-second countdown. At zero it stays
-visible until the full break scene is ready. On macOS Preview builds, the same
-optional cue expands black wings around the camera notch on the display you
+visible until the full break scene is ready, then retracts. On macOS Preview
+builds, the same optional cue expands black wings around the camera notch on the display you
 are using, with an empty mint countdown ring and soft-white timing. Displays
-without a notch use a compact top-center pill. The small skip-forward button beside
+without a notch use the same compact pill as X11. Both presentations share the
+countdown ring and skip confirmation. The small skip-forward button beside
 the timing skips this break and keeps the following break on schedule. It briefly
 confirms “Skipped,” then retracts. Only that target accepts clicks; the panel
 does not activate or take keyboard focus.
@@ -68,8 +69,8 @@ history to control the reminder timer.
 
 - Covers every monitor with a synchronized full-screen break
 - Gives scheduled breaks an optional pre-break cue:
-  a card and final ten-second countdown on qualified Ubuntu X11, or notch
-  wings with a final countdown and compact skip control on the active display in macOS Preview
+  a compact pill on qualified Ubuntu X11, or notch wings on the active display
+  in macOS Preview, both with a countdown ring and skip control
 - Uses a bundled, first-party landscape that stays still throughout the break
 - Selects one cool-biased palette from local device time and holds it across
   every display; amber light signals that the break is nearly complete
