@@ -1,6 +1,10 @@
 use crate::{
+    activity::ActivityTrackerHandle,
     authorize_main_caller,
-    probes::{probe_backend, ProbeBackend, ProbeCache},
+    break_ledger::BreakLedgerHandle,
+    probes::{probe_backend, ProbeBackend, ProbeCache, ProbeReading},
+    reminder::ReminderSettingsManager,
+    storage_recovery::StorageDiagnostic,
     tray::{TrayDiagnostics, TrayRuntime},
 };
 use serde::Serialize;
@@ -20,6 +24,22 @@ struct MonitorReport {
     scale_factor: f64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum ProbeDiagnosticStatus {
+    Pending,
+    Available,
+    Failed,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StorageDiagnostics {
+    activity_history: StorageDiagnostic,
+    break_ledger: StorageDiagnostic,
+    reminder_settings: StorageDiagnostic,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DiagnosticsReport {
@@ -31,10 +51,23 @@ pub(crate) struct DiagnosticsReport {
     monitor_error: Option<String>,
     idle_seconds: Option<u64>,
     idle_error: Option<String>,
+    idle_status: ProbeDiagnosticStatus,
     active_window_fullscreen: Option<bool>,
     fullscreen_error: Option<String>,
+    fullscreen_status: ProbeDiagnosticStatus,
     probe_backend: ProbeBackend,
+    storage: StorageDiagnostics,
     tray: TrayDiagnostics,
+}
+
+fn diagnostic_probe<T>(
+    reading: ProbeReading<T>,
+) -> (Option<T>, Option<String>, ProbeDiagnosticStatus) {
+    match reading {
+        ProbeReading::Pending => (None, None, ProbeDiagnosticStatus::Pending),
+        ProbeReading::Available(value) => (Some(value), None, ProbeDiagnosticStatus::Available),
+        ProbeReading::Failed(error) => (None, Some(error), ProbeDiagnosticStatus::Failed),
+    }
 }
 
 fn environment_value(key: &str) -> Option<String> {
@@ -99,6 +132,9 @@ fn monitor_report(
 pub(crate) fn get_diagnostics(
     window: WebviewWindow,
     probe_cache: State<'_, ProbeCache>,
+    activity_tracker: State<'_, ActivityTrackerHandle>,
+    break_ledger: State<'_, BreakLedgerHandle>,
+    reminder_settings: State<'_, ReminderSettingsManager>,
     tray_runtime: State<'_, TrayRuntime>,
 ) -> Result<DiagnosticsReport, String> {
     authorize_main_caller(window.label())?;
@@ -131,14 +167,9 @@ pub(crate) fn get_diagnostics(
     };
 
     let probes = probe_cache.snapshot();
-    let (idle_seconds, idle_error) = match probes.idle_seconds {
-        Ok(seconds) => (Some(seconds), None),
-        Err(error) => (None, Some(error)),
-    };
-    let (active_window_fullscreen, fullscreen_error) = match probes.active_window_fullscreen {
-        Ok(fullscreen) => (Some(fullscreen), None),
-        Err(error) => (None, Some(error)),
-    };
+    let (idle_seconds, idle_error, idle_status) = diagnostic_probe(probes.idle_seconds);
+    let (active_window_fullscreen, fullscreen_error, fullscreen_status) =
+        diagnostic_probe(probes.active_window_fullscreen);
 
     Ok(DiagnosticsReport {
         operating_system: std::env::consts::OS,
@@ -149,9 +180,16 @@ pub(crate) fn get_diagnostics(
         monitor_error,
         idle_seconds,
         idle_error,
+        idle_status,
         active_window_fullscreen,
         fullscreen_error,
+        fullscreen_status,
         probe_backend: probe_backend(),
+        storage: StorageDiagnostics {
+            activity_history: activity_tracker.diagnostics(),
+            break_ledger: break_ledger.diagnostics(),
+            reminder_settings: reminder_settings.diagnostics(),
+        },
         tray: tray_runtime.diagnostics(),
     })
 }
@@ -159,6 +197,29 @@ pub(crate) fn get_diagnostics(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pending_probes_are_diagnostic_state_not_technical_errors() {
+        let (value, error, status) = diagnostic_probe::<u64>(ProbeReading::Pending);
+
+        assert_eq!(value, None);
+        assert_eq!(error, None);
+        assert_eq!(status, ProbeDiagnosticStatus::Pending);
+    }
+
+    #[test]
+    fn failed_and_available_probes_remain_distinct_in_diagnostics() {
+        let (value, error, status) =
+            diagnostic_probe::<u64>(ProbeReading::Failed("idle failed".into()));
+        assert_eq!(value, None);
+        assert_eq!(error.as_deref(), Some("idle failed"));
+        assert_eq!(status, ProbeDiagnosticStatus::Failed);
+
+        let (value, error, status) = diagnostic_probe(ProbeReading::Available(0_u64));
+        assert_eq!(value, Some(0));
+        assert_eq!(error, None);
+        assert_eq!(status, ProbeDiagnosticStatus::Available);
+    }
 
     #[test]
     fn monitor_reports_preserve_physical_topology() {

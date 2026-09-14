@@ -48,12 +48,19 @@ function sha256(path) {
 
 export function verifyChecksums(directory, expectedNames) {
   const checksumPath = join(directory, "SHA256SUMS");
-  const lines = readFileSync(checksumPath, "utf8").trimEnd().split("\n");
+  const expectedBytes = expectedNames.reduce((total, name) => total + 67 + Buffer.byteLength(name), 0);
+  const checksumStat = existsSync(checksumPath) ? lstatSync(checksumPath) : undefined;
+  if (!checksumStat?.isFile() || checksumStat.size !== expectedBytes) {
+    throw new Error("SHA256SUMS must have the canonical size with one trailing LF");
+  }
+  const checksumText = readFileSync(checksumPath, "utf8");
+  const lines = checksumText.trimEnd().split("\n");
   if (lines.length !== expectedNames.length) {
     throw new Error(`SHA256SUMS contains ${lines.length} entries, expected ${expectedNames.length}`);
   }
 
   const seen = new Set();
+  const actualHashes = new Map();
   for (const line of lines) {
     const match = /^([0-9a-f]{64})  ([^\r\n]+)$/.exec(line);
     if (!match) throw new Error(`malformed SHA256SUMS line: ${line}`);
@@ -64,12 +71,21 @@ export function verifyChecksums(directory, expectedNames) {
     const path = join(directory, name);
     if (!existsSync(path) || !lstatSync(path).isFile()) throw new Error(`checksummed asset is missing: ${name}`);
     const actualHash = sha256(path);
+    actualHashes.set(name, actualHash);
     if (actualHash !== expectedHash) {
       throw new Error(`${name} checksum is ${actualHash}, expected ${expectedHash}`);
     }
   }
   for (const name of expectedNames) {
     if (!seen.has(name)) throw new Error(`SHA256SUMS is missing ${name}`);
+  }
+
+  const canonicalText = [...expectedNames]
+    .sort()
+    .map((name) => `${actualHashes.get(name)}  ${name}`)
+    .join("\n") + "\n";
+  if (checksumText !== canonicalText) {
+    throw new Error("SHA256SUMS must be sorted canonical GNU checksum text with one trailing LF");
   }
 }
 

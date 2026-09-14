@@ -21,21 +21,31 @@ env:
   RUST_VERSION: 1.98.0
 
 jobs:
-  quality:
-    runs-on: ubuntu-22.04
+  release-context:
+    runs-on: ubuntu-24.04
+    outputs:
+      channel: ${{ steps.context.outputs.channel }}
+      tag: ${{ steps.context.outputs.tag }}
+      version: ${{ steps.context.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Validate the release invocation
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+          no-cache: true
+
+      - name: Derive immutable release context
+        id: context
         env:
           BASE_REF: ${{ github.base_ref }}
           EVENT_NAME: ${{ github.event_name }}
           HEAD_REF: ${{ github.head_ref }}
           HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
           REHEARSAL: ${{ inputs.rehearsal }}
           REPOSITORY: ${{ github.repository }}
         run: |
@@ -49,6 +59,29 @@ jobs:
             echo "Publishing release builds require a v-prefixed tag push." >&2
             exit 1
           fi
+
+          VERSION=$(bun -e 'console.log(JSON.parse(await Bun.file("package.json").text()).version)')
+          CHANNEL=$(bun -e 'import { releaseChannel } from "./scripts/linux-update-envelope.js"; console.log(releaseChannel(process.argv[1]))' "$VERSION")
+          TAG="v$VERSION"
+          if [ "$REHEARSAL" != true ] && [ "$REF_NAME" != "$TAG" ]; then
+            echo "Release tag $REF_NAME does not match declared version $TAG." >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  quality:
+    needs: release-context
+    runs-on: ubuntu-22.04
+    env:
+      RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Require the tagged commit to belong to main
         if: ${{ !inputs.rehearsal }}
@@ -68,7 +101,7 @@ jobs:
       - name: Tag matches the declared version
         if: ${{ !inputs.rehearsal }}
         env:
-          EXPECTED_TAG: ${{ github.ref_name }}
+          EXPECTED_TAG: ${{ needs.release-context.outputs.tag }}
         run: bun run scripts/version.js check --expect "$EXPECTED_TAG"
 
       - name: Rehearsal version declarations agree
@@ -80,14 +113,8 @@ jobs:
 
       - name: Compose release notes
         env:
-          REHEARSAL: ${{ inputs.rehearsal }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          if [ "$REHEARSAL" = true ]; then
-            TAG="v$(bun -e 'console.log(require("./package.json").version)')"
-          fi
-          bun run release:notes "$TAG" > /dev/null
+          TAG: ${{ needs.release-context.outputs.tag }}
+        run: bun run release:notes "$TAG" > /dev/null
 
       - name: Refuse to mutate an existing published release
         if: ${{ !inputs.rehearsal }}
@@ -144,7 +171,10 @@ jobs:
           compression-level: 0
 
   build:
-    needs: quality
+    needs: [quality, release-context]
+    env:
+      RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -236,8 +266,11 @@ jobs:
           compression-level: 0
 
   assemble:
-    needs: build
+    needs: [build, release-context]
     runs-on: ubuntu-24.04
+    env:
+      RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -257,7 +290,7 @@ jobs:
           path: release-downloads
 
       - name: Assemble and verify the release candidate
-        run: bun run release:assemble release-downloads release-assets
+        run: bun run release:assemble release-downloads release-assets "$RELEASE_VERSION"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -267,11 +300,117 @@ jobs:
           retention-days: 7
           compression-level: 0
 
-  publish:
-    needs: assemble
-    if: ${{ !inputs.rehearsal && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+  validate-linux-packages:
+    needs: [assemble, release-context]
     runs-on: ubuntu-24.04
+    env:
+      RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+          no-cache: true
+
+      - name: Install credential-free package inspectors
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils cpio rpm rpm2cpio squashfs-tools
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-candidate
+          path: validated-release/release-assets
+
+      - name: Inspect Linux package identities and contents
+        run: |
+          bun run release:inspect-linux \
+            validated-release/release-assets \
+            "$RELEASE_VERSION" \
+            validated-release/linux-package-evidence.json
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: validated-release-candidate
+          path: validated-release
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 7
+          compression-level: 0
+
+  finalize-rehearsal:
+    needs: [release-context, validate-linux-packages]
+    if: ${{ inputs.rehearsal }}
+    runs-on: ubuntu-22.04
+    env:
+      RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+          no-cache: true
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: src-tauri
+
+      - run: bun install --frozen-lockfile
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: validated-release-candidate
+          path: validated-release
+
+      - name: Finalize with an ephemeral updater key
+        run: |
+          set -euo pipefail
+          CANDIDATE=validated-release/release-assets
+          EVIDENCE=validated-release/linux-package-evidence.json
+          if [ "$RELEASE_CHANNEL" = beta ]; then
+            KEY="$RUNNER_TEMP/unfocus-ephemeral-updater.key"
+            bun run tauri signer generate --ci --write-keys "$KEY" --password ephemeral-rehearsal-password
+            TAURI_SIGNING_PRIVATE_KEY="$(cat "$KEY")" \
+              TAURI_SIGNING_PRIVATE_KEY_PASSWORD=ephemeral-rehearsal-password \
+              bun run release:sign-linux-update "$CANDIDATE" "$EVIDENCE" signed-release "$RELEASE_VERSION"
+            rm -- "$KEY"
+            bun run release:finalize beta \
+              signed-release "$EVIDENCE" "$KEY.pub" final-release "$RELEASE_VERSION"
+            bun run release:verify-final \
+              final-release "$CANDIDATE" "$EVIDENCE" "$KEY.pub" "$RELEASE_VERSION"
+          else
+            bun run release:finalize base "$CANDIDATE" final-release "$RELEASE_VERSION"
+            bun run release:verify-final \
+              final-release "$CANDIDATE" "$EVIDENCE" - "$RELEASE_VERSION"
+          fi
+
+  publish:
+    needs: [release-context, validate-linux-packages]
+    if: ${{ !inputs.rehearsal && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-22.04
     environment: release
+    env:
+      RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
+      RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
+      UPDATER_PUBLIC_KEY: src-tauri/update-keys/linux-beta.pub
     permissions:
       contents: write
       id-token: write
@@ -282,110 +421,268 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: .bun-version
           no-cache: true
 
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: src-tauri
+
+      - run: bun install --frozen-lockfile
+
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-candidate
-          path: release-assets
-
-      - name: Attest release assets
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: release-assets/*
+          name: validated-release-candidate
+          path: validated-release
 
       - name: Compose release notes
-        env:
-          TAG: ${{ github.ref_name }}
-        run: bun run release:notes "$TAG" > notes.md
+        run: bun run release:notes "$RELEASE_TAG" > notes.md
 
-      - name: Create or update a draft release
+      - name: Discover and download a complete reusable draft
+        id: draft
         env:
           EVENT_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 
           verify_remote_tag() {
-            git fetch --no-tags origin "+refs/tags/$TAG:refs/remotes/origin/unfocus-release-tag"
+            git fetch --no-tags origin "+refs/tags/$RELEASE_TAG:refs/remotes/origin/unfocus-release-tag"
             ACTUAL_SHA=$(git rev-parse "refs/remotes/origin/unfocus-release-tag^{commit}")
             if [ "$ACTUAL_SHA" != "$EVENT_SHA" ]; then
-              echo "Remote tag $TAG moved from event commit $EVENT_SHA to $ACTUAL_SHA." >&2
+              echo "Remote tag $RELEASE_TAG moved from event commit $EVENT_SHA to $ACTUAL_SHA." >&2
               exit 1
             fi
           }
 
-          # A draft release carries no tag association until it is published,
-          # so /releases/tags/$TAG 404s on exactly the release this job just
-          # created. List instead, and let any API failure fail the step
-          # rather than read as "not created yet".
-          lookup_release() {
-            RELEASE=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-              | jq -s -c --arg tag "$TAG" 'flatten(1) | map(select(.tag_name == $tag)) | first // empty')
-          }
-
           verify_remote_tag
-          lookup_release
-
-          # Both writes return the release they wrote, so take the id from the
-          # response. The releases listing is cached and lagged the create by
-          # a few hundred milliseconds, so reading back to learn the id raced
-          # and failed; nothing below depends on the listing settling.
-          CREATED=false
-          if [ -z "$RELEASE" ]; then
-            CREATED=true
-            RELEASE=$(jq -n --arg tag "$TAG" --arg sha "$EVENT_SHA" \
-              --arg name "Unfocus $TAG" --rawfile body notes.md \
-              '{tag_name:$tag, target_commitish:$sha, name:$name, body:$body, draft:true, prerelease:true}' \
-              | gh api "repos/$GITHUB_REPOSITORY/releases" -X POST --input -)
-          elif [ "$(jq -r .draft <<<"$RELEASE")" = "true" ]; then
-            ID=$(jq -r .id <<<"$RELEASE")
-            RELEASE=$(jq -n --arg name "Unfocus $TAG" --rawfile body notes.md \
-              '{name:$name, body:$body, draft:true, prerelease:true}' \
-              | gh api "repos/$GITHUB_REPOSITORY/releases/$ID" -X PATCH --input -)
-          else
-            echo "Refusing to alter the published release for $TAG." >&2
+          MATCHES=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq -s -c --arg tag "$RELEASE_TAG" 'flatten(1) | map(select(.tag_name == $tag))')
+          COUNT=$(jq 'length' <<<"$MATCHES")
+          if [ "$COUNT" -eq 0 ]; then
+            echo "reuse=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [ "$COUNT" -eq 1 ] || { echo "Multiple releases claim $RELEASE_TAG." >&2; exit 1; }
+          RELEASE=$(jq -c '.[0]' <<<"$MATCHES")
+          if [ "$(jq -r .draft <<<"$RELEASE")" != true ] || [ "$(jq -r .prerelease <<<"$RELEASE")" != true ]; then
+            echo "Refusing to alter a published or non-prerelease release for $RELEASE_TAG." >&2
             exit 1
           fi
-
-          if [ "$(jq -r .draft <<<"$RELEASE")" != "true" ]; then
-            echo "The release was published before its asset set could be reconciled." >&2
+          if [ "$(jq -r .target_commitish <<<"$RELEASE")" != "$EVENT_SHA" ]; then
+            echo "Existing draft targets a different commit." >&2
             exit 1
           fi
           ID=$(jq -r .id <<<"$RELEASE")
-          [[ "$ID" =~ ^[0-9]+$ ]] || {
-            echo "GitHub did not return a release id." >&2
+          [[ "$ID" =~ ^[0-9]+$ ]] || { echo "GitHub returned an invalid draft release id." >&2; exit 1; }
+
+          ASSETS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$ID/assets?per_page=100" | jq -s -c 'add')
+          jq -e 'all(.[]; .state == "uploaded" and (.id | type == "number") and (.size | type == "number") and .size > 0)' \
+            <<<"$ASSETS" > /dev/null
+          bun -e 'import { expectedFinalReleaseFilenames } from "./scripts/verify-final-release.js"; for (const name of expectedFinalReleaseFilenames(process.argv[1])) console.log(name)' \
+            "$RELEASE_VERSION" | LC_ALL=C sort > expected-assets.txt
+          jq -r '.[].name' <<<"$ASSETS" | LC_ALL=C sort > actual-assets.txt
+          diff -u expected-assets.txt actual-assets.txt || {
+            echo "Existing draft has a partial or different immutable asset inventory." >&2
             exit 1
           }
 
-          # Only a reused draft can already hold assets, and only its id has
-          # been readable long enough to list against.
-          if [ "$CREATED" = "false" ]; then
-            ASSET_IDS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$ID/assets?per_page=100" --jq '.[].id')
-            if [ -n "$ASSET_IDS" ]; then
-              while IFS= read -r ASSET_ID; do
-                [[ "$ASSET_ID" =~ ^[0-9]+$ ]] || {
-                  echo "GitHub returned an invalid release asset ID." >&2
+          EXPECTED_CHECKSUM_SIZE=$(awk '$0 != "SHA256SUMS" { total += 67 + length($0) } END { print total + 0 }' expected-assets.txt)
+          jq -r '.[] | [.id, .name, .size] | @tsv' <<<"$ASSETS" > draft-assets.tsv
+          while IFS=$'\t' read -r ASSET_ID NAME SIZE; do
+            [[ "$ASSET_ID" =~ ^[0-9]+$ ]] || exit 1
+            [[ "$SIZE" =~ ^[1-9][0-9]*$ ]] || exit 1
+            grep -Fqx -- "$NAME" expected-assets.txt || exit 1
+            case "$NAME" in
+              SHA256SUMS)
+                [ "$SIZE" = "$EXPECTED_CHECKSUM_SIZE" ] || {
+                  echo "Existing draft SHA256SUMS has a noncanonical size." >&2
                   exit 1
                 }
-                gh api "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID" -X DELETE
-              done <<<"$ASSET_IDS"
-            fi
+                ;;
+              *.sig)
+                [ "$SIZE" -le 8192 ] || {
+                  echo "Existing draft signature $NAME exceeds its size limit." >&2
+                  exit 1
+                }
+                ;;
+              *.update.json)
+                [ "$SIZE" -le 65536 ] || {
+                  echo "Existing draft envelope $NAME exceeds its size limit." >&2
+                  exit 1
+                }
+                ;;
+              *)
+                CANDIDATE_PATH="validated-release/release-assets/$NAME"
+                test -f "$CANDIDATE_PATH"
+                test ! -L "$CANDIDATE_PATH"
+                [ "$SIZE" = "$(stat -c %s "$CANDIDATE_PATH")" ] || {
+                  echo "Existing draft base asset $NAME differs in size from the validated candidate." >&2
+                  exit 1
+                }
+                ;;
+            esac
+          done < draft-assets.tsv
+
+          mkdir remote-final
+          while IFS=$'\t' read -r ASSET_ID NAME SIZE; do
+            FILE_BLOCK_LIMIT=$(( (SIZE + 1023) / 1024 ))
+            (
+              ulimit -f "$FILE_BLOCK_LIMIT"
+              gh api -H "Accept: application/octet-stream" \
+                "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID" > "remote-final/$NAME.part"
+            )
+            [ "$(stat -c %s "remote-final/$NAME.part")" = "$SIZE" ] || {
+              echo "Downloaded draft asset $NAME has the wrong size." >&2
+              exit 1
+            }
+            mv -- "remote-final/$NAME.part" "remote-final/$NAME"
+          done < draft-assets.tsv
+
+          INVENTORY_HASH=$(jq -cS 'sort_by(.name) | map({id,name,size,state,digest})' <<<"$ASSETS" | sha256sum | cut -d ' ' -f 1)
+          echo "reuse=true" >> "$GITHUB_OUTPUT"
+          echo "release_id=$ID" >> "$GITHUB_OUTPUT"
+          echo "inventory_hash=$INVENTORY_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Require the beta updater public key before verification or signing
+        if: ${{ needs.release-context.outputs.channel == 'beta' }}
+        run: |
+          test -f "$UPDATER_PUBLIC_KEY"
+          test ! -L "$UPDATER_PUBLIC_KEY"
+          bun run release:verify-update-signature --check-public-key "$UPDATER_PUBLIC_KEY"
+
+      - name: Verify the complete reusable draft before any signing secret
+        if: ${{ steps.draft.outputs.reuse == 'true' }}
+        run: |
+          PUBLIC_KEY=-
+          if [ "$RELEASE_CHANNEL" = beta ]; then PUBLIC_KEY=$UPDATER_PUBLIC_KEY; fi
+          bun run release:verify-final \
+            remote-final \
+            validated-release/release-assets \
+            validated-release/linux-package-evidence.json \
+            "$PUBLIC_KEY" \
+            "$RELEASE_VERSION"
+          mv -- remote-final final-release
+
+      - name: Sign a fresh beta candidate
+        if: ${{ steps.draft.outputs.reuse != 'true' && needs.release-context.outputs.channel == 'beta' }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          bun run release:sign-linux-update \
+            validated-release/release-assets \
+            validated-release/linux-package-evidence.json \
+            signed-release \
+            "$RELEASE_VERSION"
+
+      - name: Finalize a fresh candidate without signing credentials
+        if: ${{ steps.draft.outputs.reuse != 'true' }}
+        run: |
+          if [ "$RELEASE_CHANNEL" = beta ]; then
+            bun run release:finalize beta \
+              signed-release \
+              validated-release/linux-package-evidence.json \
+              "$UPDATER_PUBLIC_KEY" \
+              final-release \
+              "$RELEASE_VERSION"
+          else
+            bun run release:finalize base \
+              validated-release/release-assets \
+              final-release \
+              "$RELEASE_VERSION"
           fi
 
+      - name: Verify the fresh final release
+        if: ${{ steps.draft.outputs.reuse != 'true' }}
+        run: |
+          PUBLIC_KEY=-
+          if [ "$RELEASE_CHANNEL" = beta ]; then PUBLIC_KEY=$UPDATER_PUBLIC_KEY; fi
+          bun run release:verify-final \
+            final-release \
+            validated-release/release-assets \
+            validated-release/linux-package-evidence.json \
+            "$PUBLIC_KEY" \
+            "$RELEASE_VERSION"
+
+      - name: Attest final immutable release assets
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: final-release/*
+
+      - name: Create one fresh draft or confirm exact reuse
+        env:
+          EVENT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REUSE_DRAFT: ${{ steps.draft.outputs.reuse }}
+          REUSED_INVENTORY_HASH: ${{ steps.draft.outputs.inventory_hash }}
+          REUSED_RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+        run: |
+          set -euo pipefail
+
+          verify_remote_tag() {
+            git fetch --no-tags origin "+refs/tags/$RELEASE_TAG:refs/remotes/origin/unfocus-release-tag"
+            ACTUAL_SHA=$(git rev-parse "refs/remotes/origin/unfocus-release-tag^{commit}")
+            if [ "$ACTUAL_SHA" != "$EVENT_SHA" ]; then
+              echo "Remote tag $RELEASE_TAG moved from event commit $EVENT_SHA to $ACTUAL_SHA." >&2
+              exit 1
+            fi
+          }
+
           verify_remote_tag
-          # Uploaded by release id rather than `gh release upload "$TAG"`,
-          # which would resolve the tag through that same lagging listing.
+          if [ "$REUSE_DRAFT" = true ]; then
+            RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/$REUSED_RELEASE_ID")
+            [ "$(jq -r .draft <<<"$RELEASE")" = true ] && [ "$(jq -r .prerelease <<<"$RELEASE")" = true ] || {
+              echo "Reusable draft was published or changed during verification." >&2
+              exit 1
+            }
+            [ "$(jq -r .target_commitish <<<"$RELEASE")" = "$EVENT_SHA" ] || exit 1
+            ASSETS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$REUSED_RELEASE_ID/assets?per_page=100" | jq -s -c 'add')
+            INVENTORY_HASH=$(jq -cS 'sort_by(.name) | map({id,name,size,state,digest})' <<<"$ASSETS" | sha256sum | cut -d ' ' -f 1)
+            [ "$INVENTORY_HASH" = "$REUSED_INVENTORY_HASH" ] || {
+              echo "Reusable draft assets changed during verification." >&2
+              exit 1
+            }
+            echo "reused complete immutable draft release $REUSED_RELEASE_ID"
+            exit 0
+          fi
+
+          MATCHES=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq -s -c --arg tag "$RELEASE_TAG" 'flatten(1) | map(select(.tag_name == $tag))')
+          if [ "$(jq 'length' <<<"$MATCHES")" -ne 0 ]; then
+            echo "A release appeared after draft discovery; refusing to overwrite or re-sign it." >&2
+            exit 1
+          fi
+          RELEASE=$(jq -n --arg tag "$RELEASE_TAG" --arg sha "$EVENT_SHA" \
+            --arg name "Unfocus $RELEASE_TAG" --rawfile body notes.md \
+            '{tag_name:$tag, target_commitish:$sha, name:$name, body:$body, draft:true, prerelease:true}' \
+            | gh api "repos/$GITHUB_REPOSITORY/releases" -X POST --input -)
+          ID=$(jq -r .id <<<"$RELEASE")
+          [ "$(jq -r .draft <<<"$RELEASE")" = true ] && [[ "$ID" =~ ^[0-9]+$ ]] || {
+            echo "GitHub did not create the expected draft release." >&2
+            exit 1
+          }
+
+          verify_remote_tag
           UPLOADED=0
-          for ASSET in release-assets/*; do
+          : > uploaded-assets.tsv
+          for ASSET in final-release/*; do
             [ -f "$ASSET" ] || continue
             NAME=$(basename "$ASSET")
+            SIZE=$(stat -c %s "$ASSET")
+            DIGEST="sha256:$(sha256sum "$ASSET" | cut -d ' ' -f 1)"
             ENCODED=$(jq -rn --arg name "$NAME" '$name | @uri')
-            echo "uploading $NAME"
             RESPONSE=$(curl --fail-with-body --silent --show-error \
               -X POST \
               -H "Authorization: Bearer $GH_TOKEN" \
@@ -397,21 +694,36 @@ jobs:
                 echo "upload failed for $NAME" >&2
                 exit 1
               }
-            STATE=$(jq -r '.state // "missing"' <<<"$RESPONSE")
-            if [ "$STATE" != "uploaded" ]; then
-              echo "$NAME finished in state $STATE rather than uploaded." >&2
-              exit 1
-            fi
+            ASSET_ID=$(jq -r '.id // "missing"' <<<"$RESPONSE")
+            [[ "$ASSET_ID" =~ ^[0-9]+$ ]] &&
+              [ "$(jq -r '.name // "missing"' <<<"$RESPONSE")" = "$NAME" ] &&
+              [ "$(jq -r '.size // "missing"' <<<"$RESPONSE")" = "$SIZE" ] &&
+              [ "$(jq -r '.state // "missing"' <<<"$RESPONSE")" = uploaded ] &&
+              [ "$(jq -r '.digest // "missing"' <<<"$RESPONSE")" = "$DIGEST" ] || {
+                echo "$NAME did not finish with the expected immutable asset metadata." >&2
+                exit 1
+              }
+            printf '%s\t%s\t%s\tuploaded\t%s\n' "$ASSET_ID" "$NAME" "$SIZE" "$DIGEST" >> uploaded-assets.tsv
             UPLOADED=$((UPLOADED + 1))
           done
-
-          # Counted from the upload responses, not from a fresh listing: the
-          # per-asset state above is the authoritative confirmation and needs
-          # no second read. `find` sees dotfiles the glob skips, so a staged
-          # file that was never offered for upload still fails here.
-          EXPECTED=$(find release-assets -maxdepth 1 -type f | wc -l)
-          if [ "$UPLOADED" -ne "$EXPECTED" ]; then
-            echo "Uploaded $UPLOADED assets but staged $EXPECTED." >&2
+          EXPECTED=$(find final-release -maxdepth 1 -type f | wc -l)
+          [ "$UPLOADED" -eq "$EXPECTED" ] || {
+            echo "Uploaded $UPLOADED assets but finalized $EXPECTED." >&2
             exit 1
-          fi
-          echo "uploaded $UPLOADED assets to release $ID"
+          }
+
+          RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/$ID")
+          [ "$(jq -r .draft <<<"$RELEASE")" = true ] && [ "$(jq -r .prerelease <<<"$RELEASE")" = true ] || {
+            echo "Fresh draft was published or changed during upload." >&2
+            exit 1
+          }
+          [ "$(jq -r .target_commitish <<<"$RELEASE")" = "$EVENT_SHA" ] || exit 1
+          ASSETS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$ID/assets?per_page=100" | jq -s -c 'add')
+          LC_ALL=C sort uploaded-assets.tsv > expected-uploaded-assets.tsv
+          jq -r '.[] | [.id, .name, .size, .state, .digest] | @tsv' <<<"$ASSETS" \
+            | LC_ALL=C sort > actual-uploaded-assets.tsv
+          diff -u expected-uploaded-assets.tsv actual-uploaded-assets.tsv || {
+            echo "Fresh draft assets changed during upload." >&2
+            exit 1
+          }
+          echo "uploaded and reconciled $UPLOADED immutable assets in fresh draft release $ID"

@@ -1,18 +1,31 @@
+<!-- src/routes/+page.svelte -->
+
 <script lang="ts">
+  import TrayPanel from "$lib/TrayPanel.svelte";
   import BreakOverlay from "$lib/BreakOverlay.svelte";
   import ConsumerDashboard from "$lib/ConsumerDashboard.svelte";
   import DeveloperDashboard from "$lib/DeveloperDashboard.svelte";
   import HistoryView from "$lib/HistoryView.svelte";
+  import PreBreakCue from "$lib/PreBreakCue.svelte";
   import { deviceGridOffsetMinutes } from "$lib/break-grid";
   import {
     consumerReminderPresentation,
-    consumerWarning
+    consumerWarning,
+    preBreakCueAvailable as isPreBreakCueAvailable
   } from "$lib/consumer-dashboard";
   import {
     readDashboardMode,
     writeDashboardMode,
     type DashboardMode
   } from "$lib/dashboard-mode";
+  import {
+    createDeveloperCuePreviewController,
+    DEVELOPER_CUE_PREVIEW_ENDED_EVENT,
+    developerCuePreviewEndedRunId,
+    initialDeveloperCuePreviewState,
+    type DeveloperCuePreviewResponse,
+    type DeveloperCuePreviewState
+  } from "$lib/developer-cue-preview";
   import {
     DEFAULT_DAY_START_HOUR,
     readDayStartHour,
@@ -21,16 +34,48 @@
   import type { DiagnosticsReport } from "$lib/diagnostics";
   import { historyActivationUsesKeyboard } from "$lib/history";
   import { parseWindowLabel } from "$lib/overlay-label";
+  import { preBreakCuePlatformFromNativeContext } from "$lib/pre-break-cue";
   import {
+    loadAuthoritativeReminderSettings,
+    reminderSettingsRecovery,
+    resolveReminderSettingsSave,
     type ReminderSettings,
+    type ReminderSettingsErrorContext,
+    type ReminderSettingsSnapshotFollowUp,
+    type ReminderSettingsView,
     validateReminderSettings
   } from "$lib/reminder-settings";
   import {
+    createReminderOperationGate,
     pauseActionCommand,
+    reminderCapabilityAvailable,
     type ReminderActionCommand,
     type ReminderStatus
   } from "$lib/reminder-status";
   import type { BreakSummary } from "$lib/break-summary";
+  import {
+    createRefreshGenerationGuard,
+    createRequestSequence,
+    settleLatestRequest,
+    type LatestRequestResult
+  } from "$lib/refresh-generation";
+  import {
+    applyReflectionFailure,
+    applyReflectionRecoveryRejection,
+    applyReflectionRecoverySnapshot,
+    applyReflectionSnapshot,
+    initialReflectionResource,
+    recoveryErrorAfterReflectionPoll,
+    type ReflectionRecoveryError,
+    type ReflectionResource
+  } from "$lib/reflection-resource";
+  import {
+    refreshFailed,
+    refreshLoading,
+    refreshSucceeded,
+    type RefreshState
+  } from "$lib/refresh-state";
+  import type { LocalSnapshot, StorageLoadHealth } from "$lib/storage-health";
   import type { TodayActivity } from "$lib/today-activity";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -40,6 +85,16 @@
 
   const windowRoute = parseWindowLabel(getCurrentWindow().label);
   const overlayParameters = windowRoute.kind === "overlay" ? windowRoute.parameters : null;
+  const cueParameters = windowRoute.kind === "cue" ? windowRoute.parameters : null;
+  const cuePlatform = preBreakCuePlatformFromNativeContext(
+    window.__UNFOCUS_PRE_BREAK_CUE_PLATFORM__
+  );
+  document.documentElement.classList.toggle(
+    "cue-window",
+    windowRoute.kind === "cue" || windowRoute.kind === "invalid-cue"
+  );
+
+  document.documentElement.classList.toggle("tray-panel-window", windowRoute.kind === "tray-panel");
 
   let dashboardMode = $state<DashboardMode>("consumer");
   let dashboardView = $state<"dashboard" | "history">("dashboard");
@@ -49,21 +104,42 @@
   let dayStartHour = $state(DEFAULT_DAY_START_HOUR);
   let report = $state<DiagnosticsReport | null>(null);
   let diagnosticsError = $state<string | null>(null);
+  let diagnosticsCurrentSuccessful = $state(false);
+  const diagnosticsRequests = createRequestSequence();
   let overlayError = $state<string | null>(null);
   let invalidOverlayCloseError = $state<string | null>(null);
   let authorWebsiteError = $state(false);
   let refreshing = $state(false);
   let overlayRunning = $state(false);
+  let cuePreviewState = $state<DeveloperCuePreviewState>(initialDeveloperCuePreviewState());
+  let cuePreviewError = $state<string | null>(null);
   let timingEditorExpanded = $state(false);
   let savedSettings = $state<ReminderSettings | null>(null);
+  let settingsStorageHealth = $state<StorageLoadHealth | null>(null);
+  let settingsSnapshotRefresh = $state<RefreshState<ReminderSettingsView>>(
+    refreshLoading()
+  );
+  let settingsOperationPending = $state<"retry" | "save" | "reset" | null>(null);
+  let settingsRecoveryError = $state(false);
+  const reminderOperationGate = createReminderOperationGate();
+  const settingsRefreshGeneration = createRefreshGenerationGuard();
+  const settingsRequests = createRequestSequence();
   let workMinutesInput = $state("");
   let breakSecondsInput = $state("");
   let syncAcrossDevices = $state(false);
   let gridOffsetMinutes = $state(0);
+  let preBreakCueEnabled = $state(true);
   let settingsLoading = $state(true);
-  let settingsSaving = $state(false);
+  const settingsSaving = $derived(
+    settingsOperationPending === "save" || settingsOperationPending === "reset"
+  );
+  const settingsRecoveryPending = $derived<"retry" | "reset" | null>(
+    settingsOperationPending === "retry" || settingsOperationPending === "reset"
+      ? settingsOperationPending
+      : null
+  );
   let settingsError = $state<string | null>(null);
-  let settingsErrorContext = $state<"load" | "save" | "reset" | null>(null);
+  let settingsErrorContext = $state<ReminderSettingsErrorContext>(null);
   let settingsResult = $state<SettingsResult>(null);
   let reminderStatus = $state<ReminderStatus | null>(null);
   let reminderStatusError = $state<string | null>(null);
@@ -71,30 +147,97 @@
   let reminderActionPending = $state<ReminderActionCommand | null>(null);
   let reminderActionResult = $state<string | null>(null);
   let reminderRefreshGeneration = 0;
-  let todayActivity = $state<TodayActivity | null>(null);
-  let todayActivityError = $state<string | null>(null);
-  let breakSummary = $state<BreakSummary | null>(null);
-  let breakSummaryError = $state<string | null>(null);
+  const reminderRequests = createRequestSequence();
+  let activityResource = $state<ReflectionResource<TodayActivity>>(
+    initialReflectionResource()
+  );
+  let activityRecoveryPending = $state<"retry" | "startNew" | null>(null);
+  let activityRecoveryError = $state<ReflectionRecoveryError>(null);
+  const activityRefreshGeneration = createRefreshGenerationGuard();
+  const activityRequests = createRequestSequence();
+  let breakResource = $state<ReflectionResource<BreakSummary>>(
+    initialReflectionResource()
+  );
+  let breakRecoveryPending = $state<"retry" | "startNew" | null>(null);
+  let breakRecoveryError = $state<ReflectionRecoveryError>(null);
+  const breakRefreshGeneration = createRefreshGenerationGuard();
+  const breakRequests = createRequestSequence();
 
   function errorMessage(value: unknown): string {
     return value instanceof Error ? value.message : String(value);
   }
 
+  const cuePreviewController = createDeveloperCuePreviewController(
+    {
+      showPreview: () => invoke<DeveloperCuePreviewResponse>("show_pre_break_cue_test"),
+      closePreview: (runId) => invoke("close_pre_break_cue_test", { runId }),
+      now: () => performance.now(),
+      schedule: (callback, delayMs) => window.setTimeout(callback, delayMs),
+      cancel: (timerId) => window.clearTimeout(timerId)
+    },
+    (snapshot) => {
+      cuePreviewState = snapshot.state;
+      cuePreviewError = snapshot.error;
+    }
+  );
+
+  function requestDiagnostics() {
+    diagnosticsCurrentSuccessful = false;
+    return settleLatestRequest(diagnosticsRequests, () =>
+      invoke<DiagnosticsReport>("get_diagnostics")
+    );
+  }
+
+  function publishDiagnostics(
+    request: LatestRequestResult<DiagnosticsReport>,
+    current: boolean
+  ): void {
+    if (!current) return;
+    if (request.settled.status === "fulfilled") {
+      report = request.settled.value;
+      diagnosticsError = null;
+      diagnosticsCurrentSuccessful = true;
+    } else {
+      diagnosticsError = errorMessage(request.settled.reason);
+      diagnosticsCurrentSuccessful = false;
+    }
+  }
+
   const settingsValidation = $derived(
     validateReminderSettings(workMinutesInput, breakSecondsInput, {
       syncAcrossDevices,
-      gridOffsetMinutes
+      gridOffsetMinutes,
+      preBreakCueEnabled
     })
   );
+  const authoritativeSettingsHealth = $derived<StorageLoadHealth | null>(
+    settingsStorageHealth ??
+      (report && diagnosticsError === null
+        ? report.storage.reminderSettings
+        : null)
+  );
+  const settingsRecovery = $derived(
+    reminderSettingsRecovery(
+      authoritativeSettingsHealth,
+      savedSettings,
+      settingsLoading
+    )
+  );
+  const settingsUnavailable = $derived(settingsRecovery.unavailable);
   const workMinutesError = $derived(
-    settingsLoading ? null : settingsValidation.workMinutesError
+    settingsUnavailable ? null : settingsValidation.workMinutesError
   );
   const breakSecondsError = $derived(
-    settingsLoading ? null : settingsValidation.breakSecondsError
+    settingsUnavailable ? null : settingsValidation.breakSecondsError
   );
   const reminderPresentation = $derived(
-    consumerReminderPresentation(reminderStatus, reminderStatusError)
+    consumerReminderPresentation(
+      reminderStatus,
+      reminderStatusError,
+      authoritativeSettingsHealth
+    )
   );
+  const preBreakCueAvailable = $derived(isPreBreakCueAvailable(report));
   const warning = $derived(
     consumerWarning({
       report,
@@ -102,6 +245,7 @@
       reminderStatus,
       reminderStatusError,
       reminderActionError,
+      settingsStorageHealth: authoritativeSettingsHealth,
       settingsError,
       settingsErrorContext,
       overlayError
@@ -151,54 +295,221 @@
   }
 
   async function refresh() {
-    if (refreshing) return;
+    if (
+      refreshing ||
+      reminderActionPending ||
+      activityRecoveryPending ||
+      breakRecoveryPending ||
+      settingsOperationPending
+    ) return;
     refreshing = true;
     const reminderGeneration = reminderRefreshGeneration;
-    const [diagnostics, reminder, activity, breaks] = await Promise.allSettled([
-      invoke<DiagnosticsReport>("get_diagnostics"),
-      invoke<ReminderStatus>("get_reminder_status"),
-      invoke<TodayActivity>("get_today_activity"),
-      invoke<BreakSummary>("get_break_summary")
+    const activityGeneration = activityRefreshGeneration.capture();
+    const breakGeneration = breakRefreshGeneration.capture();
+    const settingsGeneration = settingsRefreshGeneration.capture();
+    const [diagnostics, reminder, activity, breaks] = await Promise.all([
+      requestDiagnostics(),
+      settleLatestRequest(reminderRequests, () =>
+        invoke<ReminderStatus>("get_reminder_status")
+      ),
+      settleLatestRequest(activityRequests, () =>
+        invoke<LocalSnapshot<TodayActivity>>("get_today_activity")
+      ),
+      settleLatestRequest(breakRequests, () =>
+        invoke<LocalSnapshot<BreakSummary>>("get_break_summary")
+      )
     ]);
 
-    if (diagnostics.status === "fulfilled") {
-      report = diagnostics.value;
-      diagnosticsError = null;
-    } else {
-      diagnosticsError = errorMessage(diagnostics.reason);
-    }
-    if (
-      reminder.status === "fulfilled" &&
-      reminderGeneration === reminderRefreshGeneration
-    ) {
-      if (reminderStatus && reminder.value.stateRevision !== reminderStatus.stateRevision) {
+    const diagnosticsCurrent =
+      diagnostics.latest &&
+      activityRefreshGeneration.isCurrent(activityGeneration) &&
+      breakRefreshGeneration.isCurrent(breakGeneration) &&
+      settingsRefreshGeneration.isCurrent(settingsGeneration);
+    publishDiagnostics(diagnostics, diagnosticsCurrent);
+
+    const reminderCurrent =
+      reminder.latest && reminderGeneration === reminderRefreshGeneration;
+    if (reminderCurrent && reminder.settled.status === "fulfilled") {
+      if (
+        reminderStatus &&
+        reminder.settled.value.stateRevision !== reminderStatus.stateRevision
+      ) {
         reminderActionResult = null;
       }
-      reminderStatus = reminder.value;
+      reminderStatus = reminder.settled.value;
       reminderStatusError = null;
       reminderActionError = null;
-    } else if (
-      reminder.status === "rejected" &&
-      reminderGeneration === reminderRefreshGeneration
-    ) {
-      reminderStatusError = errorMessage(reminder.reason);
+    } else if (reminderCurrent && reminder.settled.status === "rejected") {
+      reminderStatusError = errorMessage(reminder.settled.reason);
     }
-    if (activity.status === "fulfilled") {
-      todayActivity = activity.value;
-      todayActivityError = null;
-    } else {
-      todayActivityError = errorMessage(activity.reason);
+
+    const activityCurrent =
+      activity.latest &&
+      activityRefreshGeneration.isCurrent(activityGeneration) &&
+      activityRecoveryPending === null;
+    if (activityCurrent && activity.settled.status === "fulfilled") {
+      activityResource = applyReflectionSnapshot(
+        activity.settled.value,
+        "Local activity storage is unavailable."
+      );
+      activityRecoveryError = recoveryErrorAfterReflectionPoll(
+        activityRecoveryError,
+        activityResource
+      );
+    } else if (activityCurrent && activity.settled.status === "rejected") {
+      activityResource = applyReflectionFailure(
+        activityResource,
+        errorMessage(activity.settled.reason)
+      );
     }
-    if (breaks.status === "fulfilled") {
-      breakSummary = breaks.value;
-      breakSummaryError = null;
-    } else {
-      breakSummaryError = errorMessage(breaks.reason);
+
+    const breakCurrent =
+      breaks.latest &&
+      breakRefreshGeneration.isCurrent(breakGeneration) &&
+      breakRecoveryPending === null;
+    if (breakCurrent && breaks.settled.status === "fulfilled") {
+      breakResource = applyReflectionSnapshot(
+        breaks.settled.value,
+        "Local break storage is unavailable."
+      );
+      breakRecoveryError = recoveryErrorAfterReflectionPoll(
+        breakRecoveryError,
+        breakResource
+      );
+    } else if (breakCurrent && breaks.settled.status === "rejected") {
+      breakResource = applyReflectionFailure(
+        breakResource,
+        errorMessage(breaks.settled.reason)
+      );
     }
     refreshing = false;
   }
 
+  async function recoverActivity(action: "retry" | "startNew") {
+    if (activityRecoveryPending) return;
+    activityRecoveryPending = action;
+    activityRecoveryError = null;
+    activityRefreshGeneration.invalidate();
+    try {
+      const command = await settleLatestRequest(activityRequests, () =>
+        invoke<StorageLoadHealth>(
+          action === "retry" ? "retry_activity_history" : "start_new_activity_history"
+        )
+      );
+      if (!command.latest || command.settled.status === "rejected") {
+        activityRecoveryError = "operation";
+        return;
+      }
+
+      // Command health is provisional. Keep the unavailable surface and pending
+      // text until the canonical snapshot below resolves.
+      activityRefreshGeneration.invalidate();
+      const snapshotGeneration = activityRefreshGeneration.capture();
+      const diagnosticsBreakGeneration = breakRefreshGeneration.capture();
+      const diagnosticsSettingsGeneration = settingsRefreshGeneration.capture();
+      const [snapshot, diagnostics] = await Promise.all([
+        settleLatestRequest(activityRequests, () =>
+          invoke<LocalSnapshot<TodayActivity>>("get_today_activity")
+        ),
+        requestDiagnostics()
+      ]);
+
+      const snapshotCurrent =
+        snapshot.latest && activityRefreshGeneration.isCurrent(snapshotGeneration);
+      if (snapshotCurrent && snapshot.settled.status === "fulfilled") {
+        const transition = applyReflectionRecoverySnapshot(
+          activityResource,
+          snapshot.settled.value,
+          "Local activity storage is unavailable."
+        );
+        activityResource = transition.resource;
+        activityRecoveryError = transition.error;
+      } else if (snapshotCurrent && snapshot.settled.status === "rejected") {
+        const transition = applyReflectionRecoveryRejection(
+          activityResource,
+          errorMessage(snapshot.settled.reason)
+        );
+        activityResource = transition.resource;
+        activityRecoveryError = transition.error;
+      }
+
+      const diagnosticsCurrent =
+        diagnostics.latest &&
+        breakRefreshGeneration.isCurrent(diagnosticsBreakGeneration) &&
+        settingsRefreshGeneration.isCurrent(diagnosticsSettingsGeneration);
+      publishDiagnostics(diagnostics, diagnosticsCurrent);
+    } finally {
+      activityRefreshGeneration.invalidate();
+      activityRecoveryPending = null;
+    }
+  }
+
+  async function recoverBreakHistory(action: "retry" | "startNew") {
+    if (breakRecoveryPending) return;
+    breakRecoveryPending = action;
+    breakRecoveryError = null;
+    breakRefreshGeneration.invalidate();
+    try {
+      const command = await settleLatestRequest(breakRequests, () =>
+        invoke<StorageLoadHealth>(
+          action === "retry" ? "retry_break_ledger" : "start_new_break_ledger"
+        )
+      );
+      if (!command.latest || command.settled.status === "rejected") {
+        breakRecoveryError = "operation";
+        return;
+      }
+
+      breakRefreshGeneration.invalidate();
+      const diagnosticsActivityGeneration = activityRefreshGeneration.capture();
+      const snapshotGeneration = breakRefreshGeneration.capture();
+      const diagnosticsSettingsGeneration = settingsRefreshGeneration.capture();
+      const [snapshot, diagnostics] = await Promise.all([
+        settleLatestRequest(breakRequests, () =>
+          invoke<LocalSnapshot<BreakSummary>>("get_break_summary")
+        ),
+        requestDiagnostics()
+      ]);
+
+      const snapshotCurrent =
+        snapshot.latest && breakRefreshGeneration.isCurrent(snapshotGeneration);
+      if (snapshotCurrent && snapshot.settled.status === "fulfilled") {
+        const transition = applyReflectionRecoverySnapshot(
+          breakResource,
+          snapshot.settled.value,
+          "Local break storage is unavailable."
+        );
+        breakResource = transition.resource;
+        breakRecoveryError = transition.error;
+      } else if (snapshotCurrent && snapshot.settled.status === "rejected") {
+        const transition = applyReflectionRecoveryRejection(
+          breakResource,
+          errorMessage(snapshot.settled.reason)
+        );
+        breakResource = transition.resource;
+        breakRecoveryError = transition.error;
+      }
+
+      const diagnosticsCurrent =
+        diagnostics.latest &&
+        activityRefreshGeneration.isCurrent(diagnosticsActivityGeneration) &&
+        settingsRefreshGeneration.isCurrent(diagnosticsSettingsGeneration);
+      publishDiagnostics(diagnostics, diagnosticsCurrent);
+    } finally {
+      breakRefreshGeneration.invalidate();
+      breakRecoveryPending = null;
+    }
+  }
+
   async function runOverlayTest() {
+    if (
+      !reminderCapabilityAvailable(
+        reminderStatus,
+        reminderStatusError,
+        authoritativeSettingsHealth,
+        "previewEnabled"
+      )
+    ) return;
     overlayRunning = true;
     overlayError = null;
     try {
@@ -208,6 +519,14 @@
     } finally {
       overlayRunning = false;
     }
+  }
+
+  async function runPreBreakCuePreview() {
+    await cuePreviewController.start();
+  }
+
+  async function closePreBreakCuePreview() {
+    await cuePreviewController.close();
   }
 
   function reminderSuccessMessage(command: ReminderActionCommand): string {
@@ -222,22 +541,42 @@
   }
 
   async function runReminderAction(command: ReminderActionCommand) {
-    if (reminderActionPending) return;
+    const capability =
+      command === "take_break_now" ? "takeBreakEnabled" : "pauseActionEnabled";
+    if (
+      reminderActionPending ||
+      settingsOperationPending ||
+      !reminderCapabilityAvailable(
+        reminderStatus,
+        reminderStatusError,
+        authoritativeSettingsHealth,
+        capability
+      )
+    ) return;
+    const operation = reminderOperationGate.begin("action");
+    if (!operation) return;
     reminderActionPending = command;
     reminderRefreshGeneration += 1;
     reminderStatusError = null;
     reminderActionError = null;
     reminderActionResult = null;
+    settingsResult = null;
     try {
-      const updated = await invoke<ReminderStatus>(command);
+      const result = await settleLatestRequest(reminderRequests, () =>
+        invoke<ReminderStatus>(command)
+      );
       reminderRefreshGeneration += 1;
-      reminderStatus = updated;
-      reminderActionResult = reminderSuccessMessage(command);
-    } catch (value) {
-      reminderRefreshGeneration += 1;
-      reminderActionError = errorMessage(value);
+      if (!result.latest) return;
+      if (result.settled.status === "fulfilled") {
+        reminderStatus = result.settled.value;
+        reminderStatusError = null;
+        reminderActionResult = reminderSuccessMessage(command);
+      } else {
+        reminderActionError = errorMessage(result.settled.reason);
+      }
     } finally {
       reminderActionPending = null;
+      reminderOperationGate.finish(operation);
     }
   }
 
@@ -246,78 +585,333 @@
     void runReminderAction(pauseActionCommand(reminderStatus));
   }
 
+  function clearSettings(): void {
+    savedSettings = null;
+    workMinutesInput = "";
+    breakSecondsInput = "";
+    syncAcrossDevices = false;
+    gridOffsetMinutes = 0;
+    preBreakCueEnabled = false;
+    timingEditorExpanded = false;
+  }
+
   function useSettings(settings: ReminderSettings) {
     savedSettings = settings;
     workMinutesInput = String(settings.workMinutes);
     breakSecondsInput = String(settings.breakSeconds);
     syncAcrossDevices = settings.syncAcrossDevices;
     gridOffsetMinutes = settings.gridOffsetMinutes;
+    preBreakCueEnabled = settings.preBreakCueEnabled;
   }
 
-  function toggleSyncAcrossDevices(enabled: boolean) {
+  function finishSettingsUpdate(result: Exclude<SettingsResult, null>): void {
+    settingsResult = result;
+    timingEditorExpanded = false;
+    void tick().then(() => {
+      const trigger = document.getElementById("timing-editor-trigger");
+      trigger?.focus({ preventScroll: true });
+      window.requestAnimationFrame(() => {
+        if (trigger?.isConnected) {
+          trigger.scrollIntoView({ block: "center", behavior: "auto" });
+        }
+      });
+    });
+  }
+
+  function toggleTimingEditor(): void {
+    if (settingsUnavailable) return;
+    const expanding = !timingEditorExpanded;
+    timingEditorExpanded = expanding;
+    if (expanding) settingsResult = null;
+  }
+
+  function toggleSyncAcrossDevices(enabled: boolean): void {
+    settingsResult = null;
     syncAcrossDevices = enabled;
     if (enabled) {
       gridOffsetMinutes = deviceGridOffsetMinutes(new Date());
     }
   }
 
+  function togglePreBreakCue(enabled: boolean): void {
+    settingsResult = null;
+    preBreakCueEnabled = enabled;
+  }
+
+  function applySettingsView(view: ReminderSettingsView): void {
+    settingsSnapshotRefresh = refreshSucceeded(view);
+    settingsStorageHealth = view.loadHealth;
+    if (view.loadHealth.status === "available" && view.data !== null) {
+      useSettings(view.data);
+    } else {
+      clearSettings();
+    }
+  }
+
+  function applySettingsSnapshotFailure(error: string): void {
+    settingsSnapshotRefresh = refreshFailed(settingsSnapshotRefresh, error);
+  }
+
   async function loadReminderSettings() {
     settingsLoading = true;
     settingsError = null;
     settingsErrorContext = null;
-    try {
-      useSettings(await invoke<ReminderSettings>("get_reminder_settings"));
-    } catch (value) {
-      settingsError = `Could not load reminder settings: ${errorMessage(value)}`;
+    const generation = settingsRefreshGeneration.capture();
+    const request = await settleLatestRequest(settingsRequests, () =>
+      loadAuthoritativeReminderSettings(() =>
+        invoke<ReminderSettingsView>("get_reminder_settings")
+      )
+    );
+    if (!request.latest || !settingsRefreshGeneration.isCurrent(generation)) return;
+
+    const result = request.settled;
+    if (result.status === "rejected") {
+      const error = errorMessage(result.reason);
+      applySettingsSnapshotFailure(error);
+      clearSettings();
+      settingsStorageHealth = null;
+      settingsError = `Could not load reminder settings: ${error}`;
       settingsErrorContext = "load";
-      timingEditorExpanded = true;
+    } else if (result.value.outcome === "rejected") {
+      const error = errorMessage(result.value.error);
+      applySettingsSnapshotFailure(error);
+      clearSettings();
+      settingsStorageHealth = null;
+      settingsError = `Could not load reminder settings: ${error}`;
+      settingsErrorContext = "load";
+    } else {
+      applySettingsView(result.value.view);
+    }
+    settingsLoading = false;
+  }
+
+  async function refreshAfterSettingsRecovery(
+    preserveSettingsError = false
+  ): Promise<ReminderSettingsSnapshotFollowUp> {
+    settingsRefreshGeneration.invalidate();
+    const settingsGeneration = settingsRefreshGeneration.capture();
+    const reminderGeneration = ++reminderRefreshGeneration;
+    const activityGeneration = activityRefreshGeneration.capture();
+    const breakGeneration = breakRefreshGeneration.capture();
+    const [settingsRequest, reminder, diagnostics] = await Promise.all([
+      settleLatestRequest(settingsRequests, () =>
+        loadAuthoritativeReminderSettings(() =>
+          invoke<ReminderSettingsView>("get_reminder_settings")
+        )
+      ),
+      settleLatestRequest(reminderRequests, () =>
+        invoke<ReminderStatus>("get_reminder_status")
+      ),
+      requestDiagnostics()
+    ]);
+
+    const reminderCurrent =
+      reminder.latest && reminderGeneration === reminderRefreshGeneration;
+    if (reminderCurrent && reminder.settled.status === "fulfilled") {
+      reminderStatus = reminder.settled.value;
+      reminderStatusError = null;
+      reminderActionError = null;
+    } else if (reminderCurrent && reminder.settled.status === "rejected") {
+      reminderStatusError = errorMessage(reminder.settled.reason);
+    }
+
+    const diagnosticsCurrent =
+      diagnostics.latest &&
+      settingsRefreshGeneration.isCurrent(settingsGeneration) &&
+      activityRefreshGeneration.isCurrent(activityGeneration) &&
+      breakRefreshGeneration.isCurrent(breakGeneration);
+    publishDiagnostics(diagnostics, diagnosticsCurrent);
+
+    if (
+      !settingsRequest.latest ||
+      !settingsRefreshGeneration.isCurrent(settingsGeneration)
+    ) {
+      return {
+        outcome: "rejected",
+        error: new Error("A newer settings refresh took precedence")
+      };
+    }
+    if (settingsRequest.settled.status === "rejected") {
+      applySettingsSnapshotFailure(errorMessage(settingsRequest.settled.reason));
+      return { outcome: "rejected", error: settingsRequest.settled.reason };
+    }
+
+    const settings = settingsRequest.settled.value;
+    if (settings.outcome !== "rejected") {
+      applySettingsView(settings.view);
+      if (!preserveSettingsError) {
+        settingsError = null;
+        settingsErrorContext = null;
+      }
+    } else {
+      applySettingsSnapshotFailure(errorMessage(settings.error));
+      if (!preserveSettingsError) {
+        settingsError = `Could not refresh reminder settings: ${errorMessage(settings.error)}`;
+        settingsErrorContext = "load";
+      }
+    }
+    return settings;
+  }
+
+  async function retryReminderSettings() {
+    if (
+      settingsOperationPending ||
+      reminderActionPending ||
+      !settingsRecovery.canRetry
+    ) return;
+    const operation = reminderOperationGate.begin("settings");
+    if (!operation) return;
+    settingsOperationPending = "retry";
+    settingsRecoveryError = false;
+    settingsError = null;
+    settingsErrorContext = null;
+    settingsRefreshGeneration.invalidate();
+    try {
+      const command = await settleLatestRequest(settingsRequests, () =>
+        invoke<StorageLoadHealth>("retry_reminder_settings")
+      );
+      if (!command.latest || command.settled.status === "rejected") {
+        const error =
+          command.settled.status === "rejected"
+            ? errorMessage(command.settled.reason)
+            : "A newer settings request took precedence";
+        settingsError = `Could not retry reminder settings: ${error}`;
+        settingsErrorContext = "load";
+        const followUp = await refreshAfterSettingsRecovery(true);
+        const recovered = followUp.outcome === "confirmed";
+        settingsRecoveryError = !recovered;
+        if (recovered) {
+          settingsError = null;
+          settingsErrorContext = null;
+        }
+      } else {
+        // Command health is provisional. The typed recovery surface remains
+        // authoritative until the grouped canonical follow-ups settle.
+        settingsRecoveryError =
+          (await refreshAfterSettingsRecovery()).outcome !== "confirmed";
+      }
     } finally {
-      settingsLoading = false;
+      settingsOperationPending = null;
+      reminderOperationGate.finish(operation);
     }
   }
 
   async function saveReminderSettings() {
     const settings = settingsValidation.settings;
-    if (!settings || settingsLoading || settingsSaving) return;
+    if (
+      !settings ||
+      settingsLoading ||
+      settingsOperationPending ||
+      reminderActionPending ||
+      settingsUnavailable
+    ) return;
+    const operation = reminderOperationGate.begin("settings");
+    if (!operation) return;
 
-    settingsSaving = true;
+    settingsOperationPending = "save";
     settingsError = null;
     settingsErrorContext = null;
     settingsResult = null;
     try {
-      const saved = await invoke<ReminderSettings>("save_reminder_settings", { settings });
-      useSettings(saved);
-      settingsResult = "saved";
-      settingsErrorContext = null;
-      timingEditorExpanded = false;
-    } catch (value) {
-      settingsError = `Could not save reminder settings: ${errorMessage(value)}`;
-      settingsErrorContext = "save";
-      timingEditorExpanded = true;
+      const command = await settleLatestRequest(settingsRequests, () =>
+        invoke<ReminderSettings>("save_reminder_settings", { settings })
+      );
+      const resolution = await resolveReminderSettingsSave(
+        settings,
+        command,
+        () => refreshAfterSettingsRecovery(true)
+      );
+      if (resolution.outcome === "saved") {
+        applySettingsView({
+          loadHealth: { status: "available", recovery: "none" },
+          data: resolution.settings
+        });
+        settingsRecoveryError = false;
+        settingsError = null;
+        settingsErrorContext = null;
+        finishSettingsUpdate("saved");
+      } else if (resolution.outcome === "reloaded") {
+        applySettingsView({
+          loadHealth: { status: "available", recovery: "none" },
+          data: resolution.settings
+        });
+        settingsRecoveryError = false;
+        settingsError =
+          command.latest && command.settled.status === "rejected"
+            ? `Save response rejected: ${errorMessage(command.settled.reason)}. Canonical timing differs from the request.`
+            : "Save response was superseded. Canonical timing differs from the request.";
+        settingsErrorContext = "saveReloaded";
+        timingEditorExpanded = true;
+      } else {
+        if (resolution.outcome === "unconfirmed") {
+          clearSettings();
+          settingsStorageHealth = null;
+        }
+        const commandDetail =
+          command.latest && command.settled.status === "rejected"
+            ? errorMessage(command.settled.reason)
+            : "save response was superseded";
+        const followUpDetail =
+          resolution.outcome === "unconfirmed"
+            ? errorMessage(resolution.error)
+            : `canonical storage remained ${resolution.view.loadHealth.status}`;
+        settingsRecoveryError = true;
+        settingsError = `Could not confirm reminder settings save (${commandDetail}); follow-up: ${followUpDetail}`;
+        settingsErrorContext = "saveUnconfirmed";
+        timingEditorExpanded = false;
+      }
     } finally {
-      settingsSaving = false;
+      settingsOperationPending = null;
+      reminderOperationGate.finish(operation);
     }
   }
 
   async function resetReminderSettings() {
-    if (settingsLoading || settingsSaving) return;
+    if (settingsLoading || settingsOperationPending || reminderActionPending) return;
 
-    settingsSaving = true;
+    const recovering = settingsRecovery.canRestoreDefaults;
+    if (settingsUnavailable && !recovering) return;
+    const operation = reminderOperationGate.begin("settings");
+    if (!operation) return;
+    settingsOperationPending = "reset";
     settingsError = null;
     settingsErrorContext = null;
     settingsResult = null;
     try {
-      const defaults = await invoke<ReminderSettings>("reset_reminder_settings");
-      useSettings(defaults);
-      settingsResult = "reset";
-      settingsErrorContext = null;
-      timingEditorExpanded = false;
-    } catch (value) {
-      settingsError = `Could not reset reminder settings: ${errorMessage(value)}`;
-      settingsErrorContext = "reset";
-      timingEditorExpanded = true;
+      const result = await settleLatestRequest(settingsRequests, () =>
+        invoke<ReminderSettings>("reset_reminder_settings")
+      );
+      if (!result.latest || result.settled.status === "rejected") {
+        const error =
+          result.settled.status === "rejected"
+            ? errorMessage(result.settled.reason)
+            : "A newer settings request took precedence";
+        settingsError = `Could not reset reminder settings: ${error}`;
+        settingsErrorContext = "reset";
+        const followUp = await refreshAfterSettingsRecovery(true);
+        const refreshed = followUp.outcome === "confirmed";
+        settingsRecoveryError = recovering && !refreshed;
+        if (recovering && refreshed) {
+          settingsError = null;
+          settingsErrorContext = null;
+        }
+        timingEditorExpanded = !recovering && !settingsUnavailable;
+      } else if (recovering) {
+        // The command result cannot expose editable fields. Keep confirmed
+        // unavailable health until the canonical settings envelope arrives.
+        settingsRecoveryError =
+          (await refreshAfterSettingsRecovery()).outcome !== "confirmed";
+      } else {
+        applySettingsView({
+          loadHealth: { status: "available", recovery: "none" },
+          data: result.settled.value
+        });
+        settingsErrorContext = null;
+        finishSettingsUpdate("reset");
+      }
     } finally {
-      settingsSaving = false;
+      settingsOperationPending = null;
+      reminderOperationGate.finish(operation);
     }
   }
 
@@ -380,8 +974,15 @@
     updatePolling();
     void loadReminderSettings();
     document.addEventListener("visibilitychange", updatePolling);
+    const cueEnded = (event: Event) => {
+      const runId = developerCuePreviewEndedRunId(event, cuePreviewState.runId);
+      if (runId !== null) cuePreviewController.nativeEnded(runId);
+    };
+    window.addEventListener(DEVELOPER_CUE_PREVIEW_ENDED_EVENT, cueEnded);
     return () => {
       stopPolling();
+      cuePreviewController.destroy();
+      window.removeEventListener(DEVELOPER_CUE_PREVIEW_ENDED_EVENT, cueEnded);
       document.removeEventListener("visibilitychange", updatePolling);
     };
   });
@@ -396,7 +997,19 @@
 
 <svelte:window onkeydown={handleSafeModeKeydown} />
 
-{#if overlayParameters}
+{#if windowRoute.kind === "tray-panel"}
+  <TrayPanel />
+{:else if windowRoute.kind === "invalid-window"}
+  <main aria-hidden="true"></main>
+{:else if cueParameters}
+  <PreBreakCue
+    deadlineMs={cueParameters.deadlineMs}
+    mode={cueParameters.mode}
+    platform={cuePlatform}
+  />
+{:else if windowRoute.kind === "invalid-cue"}
+  <main class="invalid-cue" aria-hidden="true"></main>
+{:else if overlayParameters}
   <BreakOverlay
     runId={overlayParameters.runId}
     monitorIndex={overlayParameters.monitorIndex}
@@ -420,7 +1033,10 @@
 {:else if dashboardMode === "developer"}
   <DeveloperDashboard
     {report}
+    {activityResource}
+    {breakResource}
     {diagnosticsError}
+    {diagnosticsCurrentSuccessful}
     {overlayError}
     {reminderStatus}
     {reminderStatusError}
@@ -429,8 +1045,16 @@
     {reminderActionResult}
     {refreshing}
     {overlayRunning}
+    {cuePreviewState}
+    {cuePreviewError}
     {workMinutesInput}
     {breakSecondsInput}
+    {savedSettings}
+    settingsStorageHealth={authoritativeSettingsHealth}
+    {settingsSnapshotRefresh}
+    {settingsRecoveryPending}
+    {settingsOperationPending}
+    {settingsRecoveryError}
     {settingsLoading}
     {settingsSaving}
     {settingsValidation}
@@ -443,33 +1067,48 @@
     onPauseAction={runPauseAction}
     onTakeBreak={() => void runReminderAction("take_break_now")}
     onPreview={() => void runOverlayTest()}
+    onCuePreview={() => void runPreBreakCuePreview()}
+    onCloseCuePreview={() => void closePreBreakCuePreview()}
     onWorkMinutesInput={updateWorkMinutes}
     onBreakSecondsInput={updateBreakSeconds}
     onSaveSettings={() => void saveReminderSettings()}
     onResetSettings={() => void resetReminderSettings()}
+    onRetrySettings={() => void retryReminderSettings()}
   />
 {:else}
   <div class="view-shell" hidden={dashboardView !== "dashboard"}>
     <ConsumerDashboard
+      operatingSystem={report?.operatingSystem ?? null}
       presentation={reminderPresentation}
       {warning}
       {reminderStatus}
+      {reminderStatusError}
       {reminderActionPending}
       {reminderActionResult}
       {overlayRunning}
       diagnosticsReady={report !== null}
-      {todayActivity}
-      {todayActivityError}
-      {breakSummary}
-      {breakSummaryError}
+      activityRefresh={activityResource.refresh}
+      activityStorageHealth={activityResource.storageHealth}
+      {activityRecoveryPending}
+      {activityRecoveryError}
+      breakRefresh={breakResource.refresh}
+      breakStorageHealth={breakResource.storageHealth}
+      {breakRecoveryPending}
+      {breakRecoveryError}
       {dayStartHour}
       onDayStartChange={setDayStartHour}
       {savedSettings}
+      settingsStorageHealth={authoritativeSettingsHealth}
+      {settingsRecoveryPending}
+      {settingsOperationPending}
+      {settingsRecoveryError}
       {timingEditorExpanded}
       {workMinutesInput}
       {breakSecondsInput}
       {syncAcrossDevices}
       {gridOffsetMinutes}
+      {preBreakCueEnabled}
+      {preBreakCueAvailable}
       {settingsLoading}
       {settingsSaving}
       {settingsValidation}
@@ -481,16 +1120,22 @@
       onTakeBreak={() => void runReminderAction("take_break_now")}
       onPauseAction={runPauseAction}
       onPreview={() => void runOverlayTest()}
-      onToggleTimingEditor={() => (timingEditorExpanded = !timingEditorExpanded)}
+      onToggleTimingEditor={toggleTimingEditor}
       onWorkMinutesInput={updateWorkMinutes}
       onBreakSecondsInput={updateBreakSeconds}
       onToggleSync={toggleSyncAcrossDevices}
+      onTogglePreBreakCue={togglePreBreakCue}
       onSaveSettings={() => void saveReminderSettings()}
       onResetSettings={() => void resetReminderSettings()}
+      onRetrySettings={() => void retryReminderSettings()}
       onOpenDeveloperMode={() => setDashboardMode("developer")}
       {authorWebsiteError}
       onOpenAuthorWebsite={() => void openAuthorWebsite()}
       onViewHistory={openHistory}
+      onRetryActivity={() => void recoverActivity("retry")}
+      onStartNewActivity={() => void recoverActivity("startNew")}
+      onRetryBreakHistory={() => void recoverBreakHistory("retry")}
+      onStartNewBreakHistory={() => void recoverBreakHistory("startNew")}
     />
   </div>
   {#if historyMounted}
@@ -559,6 +1204,50 @@
     min-width: 320px;
     min-height: 100vh;
     background: var(--bg);
+  }
+
+  :global(html.tray-panel-window),
+  :global(html.tray-panel-window body) {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :global(:root.tray-panel-window) {
+      --bg: #f5f7f4;
+      --line: #dce3dc;
+      --line-2: #c8d2ca;
+      --ink: #1b2920;
+      --ink-2: #4e6155;
+      --ink-3: #617167;
+      --accent: #237541;
+      --warn: #805415;
+    }
+  }
+
+  @media (prefers-color-scheme: light) and (prefers-contrast: more) {
+    :global(:root.tray-panel-window) {
+      --ink-2: #273c2f;
+      --ink-3: #354c3d;
+      --line: #75877a;
+      --line-2: #526e5c;
+    }
+  }
+
+  :global(html.cue-window),
+  :global(html.cue-window body) {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  .invalid-cue {
+    width: 100vw;
+    height: 100vh;
+    background: transparent;
+    pointer-events: none;
   }
 
   .view-shell {

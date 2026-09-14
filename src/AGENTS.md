@@ -1,3 +1,5 @@
+<!-- src/AGENTS.md -->
+
 # Frontend
 
 This file applies to `src/**` and frontend assets in `static/fonts/**`. Follow
@@ -75,11 +77,50 @@ as `export let` or `$:` reactive statements.
 
 ## Window routing and native events
 
+- `tray-panel` renders only `TrayPanel` on its native macOS window, with no
+  dashboard polling or preference initialization. Its visible-only status
+  reads and display clock cannot execute a break. Opening generations fence
+  stale responses; only the initiating opening shows the three-second
+  countdown and Cancel. Reopening a pending request shows normal status with
+  Take a break disabled. Unknown window labels render an inert surface.
 - Window labels route rendering:
-  `overlay-<run>-<index>-<count>-<duration>-<deadline>` renders `BreakOverlay`;
-  any other label renders the dashboard.
-- The label is the only channel for overlay parameters. Keep its format and
-  parsing synchronized with the Rust side.
+  `overlay-<run>-<index>-<count>-<duration>-<deadline>` renders `BreakOverlay`,
+  `cue-<run>-<deadline>` renders a scheduled `PreBreakCue`,
+  `cue-preview-<run>-<deadline>` renders its Developer preview, and `main`
+  renders the dashboard. Invalid overlay or cue labels render their safe
+  empty/close path.
+- The label is the only channel for overlay and cue parameters. Keep each
+  format and parser synchronized with the Rust side. `PreBreakCue` receives
+  its `macos` or `linux` presentation choice from the trusted native
+  initialization value, never from a label or arbitrary browser value.
+- Before a hidden Linux or macOS overlay is revealed, `BreakOverlay` decodes the bundled
+  scene and invokes `overlay_scene_ready`. Do not replace that with page-load
+  readiness; page load does not guarantee a mounted keyboard handler or a
+  decoded first frame. On macOS, the first overlay receives native keyboard
+  focus only after all scenes are ready; the notch cue still never takes focus.
+- Before a cue reveal, `prepare_pre_break_cue` returns native display layout
+  while the window is hidden. Apply it and paint before requesting visibility;
+  discard stale preparations after cancellation. Layout never comes from a label.
+- `PreBreakCue` invokes `set_pre_break_cue_visibility` only when its visible
+  stage changes. Keep the native cue hidden during the quiet interval; CSS-only
+  transparency can leave a stale card in WebKitGTK's X11 surface.
+- Scheduled cues have a four-second heads-up, quiet interval, final ten-second
+  horizon/countdown, and handoff until the overlay is ready. The macOS
+  presentation expands two 64-point black wings around the measured camera notch
+  on the active display, with curved shoulders inside native transparent margins
+  and a compact top-center pill fallback. An empty mint ring drains against the
+  deadline beside soft-white, tabular system-font timing and a 27×30-point skip
+  target. Only this target accepts pointer events after expansion. A successful
+  skip confirms for 450 ms and retracts for 350 ms; a failed request never claims
+  success. Preview skips only dismiss that preview; scheduled skips preserve
+  the following break deadline. Qualified
+  X11 uses the same compact 200×36 pill on the primary display, 12 logical
+  points below the work-area top. Do not infer macOS qualification from this code.
+- The macOS and qualified X11 Developer preview has the fixed 17-second
+  `4 + 2 + 10 + 1` heads-up/quiet/horizon/handoff lifecycle. It is main-window-only and must
+  not change reminder timing, probe behavior, overlays, settings, or
+  reflection data. A scheduled cue preempts a preview; an active overlay
+  prevents a preview from starting.
 - Overlay events carry a `runId`; filter on it in every handler.
 - An untargeted `listen()` receives events from every run. Pass the current
   window label as `target` so the Rust side can scope delivery.

@@ -1,3 +1,5 @@
+// src/lib/overlay-label.ts
+
 export const MIN_OVERLAY_DURATION_SECONDS = 3;
 export const MAX_OVERLAY_DURATION_SECONDS = 30;
 export const MAX_OVERLAY_MONITORS = 64;
@@ -10,10 +12,20 @@ export type OverlayParameters = {
   deadlineMs: number;
 };
 
+export type CueParameters = {
+  runId: number;
+  deadlineMs: number;
+  mode: "scheduled" | "preview";
+};
+
 export type WindowRoute =
   | { kind: "dashboard" }
+  | { kind: "tray-panel" }
+  | { kind: "invalid-window" }
   | { kind: "overlay"; parameters: OverlayParameters }
-  | { kind: "invalid-overlay"; reason: string };
+  | { kind: "cue"; parameters: CueParameters }
+  | { kind: "invalid-overlay"; reason: string }
+  | { kind: "invalid-cue"; reason: string };
 
 const CANONICAL_DECIMAL = /^(0|[1-9]\d*)$/;
 
@@ -34,7 +46,36 @@ function integerField(
 }
 
 export function parseWindowLabel(label: string): WindowRoute {
-  if (!label.startsWith("overlay-")) return { kind: "dashboard" };
+  if (label === "main") return { kind: "dashboard" };
+  if (label === "tray-panel") return { kind: "tray-panel" };
+  if (label === "cue" || label.startsWith("cue-")) {
+    const parts = label.split("-");
+    const mode = parts[1] === "preview" ? "preview" : "scheduled";
+    const expectedParts = mode === "preview" ? 4 : 3;
+    if (parts.length !== expectedParts || parts[0] !== "cue") {
+      return { kind: "invalid-cue", reason: "cue labels require exactly two fields" };
+    }
+
+    const runId = integerField(parts[mode === "preview" ? 2 : 1], "run ID", 1, Number.MAX_SAFE_INTEGER);
+    const deadlineMs = integerField(
+      parts[mode === "preview" ? 3 : 2],
+      "deadline",
+      1,
+      Number.MAX_SAFE_INTEGER
+    );
+    if (typeof runId === "string" || typeof deadlineMs === "string") {
+      const invalid = [runId, deadlineMs].find(
+        (value): value is string => typeof value === "string"
+      );
+      return {
+        kind: "invalid-cue",
+        reason: invalid ?? "cue label is invalid"
+      };
+    }
+    return { kind: "cue", parameters: { runId, deadlineMs, mode } };
+  }
+
+  if (!label.startsWith("overlay-")) return { kind: "invalid-window" };
 
   const parts = label.split("-");
   if (parts.length !== 6 || parts[0] !== "overlay") {

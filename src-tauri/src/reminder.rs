@@ -1,4 +1,16 @@
+// src-tauri/src/reminder.rs
+
+#[cfg(any(target_os = "macos", test))]
+mod manual_preparation;
 mod schedule;
+#[cfg(target_os = "macos")]
+use manual_preparation::ManualPreparation;
+#[cfg(target_os = "macos")]
+pub(crate) use manual_preparation::ManualPreparationStatus;
+#[cfg(target_os = "macos")]
+use std::sync::atomic::AtomicBool;
+#[cfg(target_os = "macos")]
+type PreparationCache = Arc<Mutex<(ManualPreparationStatus, Instant)>>;
 
 use crate::{
     activity::{
@@ -11,19 +23,27 @@ use crate::{
         show_overlay, show_overlay_if_idle, OverlayController, MAX_OVERLAY_DURATION_SECONDS,
         MIN_OVERLAY_DURATION_SECONDS,
     },
-    probes::{ProbeCache, ProbeSnapshot},
+    pre_break_cue::{
+        pre_break_cue_platform_enabled, PreBreakCue, PreBreakCueController, CUE_LEAD_MILLISECONDS,
+    },
+    probes::{qualified_x11_session, ProbeCache, ProbeReading, ProbeSnapshot},
+    storage_recovery::{
+        canonical_bytes_unchanged, create_new_file_with_permissions, existing_file_permissions,
+        quarantine_invalid_hard_link, replace_file_atomically, LoadFailure, LocalSnapshot,
+        StorageDiagnostic, StorageFailureCategory, StorageLoadHealth,
+    },
     tray::{TrayPhase, TraySnapshot, TrayStatus},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{self, Write},
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
         mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError},
-        Arc, Mutex, MutexGuard,
+        Arc, Mutex,
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -43,11 +63,13 @@ const CLOCK_DIVERGENCE_TOLERANCE: Duration = Duration::from_secs(5);
 const REMINDER_CONTROL_CAPACITY: usize = 16;
 const REMINDER_CONTROL_TIMEOUT: Duration = Duration::from_secs(10);
 const SETTINGS_FILE_NAME: &str = "reminder-settings.json";
-const SETTINGS_SCHEMA_VERSION: u32 = 3;
+const SETTINGS_SCHEMA_VERSION: u32 = 4;
 const MIN_GRID_OFFSET_MINUTES: i16 = -720; // UTC-12:00
 const MAX_GRID_OFFSET_MINUTES: i16 = 840; //  UTC+14:00
 
 static SETTINGS_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+static TEST_SETTINGS_PERSIST_FAILURES: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,6 +78,7 @@ pub(crate) struct ReminderSettings {
     break_seconds: u64,
     sync_across_devices: bool,
     grid_offset_minutes: i16,
+    pre_break_cue_enabled: bool,
 }
 
 impl ReminderSettings {
@@ -86,6 +109,7 @@ impl ReminderSettings {
             break_seconds,
             sync_across_devices,
             grid_offset_minutes,
+            pre_break_cue_enabled: true,
         })
     }
 
@@ -101,6 +125,18 @@ impl ReminderSettings {
     fn sync_offset(self) -> Option<i16> {
         self.sync_across_devices.then_some(self.grid_offset_minutes)
     }
+
+    fn with_pre_break_cue_enabled(mut self, enabled: bool) -> Self {
+        self.pre_break_cue_enabled = enabled;
+        self
+    }
+
+    fn has_same_schedule(self, other: Self) -> bool {
+        self.work_minutes == other.work_minutes
+            && self.break_seconds == other.break_seconds
+            && self.sync_across_devices == other.sync_across_devices
+            && self.grid_offset_minutes == other.grid_offset_minutes
+    }
 }
 
 impl Default for ReminderSettings {
@@ -110,6 +146,7 @@ impl Default for ReminderSettings {
             break_seconds: DEFAULT_BREAK_SECONDS,
             sync_across_devices: false,
             grid_offset_minutes: 0,
+            pre_break_cue_enabled: true,
         }
     }
 }
@@ -121,6 +158,8 @@ pub(crate) struct ReminderSettingsRequest {
     break_seconds: Value,
     sync_across_devices: bool,
     grid_offset_minutes: Value,
+    #[serde(default = "default_pre_break_cue_enabled")]
+    pre_break_cue_enabled: bool,
 }
 
 impl ReminderSettingsRequest {
@@ -152,6 +191,7 @@ impl ReminderSettingsRequest {
             self.sync_across_devices,
             grid_offset_minutes,
         )
+        .map(|settings| settings.with_pre_break_cue_enabled(self.pre_break_cue_enabled))
     }
 }
 
@@ -191,6 +231,10 @@ fn signed_integer_setting(
     Ok(value)
 }
 
+fn default_pre_break_cue_enabled() -> bool {
+    true
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PersistedReminderSettings {
@@ -203,6 +247,8 @@ struct PersistedReminderSettings {
     sync_across_devices: bool,
     #[serde(default)]
     grid_offset_minutes: i16,
+    #[serde(default)]
+    pre_break_cue_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -223,6 +269,7 @@ impl PersistedReminderSettings {
                 .transpose()?,
             sync_across_devices: state.settings.sync_across_devices,
             grid_offset_minutes: state.settings.grid_offset_minutes,
+            pre_break_cue_enabled: Some(state.settings.pre_break_cue_enabled),
         })
     }
 
@@ -232,12 +279,20 @@ impl PersistedReminderSettings {
             v if (1..SETTINGS_SCHEMA_VERSION).contains(&v) => true,
             v => return Err(format!("unsupported reminder settings version {v}")),
         };
+        let pre_break_cue_enabled = match self.pre_break_cue_enabled {
+            Some(enabled) => enabled,
+            None => {
+                needs_repair = true;
+                default_pre_break_cue_enabled()
+            }
+        };
         let settings = ReminderSettings::try_new(
             self.work_minutes,
             self.break_seconds,
             self.sync_across_devices,
             self.grid_offset_minutes,
-        )?;
+        )?
+        .with_pre_break_cue_enabled(pre_break_cue_enabled);
         let pause_until = self.pause_until_unix_milliseconds.and_then(|milliseconds| {
             let Some(pause_until) = UNIX_EPOCH.checked_add(Duration::from_millis(milliseconds))
             else {
@@ -291,9 +346,16 @@ struct ReminderSettingsRuntime {
 }
 
 #[derive(Debug)]
+enum ReminderSettingsState {
+    Available(ReminderSettingsRuntime),
+    Unavailable(LoadFailure),
+}
+
+#[derive(Debug)]
 struct ReminderSettingsInner {
     path: PathBuf,
-    runtime: Mutex<ReminderSettingsRuntime>,
+    state: Mutex<ReminderSettingsState>,
+    recovery: Mutex<()>,
 }
 
 #[derive(Debug, Clone)]
@@ -302,45 +364,91 @@ pub(crate) struct ReminderSettingsManager {
 }
 
 impl ReminderSettingsManager {
-    pub(crate) fn load(config_dir: &Path) -> io::Result<Self> {
+    /// Always constructs a manager anchored to the canonical app-config path.
+    /// Storage failures are retained as typed unavailable state so setup can
+    /// continue with one inert scheduler and an installed tray.
+    pub(crate) fn initialize(config_dir: &Path) -> Self {
         let path = config_dir.join(SETTINGS_FILE_NAME);
-        let persisted = load_or_repair_settings(&path, SystemTime::now())?;
-        Ok(Self {
+        let state = match load_settings_runtime(&path, SystemTime::now(), Instant::now(), 0) {
+            Ok(runtime) => ReminderSettingsState::Available(runtime),
+            Err(failure) => ReminderSettingsState::Unavailable(failure),
+        };
+        Self {
             inner: Arc::new(ReminderSettingsInner {
                 path,
-                runtime: Mutex::new(ReminderSettingsRuntime {
-                    settings: persisted.settings,
-                    revision: 0,
-                    changed_at: Instant::now(),
-                    pause_until: persisted.pause_until,
-                }),
+                state: Mutex::new(state),
+                recovery: Mutex::new(()),
             }),
-        })
+        }
     }
 
-    fn runtime(&self) -> MutexGuard<'_, ReminderSettingsRuntime> {
-        self.inner
-            .runtime
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    #[cfg(test)]
+    fn load(config_dir: &Path) -> io::Result<Self> {
+        let manager = Self::initialize(config_dir);
+        if manager.authoritative_snapshot().is_some() {
+            Ok(manager)
+        } else {
+            Err(io::Error::other("reminder settings unavailable"))
+        }
     }
 
-    fn current(&self) -> ReminderSettings {
-        self.runtime().settings
+    fn view(&self) -> LocalSnapshot<ReminderSettings> {
+        let Ok(state) = self.inner.state.lock() else {
+            return LocalSnapshot::unavailable(StorageFailureCategory::Read);
+        };
+        match &*state {
+            ReminderSettingsState::Available(runtime) => LocalSnapshot::available(runtime.settings),
+            ReminderSettingsState::Unavailable(failure) => {
+                LocalSnapshot::unavailable(failure.category)
+            }
+        }
     }
 
-    fn snapshot(&self) -> ReminderSettingsSnapshot {
-        let runtime = self.runtime();
-        ReminderSettingsSnapshot {
+    fn authoritative_snapshot(&self) -> Option<ReminderSettingsSnapshot> {
+        let state = self.inner.state.lock().ok()?;
+        let ReminderSettingsState::Available(runtime) = &*state else {
+            return None;
+        };
+        Some(ReminderSettingsSnapshot {
             settings: runtime.settings,
             revision: runtime.revision,
             changed_at: runtime.changed_at,
             pause_until: runtime.pause_until,
+        })
+    }
+
+    #[cfg(test)]
+    fn current(&self) -> ReminderSettings {
+        self.authoritative_snapshot()
+            .expect("test settings should be available")
+            .settings
+    }
+
+    #[cfg(test)]
+    fn snapshot(&self) -> ReminderSettingsSnapshot {
+        self.authoritative_snapshot()
+            .expect("test settings should be available")
+    }
+
+    pub(crate) fn diagnostics(&self) -> StorageDiagnostic {
+        let Ok(state) = self.inner.state.lock() else {
+            return LoadFailure::read("reminder settings state lock is poisoned").diagnostic();
+        };
+        match &*state {
+            ReminderSettingsState::Available(_) => StorageDiagnostic::available(),
+            ReminderSettingsState::Unavailable(failure) => failure.diagnostic(),
         }
     }
 
     fn save(&self, settings: ReminderSettings) -> Result<ReminderSettings, String> {
-        let mut runtime = self.runtime();
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| "reminder settings are unavailable".to_owned())?;
+        let ReminderSettingsState::Available(runtime) = &mut *state else {
+            return Err("reminder settings are unavailable; recover them before saving".into());
+        };
         persist_settings(
             &self.inner.path,
             PersistedReminderState {
@@ -356,14 +464,146 @@ impl ReminderSettingsManager {
     }
 
     fn reset(&self) -> Result<ReminderSettings, String> {
-        self.save(ReminderSettings::default())
+        let _recovery = self
+            .inner
+            .recovery
+            .lock()
+            .map_err(|_| "reminder settings recovery is unavailable".to_owned())?;
+        let category = {
+            let state = self
+                .inner
+                .state
+                .lock()
+                .map_err(|_| "reminder settings recovery is unavailable".to_owned())?;
+            match &*state {
+                ReminderSettingsState::Available(_) => None,
+                ReminderSettingsState::Unavailable(failure) => Some(failure.category),
+            }
+        };
+        match category {
+            None => self.save(ReminderSettings::default()),
+            Some(StorageFailureCategory::Invalid) => self.reset_invalid_locked(),
+            Some(StorageFailureCategory::Read) => Err(
+                "saved reminder settings cannot be preserved right now; retry is still available"
+                    .into(),
+            ),
+        }
+    }
+
+    fn reset_invalid_locked(&self) -> Result<ReminderSettings, String> {
+        let contents = fs::read(&self.inner.path).map_err(|error| {
+            self.publish_failure(LoadFailure::read(format!(
+                "could not re-read {} before recovery: {error}",
+                self.inner.path.display()
+            )));
+            "saved reminder settings could not be read; retry is still available".to_owned()
+        })?;
+        let now = SystemTime::now();
+        if settings_state_from_bytes(&contents, now).is_ok() {
+            return self
+                .retry_load_locked()
+                .data
+                .ok_or_else(|| "reminder settings recovery did not become available".to_owned());
+        }
+
+        quarantine_invalid_hard_link(&self.inner.path, &contents).map_err(|error| {
+            self.publish_failure(LoadFailure::invalid(format!(
+                "could not preserve invalid {}: {error}",
+                self.inner.path.display()
+            )));
+            "unreadable reminder settings could not be preserved".to_owned()
+        })?;
+        let defaults = PersistedReminderState {
+            settings: ReminderSettings::default(),
+            pause_until: None,
+        };
+        let temp_path = prepare_settings_file(&self.inner.path, defaults).map_err(|error| {
+            self.publish_failure(LoadFailure::invalid(format!(
+                "invalid {} was preserved, but defaults could not be prepared: {error}",
+                self.inner.path.display()
+            )));
+            "default reminder settings could not be prepared".to_owned()
+        })?;
+        let unchanged = match canonical_bytes_unchanged(&self.inner.path, &contents) {
+            Ok(unchanged) => unchanged,
+            Err(error) => {
+                let _ = fs::remove_file(&temp_path);
+                self.publish_failure(LoadFailure::read(format!(
+                    "could not complete the final canonical recheck for {}: {error}",
+                    self.inner.path.display()
+                )));
+                return Err(
+                    "saved reminder settings could not be rechecked; retry is still available"
+                        .into(),
+                );
+            }
+        };
+        if !unchanged {
+            let _ = fs::remove_file(&temp_path);
+            return Err("reminder settings changed during recovery; retry to load them".into());
+        }
+        let mut state = self.inner.state.lock().map_err(|_| {
+            let _ = fs::remove_file(&temp_path);
+            "reminder settings recovery is unavailable".to_owned()
+        })?;
+        if let Err(error) = replace_file_atomically(&temp_path, &self.inner.path) {
+            let _ = fs::remove_file(&temp_path);
+            return Err(format!(
+                "default reminder settings could not be restored: {error}"
+            ));
+        }
+        *state =
+            ReminderSettingsState::Available(runtime_from_persisted(defaults, Instant::now(), 0));
+        Ok(ReminderSettings::default())
+    }
+
+    fn retry_load(&self) -> StorageLoadHealth {
+        let Ok(_recovery) = self.inner.recovery.lock() else {
+            return StorageLoadHealth::unavailable(StorageFailureCategory::Read);
+        };
+        if self.authoritative_snapshot().is_some() {
+            return StorageLoadHealth::available();
+        }
+        self.retry_load_locked().load_health
+    }
+
+    fn retry_load_locked(&self) -> LocalSnapshot<ReminderSettings> {
+        match load_settings_runtime(&self.inner.path, SystemTime::now(), Instant::now(), 0) {
+            Ok(runtime) => {
+                let settings = runtime.settings;
+                if let Ok(mut state) = self.inner.state.lock() {
+                    *state = ReminderSettingsState::Available(runtime);
+                    LocalSnapshot::available(settings)
+                } else {
+                    LocalSnapshot::unavailable(StorageFailureCategory::Read)
+                }
+            }
+            Err(failure) => {
+                let category = failure.category;
+                self.publish_failure(failure);
+                LocalSnapshot::unavailable(category)
+            }
+        }
+    }
+
+    fn publish_failure(&self, failure: LoadFailure) {
+        if let Ok(mut state) = self.inner.state.lock() {
+            *state = ReminderSettingsState::Unavailable(failure);
+        }
     }
 
     fn pause_for(&self, duration: Duration) -> Result<(), String> {
         let pause_until = SystemTime::now()
             .checked_add(duration)
             .ok_or_else(|| "pause expiry overflowed the system clock".to_owned())?;
-        let mut runtime = self.runtime();
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| "reminder settings are unavailable".to_owned())?;
+        let ReminderSettingsState::Available(runtime) = &mut *state else {
+            return Err("reminder settings are unavailable".into());
+        };
         persist_settings(
             &self.inner.path,
             PersistedReminderState {
@@ -377,7 +617,14 @@ impl ReminderSettingsManager {
     }
 
     fn clear_pause(&self) -> Result<(), String> {
-        let mut runtime = self.runtime();
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| "reminder settings are unavailable".to_owned())?;
+        let ReminderSettingsState::Available(runtime) = &mut *state else {
+            return Err("reminder settings are unavailable".into());
+        };
         if runtime.pause_until.is_none() {
             return Ok(());
         }
@@ -394,36 +641,74 @@ impl ReminderSettingsManager {
     }
 }
 
-fn load_or_repair_settings(path: &Path, now: SystemTime) -> io::Result<PersistedReminderState> {
-    match fs::read(path) {
-        Ok(contents) => {
-            let parsed = serde_json::from_slice::<PersistedReminderSettings>(&contents)
-                .ok()
-                .and_then(|persisted| persisted.into_state(now).ok());
-            if let Some((state, needs_repair)) = parsed {
-                if needs_repair {
-                    persist_settings(path, state)?;
-                }
-                return Ok(state);
-            }
+fn runtime_from_persisted(
+    persisted: PersistedReminderState,
+    changed_at: Instant,
+    revision: u64,
+) -> ReminderSettingsRuntime {
+    ReminderSettingsRuntime {
+        settings: persisted.settings,
+        revision,
+        changed_at,
+        pause_until: persisted.pause_until,
+    }
+}
 
-            let defaults = PersistedReminderState {
-                settings: ReminderSettings::default(),
-                pause_until: None,
-            };
-            persist_settings(path, defaults)?;
-            Ok(defaults)
+fn settings_state_from_bytes(
+    contents: &[u8],
+    now: SystemTime,
+) -> Result<(PersistedReminderState, bool), LoadFailure> {
+    let persisted =
+        serde_json::from_slice::<PersistedReminderSettings>(contents).map_err(|error| {
+            LoadFailure::invalid(format!("reminder settings content is malformed: {error}"))
+        })?;
+    persisted.into_state(now).map_err(|error| {
+        LoadFailure::invalid(format!(
+            "reminder settings content is unsupported or invalid: {error}"
+        ))
+    })
+}
+
+fn load_settings_runtime(
+    path: &Path,
+    now: SystemTime,
+    changed_at: Instant,
+    revision: u64,
+) -> Result<ReminderSettingsRuntime, LoadFailure> {
+    let state = match fs::read(path) {
+        Ok(contents) => {
+            let (state, needs_repair) = settings_state_from_bytes(&contents, now)?;
+            if needs_repair {
+                persist_settings(path, state).map_err(|error| {
+                    LoadFailure::read(format!(
+                        "could not migrate or repair {}: {error}",
+                        path.display()
+                    ))
+                })?;
+            }
+            state
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             let defaults = PersistedReminderState {
                 settings: ReminderSettings::default(),
                 pause_until: None,
             };
-            persist_settings(path, defaults)?;
-            Ok(defaults)
+            persist_settings(path, defaults).map_err(|error| {
+                LoadFailure::read(format!(
+                    "could not persist default reminder settings at {}: {error}",
+                    path.display()
+                ))
+            })?;
+            defaults
         }
-        Err(error) => Err(error),
-    }
+        Err(error) => {
+            return Err(LoadFailure::read(format!(
+                "could not read {}: {error}",
+                path.display()
+            )));
+        }
+    };
+    Ok(runtime_from_persisted(state, changed_at, revision))
 }
 
 fn create_settings_temp_file(path: &Path) -> io::Result<(PathBuf, File)> {
@@ -434,15 +719,12 @@ fn create_settings_temp_file(path: &Path) -> io::Result<(PathBuf, File)> {
         .file_name()
         .map(|name| name.to_string_lossy())
         .unwrap_or_else(|| "settings".into());
+    let permissions = existing_file_permissions(path)?;
 
     for _ in 0..100 {
         let id = SETTINGS_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let temp_path = parent.join(format!(".{name}.{}.{id}.tmp", std::process::id()));
-        match OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp_path)
-        {
+        match create_new_file_with_permissions(&temp_path, permissions.as_ref()) {
             Ok(file) => return Ok((temp_path, file)),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(error),
@@ -455,44 +737,43 @@ fn create_settings_temp_file(path: &Path) -> io::Result<(PathBuf, File)> {
     ))
 }
 
-#[cfg(not(target_os = "windows"))]
-fn replace_settings_file(temp_path: &Path, path: &Path) -> io::Result<()> {
-    fs::rename(temp_path, path)
-}
-
-#[cfg(target_os = "windows")]
-fn replace_settings_file(temp_path: &Path, path: &Path) -> io::Result<()> {
-    match fs::rename(temp_path, path) {
-        Ok(()) => Ok(()),
-        Err(_error) if path.exists() => {
-            fs::copy(temp_path, path)?;
-            OpenOptions::new().write(true).open(path)?.sync_all()?;
-            fs::remove_file(temp_path)
-        }
-        Err(error) => Err(error),
+fn prepare_settings_file(path: &Path, state: PersistedReminderState) -> io::Result<PathBuf> {
+    #[cfg(test)]
+    if TEST_SETTINGS_PERSIST_FAILURES
+        .lock()
+        .is_ok_and(|mut targets| {
+            targets
+                .iter()
+                .position(|target| target == path)
+                .map(|index| targets.remove(index))
+                .is_some()
+        })
+    {
+        return Err(io::Error::other("injected reminder settings write failure"));
     }
-}
 
-fn persist_settings(path: &Path, state: PersistedReminderState) -> io::Result<()> {
     let parent = path.parent().ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidInput, "settings path has no parent")
     })?;
     fs::create_dir_all(parent)?;
-
     let serialized = serde_json::to_vec_pretty(&PersistedReminderSettings::from_state(state)?)
         .map_err(io::Error::other)?;
     let (temp_path, mut temp_file) = create_settings_temp_file(path)?;
-    let write_result = temp_file
+    let result = temp_file
         .write_all(&serialized)
         .and_then(|()| temp_file.write_all(b"\n"))
         .and_then(|()| temp_file.sync_all());
     drop(temp_file);
-    if let Err(error) = write_result {
+    if let Err(error) = result {
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
+    Ok(temp_path)
+}
 
-    if let Err(error) = replace_settings_file(&temp_path, path) {
+fn persist_settings(path: &Path, state: PersistedReminderState) -> io::Result<()> {
+    let temp_path = prepare_settings_file(path, state)?;
+    if let Err(error) = replace_file_atomically(&temp_path, path) {
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
@@ -503,28 +784,52 @@ fn persist_settings(path: &Path, state: PersistedReminderState) -> io::Result<()
 pub(crate) fn get_reminder_settings(
     window: WebviewWindow,
     manager: State<'_, ReminderSettingsManager>,
-) -> Result<ReminderSettings, String> {
+) -> Result<LocalSnapshot<ReminderSettings>, String> {
     authorize_main_caller(window.label())?;
-    Ok(manager.current())
+    Ok(manager.view())
+}
+
+#[tauri::command]
+pub(crate) async fn retry_reminder_settings(
+    window: WebviewWindow,
+    manager: State<'_, ReminderSettingsManager>,
+    control: State<'_, ReminderControl>,
+) -> Result<StorageLoadHealth, String> {
+    authorize_main_caller(window.label())?;
+    let manager = manager.inner().clone();
+    let control = control.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        retry_reminder_settings_and_notify(&manager, &control)
+    })
+    .await
+    .map_err(|error| format!("reminder settings retry task failed: {error}"))
 }
 
 #[tauri::command]
 pub(crate) fn save_reminder_settings(
     window: WebviewWindow,
     manager: State<'_, ReminderSettingsManager>,
+    control: State<'_, ReminderControl>,
     settings: ReminderSettingsRequest,
 ) -> Result<ReminderSettings, String> {
     authorize_main_caller(window.label())?;
-    manager.save(settings.into_settings()?)
+    save_reminder_settings_and_notify(manager.inner(), control.inner(), settings.into_settings()?)
 }
 
 #[tauri::command]
-pub(crate) fn reset_reminder_settings(
+pub(crate) async fn reset_reminder_settings(
     window: WebviewWindow,
     manager: State<'_, ReminderSettingsManager>,
+    control: State<'_, ReminderControl>,
 ) -> Result<ReminderSettings, String> {
     authorize_main_caller(window.label())?;
-    manager.reset()
+    let manager = manager.inner().clone();
+    let control = control.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        reset_reminder_settings_and_notify(&manager, &control)
+    })
+    .await
+    .map_err(|error| format!("reminder settings reset task failed: {error}"))?
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -532,6 +837,7 @@ pub(crate) enum ReminderAction {
     Pause,
     Resume,
     TakeBreakNow,
+    SkipCue(u64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -588,7 +894,7 @@ impl ReminderStatus {
             pause_action_label,
             pause_action_enabled,
             take_break_enabled: snapshot.phase == TrayPhase::Working && !snapshot.overlay_active,
-            preview_enabled: !snapshot.overlay_active,
+            preview_enabled: snapshot.phase != TrayPhase::Unavailable && !snapshot.overlay_active,
         }
     }
 
@@ -603,11 +909,32 @@ impl ReminderStatus {
 
 type ReminderActionResponse = Result<TraySnapshot, String>;
 
+#[derive(Debug, Clone)]
+enum ReminderControlCommand {
+    Action(ReminderAction),
+    SynchronizeSettings,
+    #[cfg(target_os = "macos")]
+    BeginManualPreparation(Arc<AtomicBool>),
+    #[cfg(target_os = "macos")]
+    CancelManualPreparation(u64),
+}
+
 #[derive(Debug)]
 struct ReminderControlRequest {
     attempt_id: u64,
-    action: ReminderAction,
+    command: ReminderControlCommand,
     response: Option<SyncSender<ReminderActionResponse>>,
+}
+
+impl ReminderControlRequest {
+    fn cancels_pre_break_cue(&self) -> bool {
+        matches!(
+            self.command,
+            ReminderControlCommand::Action(
+                ReminderAction::Pause | ReminderAction::Resume | ReminderAction::TakeBreakNow
+            )
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -616,6 +943,8 @@ pub(crate) struct ReminderControl {
     action_health: ReminderActionHealth,
     tray_status: TrayStatus,
     next_attempt_id: Arc<AtomicU64>,
+    #[cfg(target_os = "macos")]
+    preparation_status: PreparationCache,
 }
 
 impl ReminderControl {
@@ -627,25 +956,32 @@ impl ReminderControl {
                 action_health: ReminderActionHealth::default(),
                 tray_status,
                 next_attempt_id: Arc::new(AtomicU64::new(0)),
+                #[cfg(target_os = "macos")]
+                preparation_status: Arc::new(Mutex::new((
+                    ManualPreparationStatus::default(),
+                    Instant::now(),
+                ))),
             },
             receiver,
         )
     }
 
     pub(crate) fn dispatch(&self, action: ReminderAction) -> Result<(), String> {
+        self.ensure_action_available(action)?;
         self.send(ReminderControlRequest {
             attempt_id: self.next_attempt_id(),
-            action,
+            command: ReminderControlCommand::Action(action),
             response: None,
         })
     }
 
-    fn request(&self, action: ReminderAction) -> Result<ReminderStatus, String> {
+    pub(crate) fn request(&self, action: ReminderAction) -> Result<ReminderStatus, String> {
+        self.ensure_action_available(action)?;
         let (response, receiver) = mpsc::sync_channel(1);
         let attempt_id = self.next_attempt_id();
         self.send(ReminderControlRequest {
             attempt_id,
-            action,
+            command: ReminderControlCommand::Action(action),
             response: Some(response),
         })?;
         let response = receiver
@@ -657,6 +993,80 @@ impl ReminderControl {
             })?;
         let snapshot = response?;
         Ok(ReminderStatus::from_snapshot(snapshot))
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn preparation_status(&self) -> ManualPreparationStatus {
+        let (mut status, sampled_at) = *self
+            .preparation_status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        status.remaining_milliseconds = status.remaining_milliseconds.map(|remaining| {
+            remaining
+                .saturating_sub(u64::try_from(sampled_at.elapsed().as_millis()).unwrap_or(u64::MAX))
+        });
+        status
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn begin_manual_preparation(&self) -> Result<ManualPreparationStatus, String> {
+        self.ensure_action_available(ReminderAction::TakeBreakNow)?;
+        self.request_preparation(ReminderControlCommand::BeginManualPreparation(Arc::new(
+            AtomicBool::new(true),
+        )))
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn cancel_manual_preparation(
+        &self,
+        id: u64,
+    ) -> Result<ManualPreparationStatus, String> {
+        self.request_preparation(ReminderControlCommand::CancelManualPreparation(id))
+    }
+
+    #[cfg(target_os = "macos")]
+    fn request_preparation(
+        &self,
+        command: ReminderControlCommand,
+    ) -> Result<ManualPreparationStatus, String> {
+        let valid = match &command {
+            ReminderControlCommand::BeginManualPreparation(valid) => Some(Arc::clone(valid)),
+            _ => None,
+        };
+        let (response, receiver) = mpsc::sync_channel(1);
+        self.send(ReminderControlRequest {
+            attempt_id: self.next_attempt_id(),
+            command,
+            response: Some(response),
+        })?;
+        receiver
+            .recv_timeout(REMINDER_CONTROL_TIMEOUT)
+            .map_err(|error| {
+                if let Some(valid) = valid {
+                    valid.store(false, Ordering::Release);
+                }
+                format!("reminder scheduler did not answer preparation: {error}")
+            })??;
+        Ok(self.preparation_status())
+    }
+
+    /// Wake the scheduler after a committed settings mutation without waiting
+    /// for an acknowledgement. The production loop also reconciles on every
+    /// periodic iteration, so a full or disconnected queue cannot invalidate
+    /// an already authoritative storage commit.
+    fn notify_settings_changed(&self) -> Result<(), String> {
+        self.sender
+            .try_send(ReminderControlRequest {
+                attempt_id: 0,
+                command: ReminderControlCommand::SynchronizeSettings,
+                response: None,
+            })
+            .map_err(|error| match error {
+                TrySendError::Full(_) => "reminder synchronization queue is full".to_owned(),
+                TrySendError::Disconnected(_) => {
+                    "reminder synchronization channel is disconnected".to_owned()
+                }
+            })
     }
 
     fn send(&self, request: ReminderControlRequest) -> Result<(), String> {
@@ -671,6 +1081,24 @@ impl ReminderControl {
         })
     }
 
+    fn ensure_action_available(&self, action: ReminderAction) -> Result<(), String> {
+        let snapshot = self.tray_status.current();
+        let available = match action {
+            ReminderAction::Pause => snapshot.phase == TrayPhase::Working,
+            ReminderAction::Resume => snapshot.phase == TrayPhase::Paused,
+            ReminderAction::TakeBreakNow | ReminderAction::SkipCue(_) => {
+                snapshot.phase == TrayPhase::Working && !snapshot.overlay_active
+            }
+        };
+        if available {
+            Ok(())
+        } else if snapshot.phase == TrayPhase::Unavailable {
+            Err("automatic reminders are unavailable until saved timing is recovered".into())
+        } else {
+            Err("that reminder action is not available in the current state".into())
+        }
+    }
+
     fn next_attempt_id(&self) -> u64 {
         self.next_attempt_id
             .fetch_add(1, Ordering::Relaxed)
@@ -682,6 +1110,46 @@ impl ReminderControl {
         self.tray_status
             .publish_action_error(self.action_health.current());
     }
+}
+
+fn notify_scheduler_after_settings_commit(control: &ReminderControl) {
+    if let Err(error) = control.notify_settings_changed() {
+        // Fixed technical channel state only: canonical paths and persisted
+        // values stay in developer diagnostics, never in consumer feedback.
+        eprintln!(
+            "could not notify the reminder scheduler after a committed settings update: {error}; periodic reconciliation remains active"
+        );
+    }
+}
+
+fn save_reminder_settings_and_notify(
+    manager: &ReminderSettingsManager,
+    control: &ReminderControl,
+    settings: ReminderSettings,
+) -> Result<ReminderSettings, String> {
+    let committed = manager.save(settings)?;
+    notify_scheduler_after_settings_commit(control);
+    Ok(committed)
+}
+
+fn retry_reminder_settings_and_notify(
+    manager: &ReminderSettingsManager,
+    control: &ReminderControl,
+) -> StorageLoadHealth {
+    let health = manager.retry_load();
+    if health.status == crate::storage_recovery::StorageLoadStatus::Available {
+        notify_scheduler_after_settings_commit(control);
+    }
+    health
+}
+
+fn reset_reminder_settings_and_notify(
+    manager: &ReminderSettingsManager,
+    control: &ReminderControl,
+) -> Result<ReminderSettings, String> {
+    let committed = manager.reset()?;
+    notify_scheduler_after_settings_commit(control);
+    Ok(committed)
 }
 
 #[derive(Debug, Default)]
@@ -809,6 +1277,7 @@ fn system_time_from_unix_seconds(secs: i64) -> SystemTime {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WorkDeadline {
     Relative,
+    Monotonic(Duration),
     Wall(SystemTime),
 }
 
@@ -917,9 +1386,12 @@ impl ReminderTimer {
     ) {
         match self.phase {
             ReminderPhase::Working => {
+                let schedule_changed = !self.settings.has_same_schedule(settings);
                 self.settings = settings;
                 self.pending_settings = None;
-                self.enter_working(changed_at, wall_now);
+                if schedule_changed {
+                    self.enter_working(changed_at, wall_now);
+                }
             }
             ReminderPhase::Break => {
                 self.pending_settings = Some(settings);
@@ -967,6 +1439,31 @@ impl ReminderTimer {
         true
     }
 
+    fn skip_upcoming(&mut self, revision: u64, now: Duration, wall_now: SystemTime) -> bool {
+        if self.phase != ReminderPhase::Working || self.state_revision != revision {
+            return false;
+        }
+        let remaining = self
+            .tray_snapshot(now, wall_now, 0, false)
+            .remaining_milliseconds;
+        if !remaining.is_some_and(|ms| (1..=CUE_LEAD_MILLISECONDS).contains(&ms)) {
+            return false;
+        }
+        // Preserve the next scheduled start, including the skipped break's duration
+        // in relative mode. Sync mode stays on its existing shared grid.
+        self.work_deadline = match self.work_deadline {
+            WorkDeadline::Relative => WorkDeadline::Monotonic(
+                self.phase_started_at + self.settings.work_interval() * 2 + self.break_duration(),
+            ),
+            WorkDeadline::Monotonic(due) => {
+                WorkDeadline::Monotonic(due + self.settings.work_interval() + self.break_duration())
+            }
+            WorkDeadline::Wall(due) => WorkDeadline::Wall(due + self.settings.work_interval()),
+        };
+        self.state_revision = self.state_revision.wrapping_add(1);
+        true
+    }
+
     /// Credit a natural break after the timer has already entered `Break`.
     /// Used when idle probes show the user already rested long enough that
     /// showing a multi-monitor overlay would be wrong — and sitting in a
@@ -1001,6 +1498,7 @@ impl ReminderTimer {
                     now.saturating_sub(self.phase_started_at) >= self.settings.work_interval()
                 }
                 WorkDeadline::Wall(due) => wall_now >= due,
+                WorkDeadline::Monotonic(due) => now >= due,
             },
             ReminderPhase::Break => {
                 now.saturating_sub(self.phase_started_at) >= self.settings.break_duration()
@@ -1055,6 +1553,7 @@ impl ReminderTimer {
                             WorkDeadline::Wall(due) => {
                                 due.duration_since(wall_now).unwrap_or(Duration::ZERO)
                             }
+                            WorkDeadline::Monotonic(due) => due.saturating_sub(now),
                         },
                     ),
                     ReminderPhase::Break => (
@@ -1112,16 +1611,15 @@ fn break_presentation(
     activity: Option<ActivityPresentationContext>,
 ) -> BreakPresentation {
     // Fullscreen is never overridden by adaptation (#61 decision 5).
-    if probes
-        .active_window_fullscreen
-        .as_ref()
-        .is_ok_and(|fullscreen| *fullscreen)
-    {
+    if matches!(
+        &probes.active_window_fullscreen,
+        ProbeReading::Available(true)
+    ) {
         return BreakPresentation::SuppressFullscreen;
     }
 
-    let Ok(idle_seconds) = probes.idle_seconds.as_ref() else {
-        // Idle probe dark: fail open and show the break.
+    let ProbeReading::Available(idle_seconds) = &probes.idle_seconds else {
+        // Pending and failed idle probes both fail open and show the break.
         return BreakPresentation::Show;
     };
     let idle_seconds = *idle_seconds;
@@ -1186,6 +1684,9 @@ fn execute_reminder_action(
                     epoch_ms(SystemTime::now()),
                 );
             }
+        }
+        ReminderAction::SkipCue(_) => {
+            return Err("cue skip requires scheduler authorization".into())
         }
         ReminderAction::Pause | ReminderAction::Resume | ReminderAction::TakeBreakNow => {
             // Stale and repeated native events are explicit idempotent no-ops.
@@ -1276,7 +1777,31 @@ fn present_scheduled_break(
     }
 }
 
-pub(crate) fn start_scheduler(
+fn hold_scheduled_cue_until_presented<T>(
+    present: impl FnOnce() -> T,
+    close_scheduled_cue: impl FnOnce(),
+) -> T {
+    let presentation = present();
+    close_scheduled_cue();
+    presentation
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ReminderPresentationControllers {
+    overlay: OverlayController,
+    pre_break_cue: PreBreakCueController,
+}
+
+impl ReminderPresentationControllers {
+    pub(crate) fn new(overlay: OverlayController, pre_break_cue: PreBreakCueController) -> Self {
+        Self {
+            overlay,
+            pre_break_cue,
+        }
+    }
+}
+
+struct ReminderSchedulerContext {
     app: AppHandle,
     probe_cache: ProbeCache,
     activity_tracker: ActivityTrackerHandle,
@@ -1284,188 +1809,588 @@ pub(crate) fn start_scheduler(
     overlay_controller: OverlayController,
     settings_manager: ReminderSettingsManager,
     tray_status: TrayStatus,
-) -> io::Result<ReminderControl> {
-    let (control, receiver) = ReminderControl::channel(tray_status.clone());
-    let action_health = control.action_health.clone();
-    let next_attempt_id = Arc::clone(&control.next_attempt_id);
-    std::thread::Builder::new()
-        .name("unfocus-reminders".into())
-        .spawn(move || {
-            let initial = settings_manager.snapshot();
-            let started_at = initial.changed_at;
-            let mut settings_revision = initial.revision;
-            // Sampled once and reused for the pause check, timer construction,
-            // and the initial snapshot so they all observe the same instant.
-            let wall_now = SystemTime::now();
-            let pause_remaining = initial
-                .pause_until
-                .and_then(|pause_until| pause_until.duration_since(wall_now).ok());
-            let mut timer = pause_remaining.map_or_else(
-                || ReminderTimer::new(Duration::ZERO, initial.settings, wall_now),
-                |remaining| {
-                    ReminderTimer::new_paused(Duration::ZERO, initial.settings, remaining, wall_now)
-                },
-            );
-            tray_status.publish(timer.tray_snapshot(
-                Duration::ZERO,
-                wall_now,
-                settings_revision,
-                false,
-            ));
-            let mut control_connected = true;
+    receiver: Receiver<ReminderControlRequest>,
+    action_health: ReminderActionHealth,
+    next_attempt_id: Arc<AtomicU64>,
+    #[cfg(target_os = "macos")]
+    preparation_status: PreparationCache,
+    pre_break_cue_controller: PreBreakCueController,
+}
+
+struct ReminderScheduler {
+    context: ReminderSchedulerContext,
+    started_at: Instant,
+    runtime: ReminderSchedulerRuntime,
+    control_connected: bool,
+    last_sample: Option<(SystemTime, Duration)>,
+    pre_break_cue: PreBreakCue,
+    #[cfg(target_os = "macos")]
+    manual_preparation: ManualPreparation,
+    #[cfg(target_os = "macos")]
+    preparation_request_valid: Option<Arc<AtomicBool>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettingsReconciliation {
+    Unavailable,
+    Activated,
+    Unchanged,
+    Updated,
+}
+
+/// Pure timer-owning portion of one scheduler thread. Production reconciliation
+/// and ticking both pass through this state, so recovery cannot accidentally
+/// create a second timer beside the scheduler's existing one.
+struct ReminderSchedulerRuntime {
+    timer: Option<ReminderTimer>,
+    settings_revision: u64,
+}
+
+impl ReminderSchedulerRuntime {
+    fn new(initial: Option<ReminderSettingsSnapshot>, now: Duration, wall_now: SystemTime) -> Self {
+        Self {
+            timer: initial.map(|snapshot| Self::recovered_timer(now, wall_now, snapshot)),
+            settings_revision: initial.map_or(0, |snapshot| snapshot.revision),
+        }
+    }
+
+    fn recovered_timer(
+        now: Duration,
+        wall_now: SystemTime,
+        snapshot: ReminderSettingsSnapshot,
+    ) -> ReminderTimer {
+        let pause_remaining = snapshot
+            .pause_until
+            .and_then(|pause_until| pause_until.duration_since(wall_now).ok());
+        pause_remaining.map_or_else(
+            || ReminderTimer::new(now, snapshot.settings, wall_now),
+            |remaining| ReminderTimer::new_paused(now, snapshot.settings, remaining, wall_now),
+        )
+    }
+
+    fn reconcile_settings(
+        &mut self,
+        latest: Option<ReminderSettingsSnapshot>,
+        now: Duration,
+        wall_now: SystemTime,
+        started_at: Instant,
+    ) -> SettingsReconciliation {
+        let Some(latest) = latest else {
+            return SettingsReconciliation::Unavailable;
+        };
+        let Some(timer) = self.timer.as_mut() else {
+            self.timer = Some(Self::recovered_timer(now, wall_now, latest));
+            self.settings_revision = latest.revision;
+            return SettingsReconciliation::Activated;
+        };
+        if latest.revision == self.settings_revision {
+            return SettingsReconciliation::Unchanged;
+        }
+        timer.apply_settings(
+            latest.settings,
+            latest.changed_at.saturating_duration_since(started_at),
+            wall_now,
+        );
+        self.settings_revision = latest.revision;
+        SettingsReconciliation::Updated
+    }
+
+    fn tick(&mut self, now: Duration, wall_now: SystemTime) -> Option<ReminderTransition> {
+        self.timer.as_mut()?.tick(now, wall_now)
+    }
+
+    #[cfg(any(target_os = "macos", test))]
+    fn preparation_revision(
+        &self,
+        overlay_active: bool,
+        authoritative_revision: Option<u64>,
+    ) -> Option<(u64, u64)> {
+        self.timer()
+            .filter(|timer| {
+                timer.phase == ReminderPhase::Working
+                    && !overlay_active
+                    && authoritative_revision == Some(self.settings_revision)
+            })
+            .map(|timer| (self.settings_revision, timer.state_revision))
+    }
+
+    fn timer(&self) -> Option<&ReminderTimer> {
+        self.timer.as_ref()
+    }
+
+    fn timer_mut(&mut self) -> Option<&mut ReminderTimer> {
+        self.timer.as_mut()
+    }
+}
+
+/// The production scheduler's per-iteration settings reconciliation seam.
+/// Keeping it free of Tauri objects lets tests exercise the exact unavailable,
+/// activation, and unchanged-revision path without constructing fake windows.
+fn reconcile_scheduler_iteration(
+    runtime: &mut ReminderSchedulerRuntime,
+    latest: Option<ReminderSettingsSnapshot>,
+    now: Duration,
+    wall_now: SystemTime,
+    started_at: Instant,
+) -> SettingsReconciliation {
+    runtime.reconcile_settings(latest, now, wall_now, started_at)
+}
+
+impl ReminderScheduler {
+    fn new(context: ReminderSchedulerContext) -> Self {
+        let initial = context.settings_manager.authoritative_snapshot();
+        let started_at = initial.map_or_else(Instant::now, |snapshot| snapshot.changed_at);
+        let wall_now = SystemTime::now();
+        let runtime = ReminderSchedulerRuntime::new(initial, Duration::ZERO, wall_now);
+        let initial_snapshot = runtime
+            .timer()
+            .map_or_else(TraySnapshot::unavailable, |timer| {
+                timer.tray_snapshot(Duration::ZERO, wall_now, runtime.settings_revision, false)
+            });
+        context.tray_status.publish(initial_snapshot);
+        let pre_break_cue_controller = context.pre_break_cue_controller.clone();
+        Self {
+            context,
+            started_at,
+            runtime,
+            control_connected: true,
+            #[cfg(target_os = "macos")]
+            manual_preparation: ManualPreparation::default(),
+            #[cfg(target_os = "macos")]
+            preparation_request_valid: None,
             // Loop-local, not on `ReminderTimer`: the timer stays pure and
             // clock-injected. `None` on the first iteration, so it never
             // rebases before there is a prior sample to diverge from.
-            let mut last_sample: Option<(SystemTime, Duration)> = None;
+            last_sample: None,
+            pre_break_cue: PreBreakCue::new(
+                pre_break_cue_platform_enabled(qualified_x11_session(), cfg!(target_os = "macos")),
+                pre_break_cue_controller,
+            ),
+        }
+    }
 
-            loop {
-                let request = if control_connected {
-                    match receiver.recv_timeout(REMINDER_POLL_INTERVAL) {
-                        Ok(request) => Some(request),
-                        Err(RecvTimeoutError::Timeout) => None,
-                        Err(RecvTimeoutError::Disconnected) => {
-                            control_connected = false;
-                            None
-                        }
-                    }
-                } else {
-                    std::thread::sleep(REMINDER_POLL_INTERVAL);
-                    None
-                };
+    fn run(mut self) {
+        loop {
+            self.run_iteration();
+        }
+    }
 
-                // Sampled once per iteration and reused everywhere below so
-                // every timer call in this pass observes the same instant.
-                let wall_now = SystemTime::now();
+    fn run_iteration(&mut self) {
+        let request = self.receive_request();
+        // Sampled once per iteration and reused everywhere below so every
+        // timer call in this pass observes the same instant.
+        let wall_now = SystemTime::now();
+        let now = self.started_at.elapsed();
+        self.apply_latest_settings(now, wall_now);
+        let probes = self.observe_activity();
+        self.rebase_after_clock_discontinuity(now, wall_now);
 
-                let latest = settings_manager.snapshot();
-                if latest.revision != settings_revision {
-                    timer.apply_settings(
-                        latest.settings,
-                        latest.changed_at.saturating_duration_since(started_at),
-                        wall_now,
-                    );
-                    settings_revision = latest.revision;
+        if request
+            .as_ref()
+            .is_some_and(ReminderControlRequest::cancels_pre_break_cue)
+        {
+            self.pre_break_cue
+                .cancel(&self.context.app, "reminder action requested");
+        }
+        let action_result = self.execute_request(request.as_ref(), now, wall_now);
+        self.handle_transition(now, wall_now);
+        #[cfg(target_os = "macos")]
+        self.process_manual_preparation(now, wall_now);
+        let snapshot = self.snapshot_and_reconcile_cue(now, wall_now, &probes);
+        self.context.tray_status.publish(snapshot.clone());
+        Self::respond_to_request(request, action_result, snapshot);
+    }
+
+    fn receive_request(&mut self) -> Option<ReminderControlRequest> {
+        if !self.control_connected {
+            std::thread::sleep(REMINDER_POLL_INTERVAL);
+            return None;
+        }
+        match self.context.receiver.recv_timeout(REMINDER_POLL_INTERVAL) {
+            Ok(request) => Some(request),
+            Err(RecvTimeoutError::Timeout) => None,
+            Err(RecvTimeoutError::Disconnected) => {
+                self.control_connected = false;
+                #[cfg(target_os = "macos")]
+                self.manual_preparation.clear();
+                None
+            }
+        }
+    }
+
+    fn apply_latest_settings(&mut self, now: Duration, wall_now: SystemTime) {
+        let reconciliation = reconcile_scheduler_iteration(
+            &mut self.runtime,
+            self.context.settings_manager.authoritative_snapshot(),
+            now,
+            wall_now,
+            self.started_at,
+        );
+        #[cfg(target_os = "macos")]
+        if reconciliation != SettingsReconciliation::Unchanged {
+            self.manual_preparation.clear();
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = reconciliation;
+    }
+
+    fn observe_activity(&self) -> ProbeSnapshot {
+        // Activity segmentation is observe-only: probe failures freeze
+        // classification and never change the pure reminder clock.
+        let probes = self.context.probe_cache.snapshot();
+        observe_activity_snapshot(
+            &self.context.activity_tracker,
+            epoch_ms(SystemTime::now()),
+            &probes,
+        );
+        probes
+    }
+
+    fn rebase_after_clock_discontinuity(&mut self, now: Duration, wall_now: SystemTime) {
+        // Detect an NTP/manual step or a suspend where `Instant` observes it.
+        // Rebase before ticking so a jump cannot fire a stale deadline or
+        // strand Working for the size of a backward step. This mirrors the
+        // pinned test-only lifecycle discontinuity contract.
+        if let Some((prev_wall, prev_mono)) = self.last_sample {
+            let wall_delta_ms = match wall_now.duration_since(prev_wall) {
+                Ok(forward) => i64::try_from(forward.as_millis()).unwrap_or(i64::MAX),
+                Err(backward) => {
+                    -i64::try_from(backward.duration().as_millis()).unwrap_or(i64::MAX)
                 }
-
-                // Activity segmentation is observe-only: probe failures freeze
-                // classification and never change the pure reminder clock.
-                let probes = probe_cache.snapshot();
-                activity_tracker.observe(epoch_ms(SystemTime::now()), probes.idle_seconds.ok());
-
-                let now = started_at.elapsed();
-
-                // Detect a clock discontinuity (an NTP or manual step; a
-                // suspend on platforms where `Instant` observes it — `std`
-                // does not specify that it must) and rebase before evaluating
-                // `now`/`wall_now` below, so a jump never lets a stale wall
-                // deadline fire a surprise break and never strands Working for
-                // the size of a backward step. This mirrors
-                // `lifecycle_contract::discontinuity_observation`, a pinned
-                // test-only contract with no production callers, rather than
-                // calling it — the same relationship `tick` already has with
-                // `stall_observation` below.
-                if let Some((prev_wall, prev_mono)) = last_sample {
-                    let wall_delta_ms = match wall_now.duration_since(prev_wall) {
-                        Ok(forward) => i64::try_from(forward.as_millis()).unwrap_or(i64::MAX),
-                        Err(backward) => {
-                            -i64::try_from(backward.duration().as_millis()).unwrap_or(i64::MAX)
-                        }
-                    };
-                    let mono_delta_ms =
-                        i64::try_from(now.saturating_sub(prev_mono).as_millis()).unwrap_or(i64::MAX);
-                    let tolerance_ms =
-                        i64::try_from(CLOCK_DIVERGENCE_TOLERANCE.as_millis()).unwrap_or(i64::MAX);
-                    if wall_delta_ms.abs_diff(mono_delta_ms) > tolerance_ms.unsigned_abs() {
-                        timer.rebase_work_deadline(wall_now);
-                    }
-                }
-                // Updated every iteration, rebase or not, so a single jump
-                // cannot trigger repeated rebases on the next few polls.
-                last_sample = Some((wall_now, now));
-
-                let action_result = request.as_ref().map(|request| {
-                    execute_reminder_action(
-                        request.action,
-                        now,
-                        wall_now,
-                        &mut timer,
-                        &settings_manager,
-                        &app,
-                        &overlay_controller,
-                        &break_ledger,
-                    )
-                });
-                if let (Some(request), Some(result)) = (&request, &action_result) {
-                    match result {
-                        Ok(()) => action_health.clear(request.attempt_id),
-                        Err(error) => {
-                            action_health.record_failure(request.attempt_id, error.clone())
-                        }
-                    }
-                }
-                let transition = timer.tick(now, wall_now);
-                if transition == Some(ReminderTransition::ResumeWorking) {
-                    if let Err(error) = settings_manager.clear_pause() {
-                        let error = format!(
-                            "reminder pause expired but its persisted state was not cleared: {error}"
-                        );
-                        eprintln!("{error}");
-                        let attempt_id = next_attempt_id
-                            .fetch_add(1, Ordering::Relaxed)
-                            .wrapping_add(1);
-                        action_health.record_failure(attempt_id, error);
-                    }
-                } else if transition == Some(ReminderTransition::StartBreak) {
-                    let settings = timer.settings;
-                    if let Some(presentation) = present_scheduled_break(
-                        &app,
-                        &probe_cache,
-                        &activity_tracker,
-                        &overlay_controller,
-                        timer.break_duration(),
-                    ) {
-                        let kind = match presentation {
-                            BreakPresentation::Show => BreakEventKind::ScheduledShown,
-                            BreakPresentation::NaturalIdle => BreakEventKind::NaturalIdle,
-                            BreakPresentation::SuppressFullscreen => {
-                                BreakEventKind::FullscreenSuppress
-                            }
-                        };
-                        break_ledger.record(
-                            kind,
-                            settings.work_minutes,
-                            settings.break_seconds,
-                            epoch_ms(SystemTime::now()),
-                        );
-                        if presentation == BreakPresentation::NaturalIdle {
-                            let credited = timer.credit_natural_break(now, wall_now);
-                            debug_assert!(credited);
-                        }
-                    }
-                }
-
-                let snapshot = timer
-                    .tray_snapshot(
-                        now,
-                        wall_now,
-                        settings_revision,
-                        overlay_controller.has_active_run(),
-                    )
-                    .with_action_error(action_health.current());
-                tray_status.publish(snapshot.clone());
-
-                if let Some(request) = request {
-                    let response = action_result
-                        .unwrap_or_else(|| Err("reminder action was not processed".to_owned()))
-                        .map(|()| snapshot);
-                    if let Some(sender) = request.response {
-                        let _ = sender.try_send(response);
-                    } else if let Err(error) = response {
-                        eprintln!("tray reminder action failed: {error}");
-                    }
+            };
+            let mono_delta_ms =
+                i64::try_from(now.saturating_sub(prev_mono).as_millis()).unwrap_or(i64::MAX);
+            let tolerance_ms =
+                i64::try_from(CLOCK_DIVERGENCE_TOLERANCE.as_millis()).unwrap_or(i64::MAX);
+            #[cfg(target_os = "macos")]
+            if wall_delta_ms.abs_diff(mono_delta_ms) > 1_000 || mono_delta_ms > 1_000 {
+                // A three-second request must not replay after a stalled/suspended loop.
+                self.manual_preparation.clear();
+            }
+            if wall_delta_ms.abs_diff(mono_delta_ms) > tolerance_ms.unsigned_abs() {
+                if let Some(timer) = self.runtime.timer_mut() {
+                    timer.rebase_work_deadline(wall_now);
                 }
             }
-        })?;
+        }
+        // Updated every iteration so one jump cannot trigger repeated rebases.
+        self.last_sample = Some((wall_now, now));
+    }
+
+    fn execute_request(
+        &mut self,
+        request: Option<&ReminderControlRequest>,
+        now: Duration,
+        wall_now: SystemTime,
+    ) -> Option<Result<(), String>> {
+        let request = request?;
+        #[cfg(target_os = "macos")]
+        let settings_revision = self.runtime.settings_revision;
+        #[cfg(target_os = "macos")]
+        if matches!(request.command, ReminderControlCommand::Action(_)) {
+            self.manual_preparation.clear();
+        }
+        let Some(timer) = self.runtime.timer_mut() else {
+            return Some(Err(
+                "automatic reminders are unavailable until saved timing is recovered".into(),
+            ));
+        };
+        match request.command.clone() {
+            ReminderControlCommand::Action(action) => {
+                let result = if let ReminderAction::SkipCue(run_id) = action {
+                    self.skip_cue(run_id, now, wall_now)
+                } else {
+                    execute_reminder_action(
+                        action,
+                        now,
+                        wall_now,
+                        timer,
+                        &self.context.settings_manager,
+                        &self.context.app,
+                        &self.context.overlay_controller,
+                        &self.context.break_ledger,
+                    )
+                };
+                match &result {
+                    Ok(()) => self.context.action_health.clear(request.attempt_id),
+                    Err(error) => self
+                        .context
+                        .action_health
+                        .record_failure(request.attempt_id, error.clone()),
+                }
+                Some(result)
+            }
+            ReminderControlCommand::SynchronizeSettings => Some(Ok(())),
+            #[cfg(target_os = "macos")]
+            ReminderControlCommand::BeginManualPreparation(valid) => {
+                if !valid.load(Ordering::Acquire) {
+                    return Some(Err(
+                        "break preparation request expired before acceptance".into()
+                    ));
+                }
+                if timer.phase != ReminderPhase::Working
+                    || self.context.overlay_controller.has_active_run()
+                {
+                    return Some(Err("a break cannot be prepared in the current state".into()));
+                }
+                if self.manual_preparation.status(now).request_id.is_none() {
+                    self.preparation_request_valid = Some(valid);
+                }
+                Some(
+                    self.manual_preparation
+                        .begin(now, (settings_revision, timer.state_revision)),
+                )
+            }
+            #[cfg(target_os = "macos")]
+            ReminderControlCommand::CancelManualPreparation(id) => {
+                Some(self.manual_preparation.cancel(id))
+            }
+        }
+    }
+
+    fn skip_cue(&mut self, run_id: u64, now: Duration, wall_now: SystemTime) -> Result<(), String> {
+        let revision = self
+            .pre_break_cue
+            .skippable_revision(run_id)
+            .ok_or("this cue is no longer current")?;
+        let Some(timer) = self.runtime.timer_mut() else {
+            return Err(
+                "automatic reminders are unavailable until saved timing is recovered".into(),
+            );
+        };
+        if self.context.overlay_controller.has_active_run()
+            || !timer.skip_upcoming(revision, now, wall_now)
+        {
+            return Err("this break can no longer be skipped".into());
+        }
+        self.pre_break_cue.finish_skip(&self.context.app);
+        Ok(())
+    }
+
+    fn handle_transition(&mut self, now: Duration, wall_now: SystemTime) {
+        match self.runtime.tick(now, wall_now) {
+            Some(ReminderTransition::ResumeWorking) => self.clear_expired_pause(),
+            Some(ReminderTransition::StartBreak) => self.start_scheduled_break(now, wall_now),
+            Some(ReminderTransition::EndBreak) | None => {}
+        }
+    }
+
+    fn clear_expired_pause(&self) {
+        if let Err(error) = self.context.settings_manager.clear_pause() {
+            let error =
+                format!("reminder pause expired but its persisted state was not cleared: {error}");
+            eprintln!("{error}");
+            let attempt_id = self
+                .context
+                .next_attempt_id
+                .fetch_add(1, Ordering::Relaxed)
+                .wrapping_add(1);
+            self.context.action_health.record_failure(attempt_id, error);
+        }
+    }
+
+    fn start_scheduled_break(&mut self, now: Duration, wall_now: SystemTime) {
+        #[cfg(target_os = "macos")]
+        self.manual_preparation.clear();
+        let Some(timer) = self.runtime.timer_mut() else {
+            return;
+        };
+        self.pre_break_cue.cancel_preview(&self.context.app);
+        let settings = timer.settings;
+        let presentation = hold_scheduled_cue_until_presented(
+            || {
+                present_scheduled_break(
+                    &self.context.app,
+                    &self.context.probe_cache,
+                    &self.context.activity_tracker,
+                    &self.context.overlay_controller,
+                    timer.break_duration(),
+                )
+            },
+            || {
+                self.pre_break_cue
+                    .close_scheduled(&self.context.app, "scheduled break started");
+            },
+        );
+        let Some(presentation) = presentation else {
+            return;
+        };
+        let kind = match presentation {
+            BreakPresentation::Show => BreakEventKind::ScheduledShown,
+            BreakPresentation::NaturalIdle => BreakEventKind::NaturalIdle,
+            BreakPresentation::SuppressFullscreen => BreakEventKind::FullscreenSuppress,
+        };
+        self.context.break_ledger.record(
+            kind,
+            settings.work_minutes,
+            settings.break_seconds,
+            epoch_ms(SystemTime::now()),
+        );
+        if presentation == BreakPresentation::NaturalIdle {
+            let credited = timer.credit_natural_break(now, wall_now);
+            debug_assert!(credited);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn process_manual_preparation(&mut self, now: Duration, wall_now: SystemTime) {
+        let revision = self.runtime.preparation_revision(
+            self.context.overlay_controller.has_active_run(),
+            self.context
+                .settings_manager
+                .authoritative_snapshot()
+                .filter(|_| self.control_connected)
+                .map(|latest| latest.revision),
+        );
+        self.manual_preparation.reconcile(revision);
+        if self
+            .preparation_request_valid
+            .as_ref()
+            .is_some_and(|valid| !valid.load(Ordering::Acquire))
+        {
+            self.manual_preparation.clear();
+        }
+        if self.manual_preparation.take_due(now) {
+            self.pre_break_cue
+                .cancel(&self.context.app, "manual break preparation completed");
+            if let Some(timer) = self.runtime.timer_mut() {
+                let result = execute_reminder_action(
+                    ReminderAction::TakeBreakNow,
+                    now,
+                    wall_now,
+                    timer,
+                    &self.context.settings_manager,
+                    &self.context.app,
+                    &self.context.overlay_controller,
+                    &self.context.break_ledger,
+                );
+                let attempt_id = self
+                    .context
+                    .next_attempt_id
+                    .fetch_add(1, Ordering::Relaxed)
+                    .wrapping_add(1);
+                match result {
+                    Ok(()) => self.context.action_health.clear(attempt_id),
+                    Err(error) => self.context.action_health.record_failure(attempt_id, error),
+                }
+            }
+        }
+        *self
+            .context
+            .preparation_status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) =
+            (self.manual_preparation.status(now), Instant::now());
+    }
+
+    fn snapshot_and_reconcile_cue(
+        &mut self,
+        now: Duration,
+        wall_now: SystemTime,
+        probes: &ProbeSnapshot,
+    ) -> TraySnapshot {
+        let Some(timer) = self.runtime.timer() else {
+            self.pre_break_cue
+                .cancel(&self.context.app, "reminder settings unavailable");
+            return TraySnapshot::unavailable()
+                .with_action_error(self.context.action_health.current());
+        };
+        let snapshot = timer
+            .tray_snapshot(
+                now,
+                wall_now,
+                self.runtime.settings_revision,
+                self.context.overlay_controller.has_active_run(),
+            )
+            .with_action_error(self.context.action_health.current());
+        let cue_in_lead_window = snapshot.phase == TrayPhase::Working
+            && snapshot
+                .remaining_milliseconds
+                .is_some_and(|remaining| (1..=CUE_LEAD_MILLISECONDS).contains(&remaining));
+        let cue_presentation_allowed = !cue_in_lead_window
+            || matches!(
+                break_presentation(
+                    probes,
+                    timer.break_duration(),
+                    Some(
+                        self.context
+                            .activity_tracker
+                            .presentation_context(epoch_ms(wall_now)),
+                    ),
+                ),
+                BreakPresentation::Show
+            );
+        self.pre_break_cue.reconcile(
+            &self.context.app,
+            &snapshot,
+            timer.settings.pre_break_cue_enabled,
+            cue_presentation_allowed,
+            wall_now,
+        );
+        snapshot
+    }
+
+    fn respond_to_request(
+        request: Option<ReminderControlRequest>,
+        action_result: Option<Result<(), String>>,
+        snapshot: TraySnapshot,
+    ) {
+        let Some(request) = request else {
+            return;
+        };
+        let response = action_result
+            .unwrap_or_else(|| Err("reminder action was not processed".to_owned()))
+            .map(|()| snapshot);
+        if let Some(sender) = request.response {
+            let _ = sender.try_send(response);
+        } else if let Err(error) = response {
+            eprintln!("tray reminder action failed: {error}");
+        }
+    }
+}
+
+fn observe_activity_snapshot(
+    activity_tracker: &ActivityTrackerHandle,
+    now_ms: u64,
+    probes: &ProbeSnapshot,
+) {
+    match &probes.idle_seconds {
+        ProbeReading::Pending => {}
+        ProbeReading::Available(idle_seconds) => {
+            activity_tracker.observe(now_ms, Some(*idle_seconds));
+        }
+        ProbeReading::Failed(_) => activity_tracker.observe(now_ms, None),
+    }
+}
+
+pub(crate) fn start_scheduler(
+    app: AppHandle,
+    probe_cache: ProbeCache,
+    activity_tracker: ActivityTrackerHandle,
+    break_ledger: BreakLedgerHandle,
+    presentation_controllers: ReminderPresentationControllers,
+    settings_manager: ReminderSettingsManager,
+    tray_status: TrayStatus,
+) -> io::Result<ReminderControl> {
+    let (control, receiver) = ReminderControl::channel(tray_status.clone());
+    let context = ReminderSchedulerContext {
+        app,
+        probe_cache,
+        activity_tracker,
+        break_ledger,
+        overlay_controller: presentation_controllers.overlay,
+        settings_manager,
+        tray_status,
+        receiver,
+        action_health: control.action_health.clone(),
+        next_attempt_id: Arc::clone(&control.next_attempt_id),
+        #[cfg(target_os = "macos")]
+        preparation_status: Arc::clone(&control.preparation_status),
+        pre_break_cue_controller: presentation_controllers.pre_break_cue,
+    };
+    std::thread::Builder::new()
+        .name("unfocus-reminders".into())
+        .spawn(move || ReminderScheduler::new(context).run())?;
     Ok(control)
 }
 
@@ -1475,6 +2400,86 @@ mod tests {
     use serde_json::json;
 
     static TEST_DIRECTORY_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn manual_preparation_cancel_and_failed_overlay_preserve_the_timer() {
+        let mut preparation = manual_preparation::ManualPreparation::default();
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20), UNIX_EPOCH);
+        let original = timer.tray_snapshot(Duration::ZERO, UNIX_EPOCH, 0, false);
+        preparation
+            .begin(Duration::ZERO, (0, timer.state_revision))
+            .unwrap();
+        let id = preparation.status(Duration::ZERO).request_id.unwrap();
+        preparation.cancel(id).unwrap();
+        assert_eq!(
+            timer.tray_snapshot(Duration::ZERO, UNIX_EPOCH, 0, false),
+            original
+        );
+        preparation
+            .begin(Duration::ZERO, (0, timer.state_revision))
+            .unwrap();
+        assert!(preparation.take_due(Duration::from_secs(3)));
+        assert!(
+            start_manual_break(&mut timer, Duration::from_secs(3), |_| Err(
+                "overlay failed".into()
+            ))
+            .is_err()
+        );
+        assert_eq!(
+            timer.tray_snapshot(Duration::ZERO, UNIX_EPOCH, 0, false),
+            original
+        );
+        assert!(!preparation.take_due(Duration::from_secs(4)));
+    }
+
+    #[test]
+    fn manual_preparation_scheduler_eligibility_rejects_collisions_and_mutations() {
+        let mut runtime = ReminderSchedulerRuntime {
+            timer: Some(ReminderTimer::new(
+                Duration::ZERO,
+                settings(1, 20),
+                UNIX_EPOCH,
+            )),
+            settings_revision: 4,
+        };
+        assert_eq!(runtime.preparation_revision(false, Some(4)), Some((4, 0)));
+        assert_eq!(runtime.preparation_revision(true, Some(4)), None);
+        assert_eq!(runtime.preparation_revision(false, None), None);
+        assert_eq!(runtime.preparation_revision(false, Some(5)), None);
+        let mut preparation = manual_preparation::ManualPreparation::default();
+        preparation
+            .begin(
+                Duration::from_secs(57),
+                runtime.preparation_revision(false, Some(4)).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            runtime.tick(
+                Duration::from_secs(60),
+                UNIX_EPOCH + Duration::from_secs(60)
+            ),
+            Some(ReminderTransition::StartBreak)
+        );
+        preparation.reconcile(runtime.preparation_revision(false, Some(4)));
+        assert!(!preparation.take_due(Duration::from_secs(60)));
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 20), UNIX_EPOCH);
+        assert!(timer.pause(Duration::from_secs(1)));
+        runtime.timer = Some(timer);
+        assert_eq!(runtime.preparation_revision(false, Some(4)), None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn manual_preparation_unavailable_or_disconnected_control_is_rejected() {
+        let (control, receiver) = ReminderControl::channel(TrayStatus::default());
+        drop(receiver);
+        assert!(control.begin_manual_preparation().is_err());
+        assert!(control.cancel_manual_preparation(1).is_err());
+        assert_eq!(
+            control.preparation_status(),
+            ManualPreparationStatus::default()
+        );
+    }
 
     struct TestDirectory {
         path: PathBuf,
@@ -1509,6 +2514,94 @@ mod tests {
         }
     }
 
+    #[test]
+    fn skip_preserves_the_next_relative_break_and_rejects_repeated_revision() {
+        let mut timer = ReminderTimer::with_defaults(Duration::ZERO);
+        let click = Duration::from_secs(1192);
+        assert!(timer.skip_upcoming(0, click, UNIX_EPOCH));
+        assert_eq!(timer.phase, ReminderPhase::Working);
+        assert_eq!(
+            timer.work_deadline,
+            WorkDeadline::Monotonic(Duration::from_secs(2420))
+        );
+        assert!(!timer.skip_upcoming(0, click, UNIX_EPOCH));
+        assert_eq!(
+            timer
+                .tray_snapshot(click, UNIX_EPOCH, 0, false)
+                .remaining_milliseconds,
+            Some(1_228_000)
+        );
+        assert_eq!(timer.tick(Duration::from_secs(1200), UNIX_EPOCH), None);
+        assert_eq!(timer.tick(Duration::from_secs(2419), UNIX_EPOCH), None);
+        assert_eq!(
+            timer.tick(Duration::from_secs(2420), UNIX_EPOCH),
+            Some(ReminderTransition::StartBreak)
+        );
+    }
+
+    #[test]
+    fn skip_preserves_the_sync_grid_without_grace_or_break_duration() {
+        let synced = ReminderSettings::try_new(20, 20, true, 0).unwrap();
+        let mut timer = ReminderTimer::new(Duration::ZERO, synced, UNIX_EPOCH);
+        assert!(timer.skip_upcoming(
+            0,
+            Duration::from_secs(1199),
+            UNIX_EPOCH + Duration::from_secs(1199)
+        ));
+        assert_eq!(
+            timer.work_deadline,
+            WorkDeadline::Wall(UNIX_EPOCH + Duration::from_secs(2400))
+        );
+        assert_eq!(
+            timer.tick(
+                Duration::from_secs(1200),
+                UNIX_EPOCH + Duration::from_secs(1200)
+            ),
+            None
+        );
+        assert_eq!(
+            timer.tick(
+                Duration::from_secs(2400),
+                UNIX_EPOCH + Duration::from_secs(2400)
+            ),
+            Some(ReminderTransition::StartBreak)
+        );
+    }
+
+    #[test]
+    fn skip_rejects_outside_lead_expired_paused_and_stale_cycles() {
+        for seconds in [0, 1139, 1200, 1201] {
+            let mut timer = ReminderTimer::with_defaults(Duration::ZERO);
+            assert!(!timer.skip_upcoming(0, Duration::from_secs(seconds), UNIX_EPOCH));
+            assert_eq!(timer.work_deadline, WorkDeadline::Relative);
+            assert_eq!(timer.state_revision, 0);
+        }
+        let mut timer = ReminderTimer::with_defaults(Duration::ZERO);
+        assert!(!timer.skip_upcoming(9, Duration::from_secs(1190), UNIX_EPOCH));
+        timer.pause(Duration::from_secs(1190));
+        assert!(!timer.skip_upcoming(timer.state_revision, Duration::from_secs(1191), UNIX_EPOCH));
+        timer.resume(Duration::from_secs(1192), UNIX_EPOCH);
+        assert!(!timer.skip_upcoming(0, Duration::from_secs(2380), UNIX_EPOCH));
+    }
+
+    #[test]
+    fn a_second_future_skip_and_later_manual_actions_keep_normal_timer_semantics() {
+        let mut timer = ReminderTimer::with_defaults(Duration::ZERO);
+        assert!(timer.skip_upcoming(0, Duration::from_secs(1190), UNIX_EPOCH));
+        assert!(timer.skip_upcoming(1, Duration::from_secs(2410), UNIX_EPOCH));
+        assert_eq!(
+            timer.work_deadline,
+            WorkDeadline::Monotonic(Duration::from_secs(3640))
+        );
+        assert!(timer.take_break_now(Duration::from_secs(2411)));
+        assert!(!timer.skip_upcoming(timer.state_revision, Duration::from_secs(2412), UNIX_EPOCH));
+        assert_eq!(
+            timer.tick(Duration::from_secs(2431), UNIX_EPOCH),
+            Some(ReminderTransition::EndBreak)
+        );
+        assert_eq!(timer.work_deadline, WorkDeadline::Relative);
+    }
+
     fn settings(work_minutes: u64, break_seconds: u64) -> ReminderSettings {
         ReminderSettings::try_new(work_minutes, break_seconds, false, 0)
             .expect("valid test settings")
@@ -1520,7 +2613,59 @@ mod tests {
             break_seconds,
             sync_across_devices: false,
             grid_offset_minutes: json!(0),
+            pre_break_cue_enabled: true,
         }
+    }
+
+    fn fill_synchronization_queue(control: &ReminderControl) {
+        for _ in 0..REMINDER_CONTROL_CAPACITY {
+            control
+                .notify_settings_changed()
+                .expect("synchronization queue has capacity");
+        }
+    }
+
+    #[test]
+    fn scheduler_probe_snapshot_preserves_pending_then_recovers_after_failure() {
+        use crate::activity::{ActivityKind, ActivityProbeStatus};
+
+        let directory = TestDirectory::new();
+        let tracker = ActivityTrackerHandle::initialize(&directory.path);
+        let cache = ProbeCache::default();
+        let cache_now = Instant::now();
+        let activity_now = epoch_ms(SystemTime::now());
+
+        let pending = cache.snapshot();
+        observe_activity_snapshot(&tracker, activity_now, &pending);
+        let pending_summary = tracker
+            .snapshot(activity_now)
+            .data
+            .expect("activity storage is available");
+        assert_eq!(pending_summary.probe_status, ActivityProbeStatus::Pending);
+        assert_eq!(pending_summary.current_kind, None);
+
+        cache.update_idle_for_test(Err("actual idle failure".into()), cache_now);
+        let failed = cache.snapshot();
+        observe_activity_snapshot(&tracker, activity_now + 1, &failed);
+        let failed_summary = tracker
+            .snapshot(activity_now + 1)
+            .data
+            .expect("activity storage is available");
+        assert_eq!(failed_summary.probe_status, ActivityProbeStatus::Failed);
+        assert_eq!(failed_summary.current_kind, Some(ActivityKind::Unknown));
+
+        cache.update_idle_for_test(Ok(0), cache_now);
+        let available = cache.snapshot();
+        observe_activity_snapshot(&tracker, activity_now + 2, &available);
+        let available_summary = tracker
+            .snapshot(activity_now + 2)
+            .data
+            .expect("activity storage is available");
+        assert_eq!(
+            available_summary.probe_status,
+            ActivityProbeStatus::Available
+        );
+        assert_eq!(available_summary.current_kind, Some(ActivityKind::Active));
     }
 
     #[test]
@@ -1608,17 +2753,18 @@ mod tests {
     }
 
     #[test]
-    fn a_version_one_file_migrates_to_version_three_with_sync_defaults() {
+    fn a_version_one_file_migrates_to_version_four_with_current_defaults() {
         let body = br#"{"version":1,"workMinutes":20,"breakSeconds":20}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
         assert!(needs_repair, "an older version must be rewritten");
         assert!(!state.settings.sync_across_devices);
         assert_eq!(state.settings.grid_offset_minutes, 0);
+        assert!(state.settings.pre_break_cue_enabled);
     }
 
     #[test]
-    fn a_version_two_file_migrates_to_version_three_with_sync_defaults() {
+    fn a_version_two_file_migrates_to_version_four_with_current_defaults() {
         let body = br#"{"version":2,"workMinutes":25,"breakSeconds":15,"pauseUntilUnixMilliseconds":null}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
@@ -1628,21 +2774,32 @@ mod tests {
     }
 
     #[test]
-    fn a_version_three_file_round_trips_without_repair() {
+    fn a_version_three_file_migrates_with_the_cue_enabled() {
         let body = br#"{"version":3,"workMinutes":20,"breakSeconds":20,"pauseUntilUnixMilliseconds":null,"syncAcrossDevices":true,"gridOffsetMinutes":330}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
-        assert!(!needs_repair);
+        assert!(needs_repair);
         assert!(state.settings.sync_across_devices);
         assert_eq!(state.settings.grid_offset_minutes, 330);
+        assert!(state.settings.pre_break_cue_enabled);
+    }
+
+    #[test]
+    fn a_version_four_file_round_trips_without_repair() {
+        let body = br#"{"version":4,"workMinutes":20,"breakSeconds":20,"pauseUntilUnixMilliseconds":null,"syncAcrossDevices":true,"gridOffsetMinutes":330,"preBreakCueEnabled":false}"#;
+        let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
+        let (state, needs_repair) = persisted.into_state(SystemTime::now()).unwrap();
+        assert!(!needs_repair);
+        assert!(!state.settings.pre_break_cue_enabled);
         let round_tripped = PersistedReminderSettings::from_state(state).unwrap();
         assert_eq!(round_tripped.version, SETTINGS_SCHEMA_VERSION);
         assert_eq!(round_tripped.grid_offset_minutes, 330);
+        assert_eq!(round_tripped.pre_break_cue_enabled, Some(false));
     }
 
     #[test]
     fn an_unsupported_future_version_fails_to_parse_into_state() {
-        let body = br#"{"version":4,"workMinutes":20,"breakSeconds":20}"#;
+        let body = br#"{"version":5,"workMinutes":20,"breakSeconds":20}"#;
         let persisted: PersistedReminderSettings = serde_json::from_slice(body).unwrap();
         assert!(persisted.into_state(SystemTime::now()).is_err());
     }
@@ -1680,7 +2837,9 @@ mod tests {
         // starting from defaults on sync_across_devices/grid_offset_minutes
         // would let a reset that never touches those two fields pass by
         // coincidence.
-        let sync_on = ReminderSettings::try_new(45, 12, true, 330).unwrap();
+        let sync_on = ReminderSettings::try_new(45, 12, true, 330)
+            .unwrap()
+            .with_pre_break_cue_enabled(false);
         manager.save(sync_on).unwrap();
         drop(manager);
 
@@ -1697,6 +2856,10 @@ mod tests {
         assert_eq!(
             after_reset.grid_offset_minutes, 0,
             "reset must zero the grid offset"
+        );
+        assert!(
+            after_reset.pre_break_cue_enabled,
+            "reset must restore the default heads-up"
         );
     }
 
@@ -1827,6 +2990,128 @@ mod tests {
     }
 
     #[test]
+    fn committed_save_succeeds_with_a_full_notification_queue_and_reconciles_periodically() {
+        let directory = TestDirectory::new();
+        let manager = ReminderSettingsManager::load(&directory.path).unwrap();
+        let initial = manager.snapshot();
+        let started_at = initial.changed_at;
+        let mut runtime = ReminderSchedulerRuntime::new(Some(initial), Duration::ZERO, UNIX_EPOCH);
+        let (control, receiver) = ReminderControl::channel(TrayStatus::default());
+        fill_synchronization_queue(&control);
+
+        let committed = save_reminder_settings_and_notify(&manager, &control, settings(45, 12))
+            .expect("storage commit is authoritative");
+
+        assert_eq!(committed, settings(45, 12));
+        assert_eq!(manager.current(), committed);
+        assert_eq!(
+            ReminderSettingsManager::load(&directory.path)
+                .unwrap()
+                .current(),
+            committed
+        );
+        assert_eq!(receiver.try_iter().count(), REMINDER_CONTROL_CAPACITY);
+        assert_eq!(
+            reconcile_scheduler_iteration(
+                &mut runtime,
+                manager.authoritative_snapshot(),
+                Duration::from_secs(10),
+                UNIX_EPOCH,
+                started_at
+            ),
+            SettingsReconciliation::Updated
+        );
+        assert_eq!(
+            runtime.timer().expect("timer remains active").settings,
+            committed
+        );
+    }
+
+    #[test]
+    fn successful_retry_returns_health_without_waiting_for_scheduler_acknowledgement() {
+        let directory = TestDirectory::new();
+        let path = directory.settings_path();
+        TEST_SETTINGS_PERSIST_FAILURES
+            .lock()
+            .expect("hook")
+            .push(path);
+        let manager = ReminderSettingsManager::initialize(&directory.path);
+        let (control, receiver) = ReminderControl::channel(TrayStatus::default());
+
+        let health = retry_reminder_settings_and_notify(&manager, &control);
+
+        assert_eq!(health, StorageLoadHealth::available());
+        assert_eq!(manager.current(), ReminderSettings::default());
+        let delayed = receiver
+            .try_recv()
+            .expect("best-effort notification was queued without being consumed");
+        assert!(matches!(
+            delayed.command,
+            ReminderControlCommand::SynchronizeSettings
+        ));
+        assert!(
+            delayed.response.is_none(),
+            "notification must not wait for a response"
+        );
+    }
+
+    #[test]
+    fn committed_normal_reset_succeeds_with_a_disconnected_scheduler() {
+        let directory = TestDirectory::new();
+        let manager = ReminderSettingsManager::load(&directory.path).unwrap();
+        manager.save(settings(45, 12)).unwrap();
+        let (control, receiver) = ReminderControl::channel(TrayStatus::default());
+        drop(receiver);
+
+        let committed = reset_reminder_settings_and_notify(&manager, &control)
+            .expect("completed reset is not rolled back by notification failure");
+
+        assert_eq!(committed, ReminderSettings::default());
+        assert_eq!(manager.current(), committed);
+        assert_eq!(
+            ReminderSettingsManager::load(&directory.path)
+                .unwrap()
+                .current(),
+            committed
+        );
+    }
+
+    #[test]
+    fn committed_invalid_file_reset_succeeds_with_a_full_notification_queue() {
+        let directory = TestDirectory::new();
+        fs::write(directory.settings_path(), b"invalid reminder settings").unwrap();
+        let manager = ReminderSettingsManager::initialize(&directory.path);
+        let (control, _receiver) = ReminderControl::channel(TrayStatus::default());
+        fill_synchronization_queue(&control);
+
+        let committed = reset_reminder_settings_and_notify(&manager, &control)
+            .expect("invalid-file reset commit is authoritative");
+
+        assert_eq!(committed, ReminderSettings::default());
+        assert_eq!(manager.view().load_health, StorageLoadHealth::available());
+        assert_eq!(manager.current(), committed);
+    }
+
+    #[test]
+    fn precommit_persistence_failure_remains_an_error_and_sends_no_notification() {
+        let directory = TestDirectory::new();
+        let path = directory.settings_path();
+        let manager = ReminderSettingsManager::load(&directory.path).unwrap();
+        TEST_SETTINGS_PERSIST_FAILURES
+            .lock()
+            .expect("hook")
+            .push(path);
+        let (control, receiver) = ReminderControl::channel(TrayStatus::default());
+
+        assert!(save_reminder_settings_and_notify(&manager, &control, settings(45, 12)).is_err());
+        assert_eq!(manager.current(), ReminderSettings::default());
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(mpsc::TryRecvError::Empty)
+        ));
+    }
+
+    #[test]
     fn a_failed_pause_write_does_not_publish_runtime_pause_state() {
         let directory = TestDirectory::new();
         let manager = ReminderSettingsManager::load(&directory.path).unwrap();
@@ -1838,34 +3123,338 @@ mod tests {
     }
 
     #[test]
-    fn malformed_and_out_of_range_settings_are_replaced_with_defaults() {
-        let directory = TestDirectory::new();
-        let path = directory.settings_path();
-
+    fn malformed_unsupported_and_out_of_range_settings_are_preserved_unavailable() {
         for invalid in [
             "{",
             r#"{"version":1,"workMinutes":0,"breakSeconds":20}"#,
             r#"{"version":1,"workMinutes":20,"breakSeconds":31}"#,
             r#"{"version":99,"workMinutes":20,"breakSeconds":20}"#,
             r#"{"version":1,"workMinutes":20,"breakSeconds":20,"extra":true}"#,
-            // An out-of-range grid offset (841 > MAX_GRID_OFFSET_MINUTES) fits
-            // in i16, so it reaches `ReminderSettings::try_new` rather than
-            // failing inside serde -- pinning that it takes the same
-            // whole-file repair path as an out-of-range `workMinutes`.
             r#"{"version":3,"workMinutes":45,"breakSeconds":12,"syncAcrossDevices":true,"gridOffsetMinutes":841}"#,
         ] {
+            let directory = TestDirectory::new();
+            let path = directory.settings_path();
             fs::write(&path, invalid).unwrap();
-            let manager = ReminderSettingsManager::load(&directory.path).unwrap();
-            assert_eq!(manager.current(), ReminderSettings::default());
+            let original = fs::read(&path).unwrap();
 
-            let repaired: PersistedReminderSettings =
-                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-            assert_eq!(repaired.version, SETTINGS_SCHEMA_VERSION);
+            let manager = ReminderSettingsManager::initialize(&directory.path);
+
+            assert_eq!(fs::read(&path).unwrap(), original);
+            assert!(manager.authoritative_snapshot().is_none());
             assert_eq!(
-                repaired.into_state(SystemTime::now()).unwrap().0.settings,
-                ReminderSettings::default()
+                manager.view().load_health,
+                StorageLoadHealth::unavailable(StorageFailureCategory::Invalid)
             );
+            assert!(manager.save(settings(45, 12)).is_err());
         }
+    }
+
+    #[test]
+    fn missing_settings_become_available_only_after_defaults_persist() {
+        let directory = TestDirectory::new();
+        let path = directory.settings_path();
+        TEST_SETTINGS_PERSIST_FAILURES
+            .lock()
+            .expect("hook")
+            .push(path.clone());
+
+        let manager = ReminderSettingsManager::initialize(&directory.path);
+
+        assert!(manager.authoritative_snapshot().is_none());
+        assert!(!path.exists());
+        assert_eq!(
+            manager.view().load_health,
+            StorageLoadHealth::unavailable(StorageFailureCategory::Read)
+        );
+        assert_eq!(manager.retry_load(), StorageLoadHealth::available());
+        assert_eq!(manager.current(), ReminderSettings::default());
+        assert!(path.is_file());
+    }
+
+    #[test]
+    fn failed_legacy_migration_is_unavailable_and_retry_preserves_values_and_pause() {
+        let directory = TestDirectory::new();
+        let path = directory.settings_path();
+        let pause_until =
+            system_time_to_unix_milliseconds(SystemTime::now() + Duration::from_secs(60)).unwrap();
+        fs::write(
+            &path,
+            serde_json::to_vec(&json!({
+                "version": 2,
+                "workMinutes": 45,
+                "breakSeconds": 12,
+                "pauseUntilUnixMilliseconds": pause_until,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let original = fs::read(&path).unwrap();
+        TEST_SETTINGS_PERSIST_FAILURES
+            .lock()
+            .expect("hook")
+            .push(path.clone());
+
+        let manager = ReminderSettingsManager::initialize(&directory.path);
+
+        assert!(manager.authoritative_snapshot().is_none());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_eq!(manager.retry_load(), StorageLoadHealth::available());
+        let recovered = manager.snapshot();
+        assert_eq!(recovered.settings, settings(45, 12));
+        assert!(recovered.pause_until.is_some());
+        let migrated: PersistedReminderSettings =
+            serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(migrated.version, SETTINGS_SCHEMA_VERSION);
+        assert_eq!(migrated.pause_until_unix_milliseconds, Some(pause_until));
+    }
+
+    #[test]
+    fn read_failure_initializes_canonical_manager_and_allows_retry_only() {
+        let directory = TestDirectory::new();
+        let blocked_config = directory.path.join("blocked-config");
+        fs::write(&blocked_config, b"blocker").unwrap();
+        let canonical = blocked_config.join(SETTINGS_FILE_NAME);
+        let manager = ReminderSettingsManager::initialize(&blocked_config);
+
+        assert_eq!(manager.inner.path, canonical);
+        assert_eq!(
+            manager.view().load_health,
+            StorageLoadHealth::unavailable(StorageFailureCategory::Read)
+        );
+        assert!(manager.save(settings(45, 12)).is_err());
+        assert!(manager.reset().is_err());
+        assert_eq!(fs::read(&blocked_config).unwrap(), b"blocker");
+
+        fs::remove_file(&blocked_config).unwrap();
+        fs::create_dir(&blocked_config).unwrap();
+        persist_settings(
+            &canonical,
+            PersistedReminderState {
+                settings: settings(45, 12),
+                pause_until: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(manager.retry_load(), StorageLoadHealth::available());
+        assert_eq!(manager.current(), settings(45, 12));
+    }
+
+    #[test]
+    fn invalid_reset_quarantines_exact_bytes_then_persists_v4_defaults() {
+        let directory = TestDirectory::new();
+        let path = directory.settings_path();
+        let original = b"invalid reminder settings\0";
+        fs::write(&path, original).unwrap();
+        let manager = ReminderSettingsManager::initialize(&directory.path);
+
+        assert_eq!(manager.reset().unwrap(), ReminderSettings::default());
+        assert_eq!(manager.current(), ReminderSettings::default());
+        let persisted: PersistedReminderSettings =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(persisted.version, SETTINGS_SCHEMA_VERSION);
+        let quarantines: Vec<_> = fs::read_dir(&directory.path)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("reminder-settings.json.invalid-")
+            })
+            .collect();
+        assert_eq!(quarantines.len(), 1);
+        assert_eq!(fs::read(quarantines[0].path()).unwrap(), original);
+    }
+
+    #[test]
+    fn failed_invalid_reset_preserves_canonical_bytes_and_unavailable_state() {
+        let directory = TestDirectory::new();
+        let path = directory.settings_path();
+        let original = b"invalid reminder settings";
+        fs::write(&path, original).unwrap();
+        let manager = ReminderSettingsManager::initialize(&directory.path);
+        crate::storage_recovery::TEST_QUARANTINE_FAILURES
+            .lock()
+            .expect("hook")
+            .push(path.clone());
+
+        assert!(manager.reset().is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert!(manager.authoritative_snapshot().is_none());
+
+        TEST_SETTINGS_PERSIST_FAILURES
+            .lock()
+            .expect("hook")
+            .push(path.clone());
+        assert!(manager.reset().is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert!(manager.authoritative_snapshot().is_none());
+    }
+
+    #[test]
+    fn canonical_replacement_failure_preserves_exact_invalid_settings_and_unavailable_state() {
+        let directory = TestDirectory::new();
+        let path = directory.settings_path();
+        let original = b"invalid reminder settings\0replacement";
+        fs::write(&path, original).unwrap();
+        let manager = ReminderSettingsManager::initialize(&directory.path);
+        crate::storage_recovery::inject_replacement_failure(path.clone());
+
+        assert!(manager.reset().is_err());
+
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert!(manager.authoritative_snapshot().is_none());
+        assert_eq!(
+            manager.view().load_health,
+            StorageLoadHealth::unavailable(StorageFailureCategory::Invalid)
+        );
+    }
+
+    #[test]
+    fn invalid_reset_recovers_an_external_valid_repair_instead_of_overwriting_it() {
+        let directory = TestDirectory::new();
+        let path = directory.settings_path();
+        fs::write(&path, b"invalid reminder settings").unwrap();
+        let manager = ReminderSettingsManager::initialize(&directory.path);
+        persist_settings(
+            &path,
+            PersistedReminderState {
+                settings: settings(45, 12),
+                pause_until: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(manager.reset().unwrap(), settings(45, 12));
+        assert_eq!(manager.current(), settings(45, 12));
+        assert_eq!(
+            fs::read_dir(&directory.path)
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("reminder-settings.json.invalid-"))
+                .count(),
+            0
+        );
+    }
+
+    #[test]
+    fn concurrent_external_settings_repair_is_not_overwritten_by_reset() {
+        let directory = TestDirectory::new();
+        let path = directory.settings_path();
+        fs::write(&path, b"invalid reminder settings").unwrap();
+        let manager = ReminderSettingsManager::initialize(&directory.path);
+        let (started, release) = crate::storage_recovery::install_replacement_barrier(path.clone());
+        let recovering = manager.clone();
+        let recovery = std::thread::spawn(move || recovering.reset());
+        started
+            .recv_timeout(Duration::from_secs(1))
+            .expect("reset reaches final byte recheck");
+
+        persist_settings(
+            &path,
+            PersistedReminderState {
+                settings: settings(45, 12),
+                pause_until: None,
+            },
+        )
+        .unwrap();
+        let repaired = fs::read(&path).unwrap();
+        release.send(()).unwrap();
+
+        assert!(recovery.join().unwrap().is_err());
+        assert_eq!(fs::read(&path).unwrap(), repaired);
+        assert!(manager.authoritative_snapshot().is_none());
+        assert_eq!(manager.retry_load(), StorageLoadHealth::available());
+        assert_eq!(manager.current(), settings(45, 12));
+    }
+
+    #[test]
+    fn canonical_removal_at_final_recheck_publishes_read_failure() {
+        let directory = TestDirectory::new();
+        let path = directory.settings_path();
+        fs::write(&path, b"invalid reminder settings").unwrap();
+        let manager = ReminderSettingsManager::initialize(&directory.path);
+        let (started, release) = crate::storage_recovery::install_replacement_barrier(path.clone());
+        let recovering = manager.clone();
+        let recovery = std::thread::spawn(move || recovering.reset());
+        started
+            .recv_timeout(Duration::from_secs(1))
+            .expect("reset reaches final canonical recheck");
+
+        fs::remove_file(&path).unwrap();
+        release.send(()).unwrap();
+
+        assert!(recovery.join().unwrap().is_err());
+        assert_eq!(
+            manager.view().load_health,
+            StorageLoadHealth::unavailable(StorageFailureCategory::Read)
+        );
+        assert!(
+            manager.reset().is_err(),
+            "read failures must remove reset capability"
+        );
+        assert_eq!(manager.retry_load(), StorageLoadHealth::available());
+    }
+
+    #[test]
+    fn unchanged_and_cue_only_synchronization_preserve_the_current_cue_revision() {
+        let mut timer = ReminderTimer::new(Duration::ZERO, settings(20, 20), UNIX_EPOCH);
+        let changed_at = Duration::from_secs(10 * 60);
+        let before = timer.tray_snapshot(changed_at, UNIX_EPOCH, 0, false);
+        let current_cue_attempt = Some(before.state_revision);
+        let current_cue_revision = Some(before.state_revision);
+        let synchronization = ReminderControlRequest {
+            attempt_id: 0,
+            command: ReminderControlCommand::SynchronizeSettings,
+            response: None,
+        };
+
+        assert!(!synchronization.cancels_pre_break_cue());
+        assert_eq!(current_cue_attempt, Some(before.state_revision));
+        assert_eq!(current_cue_revision, Some(before.state_revision));
+
+        timer.apply_settings(
+            settings(20, 20).with_pre_break_cue_enabled(false),
+            changed_at,
+            UNIX_EPOCH,
+        );
+
+        let after = timer.tray_snapshot(changed_at, UNIX_EPOCH, 1, false);
+        assert_eq!(after.remaining_milliseconds, before.remaining_milliseconds);
+        assert_eq!(after.state_revision, before.state_revision);
+        assert_eq!(current_cue_attempt, Some(after.state_revision));
+        assert_eq!(current_cue_revision, Some(after.state_revision));
+        assert!(!timer.settings.pre_break_cue_enabled);
+    }
+
+    #[test]
+    fn timing_action_requests_cancel_the_current_cue() {
+        for action in [
+            ReminderAction::Pause,
+            ReminderAction::Resume,
+            ReminderAction::TakeBreakNow,
+        ] {
+            let request = ReminderControlRequest {
+                attempt_id: 1,
+                command: ReminderControlCommand::Action(action),
+                response: None,
+            };
+            assert!(request.cancels_pre_break_cue(), "{action:?}");
+        }
+    }
+
+    #[test]
+    fn a_skip_request_keeps_the_current_cue_for_scheduler_authorization() {
+        let request = ReminderControlRequest {
+            attempt_id: 1,
+            command: ReminderControlCommand::Action(ReminderAction::SkipCue(7)),
+            response: None,
+        };
+
+        assert!(!request.cancels_pre_break_cue());
     }
 
     #[test]
@@ -2116,6 +3705,13 @@ mod tests {
     #[test]
     fn control_queue_failures_are_published_without_changing_timer_state() {
         let tray_status = TrayStatus::default();
+        tray_status.publish(TraySnapshot::timer(
+            TrayPhase::Working,
+            Duration::from_secs(20 * 60),
+            false,
+            0,
+            0,
+        ));
         let before = tray_status.current();
         let (control, _receiver) = ReminderControl::channel(tray_status.clone());
 
@@ -2135,8 +3731,132 @@ mod tests {
             Some("reminder control queue is full")
         );
         let reminder = ReminderStatus::from_snapshot(failed);
-        assert_eq!(reminder.status, "Status unavailable");
+        assert_eq!(reminder.status, "Working · break in 20 min");
         assert_eq!(reminder.tray_status(), "Action failed · open Unfocus");
+    }
+
+    #[test]
+    fn explicit_unavailable_settings_cannot_tick_or_fire_transitions() {
+        let directory = TestDirectory::new();
+        fs::write(directory.settings_path(), b"invalid reminder settings").unwrap();
+        let manager = ReminderSettingsManager::initialize(&directory.path);
+        assert_eq!(
+            manager.view().load_health,
+            StorageLoadHealth::unavailable(StorageFailureCategory::Invalid)
+        );
+        let started_at = Instant::now();
+        let mut runtime = ReminderSchedulerRuntime::new(None, Duration::ZERO, UNIX_EPOCH);
+
+        for now in [Duration::ZERO, Duration::from_secs(86_400)] {
+            assert_eq!(
+                reconcile_scheduler_iteration(
+                    &mut runtime,
+                    manager.authoritative_snapshot(),
+                    now,
+                    UNIX_EPOCH,
+                    started_at
+                ),
+                SettingsReconciliation::Unavailable
+            );
+            assert_eq!(runtime.tick(now, UNIX_EPOCH), None);
+            assert!(runtime.timer().is_none());
+        }
+    }
+
+    #[test]
+    fn unavailable_controls_and_preview_are_disabled_before_queueing() {
+        let tray_status = TrayStatus::default();
+        let (control, receiver) = ReminderControl::channel(tray_status.clone());
+        let status = ReminderStatus::from_snapshot(tray_status.current());
+
+        assert!(!status.pause_action_enabled);
+        assert!(!status.take_break_enabled);
+        assert!(!status.preview_enabled);
+        assert!(control.dispatch(ReminderAction::Pause).is_err());
+        assert!(control.dispatch(ReminderAction::TakeBreakNow).is_err());
+        assert!(control.dispatch(ReminderAction::SkipCue(7)).is_err());
+        assert!(control.request(ReminderAction::SkipCue(7)).is_err());
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(mpsc::TryRecvError::Empty)
+        ));
+    }
+
+    #[test]
+    fn repeated_recovery_reconciliation_keeps_one_unchanged_active_timer() {
+        let recovered_at = Duration::from_secs(10_000);
+        let started_at = Instant::now();
+        let snapshot = ReminderSettingsSnapshot {
+            settings: settings(1, 5),
+            revision: 0,
+            changed_at: started_at,
+            pause_until: None,
+        };
+        let mut runtime = ReminderSchedulerRuntime::new(None, Duration::ZERO, UNIX_EPOCH);
+
+        assert_eq!(
+            reconcile_scheduler_iteration(
+                &mut runtime,
+                Some(snapshot),
+                recovered_at,
+                UNIX_EPOCH,
+                started_at
+            ),
+            SettingsReconciliation::Activated
+        );
+        let activated_at = runtime.timer().expect("active timer").phase_started_at;
+        assert_eq!(runtime.tick(recovered_at, UNIX_EPOCH), None);
+
+        for elapsed in [1, 30, 59] {
+            let now = recovered_at + Duration::from_secs(elapsed);
+            assert_eq!(
+                reconcile_scheduler_iteration(
+                    &mut runtime,
+                    Some(snapshot),
+                    now,
+                    UNIX_EPOCH,
+                    started_at
+                ),
+                SettingsReconciliation::Unchanged
+            );
+            assert_eq!(
+                runtime.timer().expect("same active timer").phase_started_at,
+                activated_at,
+                "unchanged recovery reconciliation must not restart the timer"
+            );
+            assert_eq!(runtime.tick(now, UNIX_EPOCH), None);
+        }
+        assert_eq!(
+            runtime.tick(recovered_at + Duration::from_secs(60), UNIX_EPOCH),
+            Some(ReminderTransition::StartBreak)
+        );
+    }
+
+    #[test]
+    fn recovery_restores_only_a_still_valid_bounded_pause() {
+        let wall_now = SystemTime::now();
+        let started_at = Instant::now();
+        let snapshot = ReminderSettingsSnapshot {
+            settings: settings(20, 20),
+            revision: 0,
+            changed_at: started_at,
+            pause_until: wall_now.checked_add(Duration::from_secs(60)),
+        };
+        let mut runtime = ReminderSchedulerRuntime::new(None, Duration::ZERO, wall_now);
+
+        assert_eq!(
+            reconcile_scheduler_iteration(
+                &mut runtime,
+                Some(snapshot),
+                Duration::from_secs(500),
+                wall_now,
+                started_at
+            ),
+            SettingsReconciliation::Activated
+        );
+        let timer = runtime.timer().expect("recovered timer");
+        assert_eq!(timer.phase, ReminderPhase::Paused);
+        assert_eq!(timer.paused_until, Some(Duration::from_secs(560)));
     }
 
     #[test]
@@ -2226,6 +3946,20 @@ mod tests {
         assert_eq!(resumed.state_revision, 2);
     }
 
+    fn probe_readings(
+        idle_seconds: ProbeReading<u64>,
+        active_window_fullscreen: ProbeReading<bool>,
+    ) -> ProbeSnapshot {
+        ProbeSnapshot {
+            idle_seconds,
+            active_window_fullscreen,
+        }
+    }
+
+    fn probes(idle_seconds: u64, active_window_fullscreen: bool) -> ProbeSnapshot {
+        ProbeSnapshot::available(idle_seconds, active_window_fullscreen)
+    }
+
     fn no_history() -> Option<ActivityPresentationContext> {
         None
     }
@@ -2248,10 +3982,7 @@ mod tests {
 
     #[test]
     fn configured_break_duration_controls_idle_suppression() {
-        let idle = ProbeSnapshot {
-            idle_seconds: Ok(8),
-            active_window_fullscreen: Ok(false),
-        };
+        let idle = probes(8, false);
 
         assert_eq!(
             break_presentation(&idle, Duration::from_secs(8), no_history()),
@@ -2266,22 +3997,11 @@ mod tests {
     #[test]
     fn probes_only_control_break_presentation() {
         let break_duration = ReminderSettings::default().break_duration();
-        let active = ProbeSnapshot {
-            idle_seconds: Ok(0),
-            active_window_fullscreen: Ok(false),
-        };
-        let idle = ProbeSnapshot {
-            idle_seconds: Ok(break_duration.as_secs()),
-            active_window_fullscreen: Ok(false),
-        };
-        let fullscreen = ProbeSnapshot {
-            idle_seconds: Ok(0),
-            active_window_fullscreen: Ok(true),
-        };
-        let failed = ProbeSnapshot {
-            idle_seconds: Err("idle failed".into()),
-            active_window_fullscreen: Err("fullscreen failed".into()),
-        };
+        let active = probes(0, false);
+        let idle = probes(break_duration.as_secs(), false);
+        let fullscreen = probes(0, true);
+        let failed = ProbeSnapshot::failed("idle failed", "fullscreen failed");
+        let pending = ProbeSnapshot::pending();
 
         assert_eq!(
             break_presentation(&active, break_duration, no_history()),
@@ -2299,10 +4019,14 @@ mod tests {
             break_presentation(&failed, break_duration, no_history()),
             BreakPresentation::Show
         );
+        assert_eq!(
+            break_presentation(&pending, break_duration, no_history()),
+            BreakPresentation::Show
+        );
 
         // Pure timer advancement has no probe input. Natural-break credit is a
         // separate scheduler step after StartBreak, not inside tick().
-        for probes in [&active, &idle, &fullscreen, &failed] {
+        for probes in [&active, &idle, &fullscreen, &failed, &pending] {
             let mut timer = ReminderTimer::new(Duration::ZERO, settings(1, 3), UNIX_EPOCH);
             let _ = break_presentation(probes, Duration::from_secs(3), no_history());
             assert_eq!(
@@ -2317,16 +4041,52 @@ mod tests {
     }
 
     #[test]
+    fn scheduled_cue_closes_only_after_overlay_readiness_returns_on_every_path() {
+        for presentation in [
+            Some(BreakPresentation::Show),
+            Some(BreakPresentation::NaturalIdle),
+            Some(BreakPresentation::SuppressFullscreen),
+            None,
+        ] {
+            let events = std::cell::RefCell::new(Vec::new());
+
+            let returned = hold_scheduled_cue_until_presented(
+                || {
+                    events.borrow_mut().push("presentation returned");
+                    presentation
+                },
+                || events.borrow_mut().push("scheduled cue closed"),
+            );
+
+            assert_eq!(returned, presentation);
+            assert_eq!(
+                events.into_inner(),
+                ["presentation returned", "scheduled cue closed"]
+            );
+        }
+    }
+
+    #[test]
+    fn pending_fullscreen_fails_open_like_an_actual_fullscreen_failure() {
+        let pending = probe_readings(ProbeReading::Available(0), ProbeReading::Pending);
+        let failed = probe_readings(
+            ProbeReading::Available(0),
+            ProbeReading::Failed("fullscreen failed".into()),
+        );
+
+        for snapshot in [&pending, &failed] {
+            assert_eq!(
+                break_presentation(snapshot, Duration::from_secs(20), no_history()),
+                BreakPresentation::Show
+            );
+        }
+    }
+
+    #[test]
     fn long_active_requires_real_afk_for_natural_credit() {
         let break_duration = Duration::from_secs(20);
-        let micro_idle = ProbeSnapshot {
-            idle_seconds: Ok(20),
-            active_window_fullscreen: Ok(false),
-        };
-        let real_afk = ProbeSnapshot {
-            idle_seconds: Ok(LONG_AFK_SECONDS),
-            active_window_fullscreen: Ok(false),
-        };
+        let micro_idle = probes(20, false);
+        let real_afk = probes(LONG_AFK_SECONDS, false);
         assert_eq!(
             break_presentation(&micro_idle, break_duration, long_active_context()),
             BreakPresentation::Show
@@ -2340,14 +4100,8 @@ mod tests {
     #[test]
     fn long_afk_prefers_natural_when_still_idle() {
         let break_duration = Duration::from_secs(20);
-        let still_idle = ProbeSnapshot {
-            idle_seconds: Ok(20),
-            active_window_fullscreen: Ok(false),
-        };
-        let typing = ProbeSnapshot {
-            idle_seconds: Ok(0),
-            active_window_fullscreen: Ok(false),
-        };
+        let still_idle = probes(20, false);
+        let typing = probes(0, false);
         assert_eq!(
             break_presentation(&still_idle, break_duration, long_afk_context()),
             BreakPresentation::NaturalIdle
@@ -2360,10 +4114,7 @@ mod tests {
 
     #[test]
     fn fullscreen_wins_over_long_active_adaptation() {
-        let probes = ProbeSnapshot {
-            idle_seconds: Ok(0),
-            active_window_fullscreen: Ok(true),
-        };
+        let probes = probes(0, true);
         assert_eq!(
             break_presentation(&probes, Duration::from_secs(20), long_active_context()),
             BreakPresentation::SuppressFullscreen
@@ -2373,10 +4124,7 @@ mod tests {
     #[test]
     fn empty_history_uses_legacy_idle_rules() {
         let break_duration = Duration::from_secs(20);
-        let idle = ProbeSnapshot {
-            idle_seconds: Ok(20),
-            active_window_fullscreen: Ok(false),
-        };
+        let idle = probes(20, false);
         let empty = Some(ActivityPresentationContext {
             history_available: false,
             continuous_active_seconds: LONG_ACTIVE_SECONDS,
@@ -2426,10 +4174,7 @@ mod tests {
     fn fullscreen_outranks_idle_for_presentation_contract() {
         // Issue #61: fullscreen is never overridden, including when idle would
         // otherwise natural-credit.
-        let both = ProbeSnapshot {
-            idle_seconds: Ok(30),
-            active_window_fullscreen: Ok(true),
-        };
+        let both = probes(30, true);
         assert_eq!(
             break_presentation(&both, Duration::from_secs(20), no_history()),
             BreakPresentation::SuppressFullscreen

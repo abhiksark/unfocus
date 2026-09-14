@@ -1,3 +1,15 @@
+<!-- README.md -->
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/media/unfocus-horizontal-color-on-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset=".github/media/unfocus-horizontal-color-on-light.svg">
+  <img
+    alt="Unfocus logo: a crescent moon above a distant landscape beside the Unfocus wordmark."
+    src=".github/media/unfocus-horizontal-color-on-light.svg"
+    width="320"
+  >
+</picture>
+
 # Unfocus
 
 [![CI](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml)
@@ -13,13 +25,20 @@ screen and gives you a calm, observe-only picture of how your day went. Breaks
 cover every monitor, reflection stays on your device, and there are no streaks,
 badges, accounts, or mascots competing for your attention.
 
+### Watch Unfocus in 58 seconds
+
+See the gentle notch reminder, a screen break, and reflection across your day
+and the past 90 days.
+
+https://github.com/user-attachments/assets/051b3e5b-6789-42f9-aa24-262925af3d59
+
+Staged macOS preview with illustrative activity data.
+
 [Download](https://github.com/abhiksark/unfocus/releases) ·
 [Install guide](docs/install.md) ·
 [Changelog](CHANGELOG.md) ·
 [Report a bug](https://github.com/abhiksark/unfocus/issues/new?template=bug_report.yml) ·
 [Request a feature](https://github.com/abhiksark/unfocus/issues/new?template=feature_request.yml)
-
-![The Unfocus dashboard with the focus countdown, Your day activity, and break outcomes](.github/media/dashboard.png)
 
 ## Why Unfocus
 
@@ -27,6 +46,18 @@ A screen-break reminder should help you look away, not give you another
 interface to watch. When a break is due, Unfocus places the same calm, static
 landscape across every monitor and asks you to focus on something far away. As
 the break ends, a warm amber light signals that it is time to return.
+
+On qualified Ubuntu X11 sessions, an optional compact pill appears
+briefly on the primary display one minute before a scheduled break, clears out
+of the way, then returns for the final ten-second countdown. At zero it stays
+visible until the full break scene is ready, then retracts. On macOS Preview
+builds, the same optional cue expands black wings around the camera notch on the display you
+are using, with an empty mint countdown ring and soft-white timing. Displays
+without a notch use the same compact pill as X11. Both presentations share the
+countdown ring and skip confirmation. The small skip-forward button beside
+the timing skips this break and keeps the following break on schedule. It briefly
+confirms “Skipped,” then retracts. Only that target accepts clicks; the panel
+does not activate or take keyboard focus.
 
 The dashboard then reflects the rhythm of your day using presence and break
 outcomes. It does not grade your productivity, gamify consistency, or use that
@@ -37,13 +68,16 @@ history to control the reminder timer.
 ### Breaks that feel like breaks
 
 - Covers every monitor with a synchronized full-screen break
+- Gives scheduled breaks an optional pre-break cue:
+  a compact pill on qualified Ubuntu X11, or notch wings on the active display
+  in macOS Preview, both with a countdown ring and skip control
 - Uses a bundled, first-party landscape that stays still throughout the break
 - Selects one cool-biased palette from local device time and holds it across
   every display; amber light signals that the break is nearly complete
 - Defaults to a 20-minute work interval and a 20-second break, configurable
   from 1–120 minutes and 3–30 seconds
 - Supports a fixed 30-minute pause, immediate breaks, break previews, and early
-  exit with Escape or **End break**
+  exit with Space or **End break**
 - Uses idle and fullscreen signals where supported to avoid interrupting you
   while you are already away or presenting
 - Keeps the timer running if a platform probe is unavailable or fails
@@ -61,6 +95,8 @@ history to control the reminder timer.
   records which keys you press
 - Reflection is observe-only: it never pauses, skips, or advances the timer
 
+![The Unfocus dashboard with the live reminder and Your day activity strip](.github/media/dashboard.png)
+
 ### Local by design
 
 - No account, telemetry, cloud dependency, or packaged-app runtime network
@@ -70,10 +106,6 @@ history to control the reminder timer.
   downloads
 - Developer mode exposes platform signals, connected displays, and probe
   errors when you need to troubleshoot
-
-Selecting the linked author name is the only action that asks the operating
-system to open a web address (`https://abhik.ai`) in your default browser.
-Unfocus itself does not make that request over the network.
 
 ## Install
 
@@ -137,8 +169,8 @@ built.
 
 | Platform | Status | Notes |
 | --- | --- | --- |
-| Linux X11 | **Qualified** | Synchronized multi-monitor overlays, idle detection, fullscreen detection, and AppIndicator tray support. Ubuntu is the primary test environment. |
-| macOS 11+ | **Preview** | Idle and fullscreen probes work interactively. Physical multi-monitor acceptance is not complete. |
+| Linux X11 | **Qualified** | Synchronized multi-monitor overlays, idle detection, fullscreen detection, and AppIndicator tray support. Ubuntu X11 also shows a primary-display pre-break cue. Ubuntu is the primary test environment. |
+| macOS 11+ | **Preview** | Idle and fullscreen probes work interactively; scheduled breaks also offer the notch-based pre-break cue. Physical multi-monitor acceptance is not complete. |
 | Windows x64 | **Early build** | Idle and fullscreen probes are implemented. Interactive multi-monitor qualification is pending. |
 | Linux Wayland | **Unsupported** | Default packages do not provide Wayland probes. |
 

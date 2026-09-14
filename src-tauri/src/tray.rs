@@ -1,4 +1,5 @@
 mod model;
+pub(crate) mod panel;
 
 pub(crate) use model::{TrayPhase, TraySnapshot, TrayStatus};
 
@@ -231,8 +232,13 @@ fn apply_menu_update(
         Ok(()) if health.record_update_success() => TrayUpdateOutcome::Recovered,
         Ok(()) => TrayUpdateOutcome::Updated,
         Err(error) => {
+            let timing = if reminder.phase == TrayPhase::Unavailable {
+                "Automatic reminders have not started"
+            } else {
+                "Reminder timing is still running"
+            };
             let message = format!(
-                "Tray status updates failed: {error}. Reminder timing is still running; use the dashboard until the tray recovers."
+                "Tray status updates failed: {error}. {timing}; use the dashboard until the tray recovers."
             );
             if health.record_update_failure(message.clone()) {
                 TrayUpdateOutcome::FailedFirst(message)
@@ -261,12 +267,10 @@ fn run_status_worker(
     }
 }
 
-fn install_controller(
+fn build_tray_menu(
     app: &tauri::App,
-    tray_status: &TrayStatus,
-    health: TrayHealth,
-) -> tauri::Result<TrayController> {
-    let initial = ReminderStatus::from_snapshot(tray_status.current());
+    initial: ReminderStatus,
+) -> tauri::Result<(Menu<tauri::Wry>, MutableTrayMenu)> {
     let status = MenuItem::with_id(
         app,
         STATUS_MENU_ID,
@@ -312,6 +316,66 @@ fn install_controller(
             &quit,
         ],
     )?;
+    Ok((
+        menu,
+        MutableTrayMenu {
+            status,
+            pause,
+            take_break,
+            preview,
+        },
+    ))
+}
+
+fn handle_tray_menu_event(app: &tauri::AppHandle, menu_id: &str) {
+    match tray_action(menu_id) {
+        Some(TrayAction::Pause) => {
+            let control = app.state::<ReminderControl>();
+            let status = app.state::<TrayStatus>();
+            let action = if status.current().phase == TrayPhase::Paused {
+                ReminderAction::Resume
+            } else {
+                ReminderAction::Pause
+            };
+            if let Err(error) = control.dispatch(action) {
+                eprintln!("tray pause action failed: {error}");
+            }
+        }
+        Some(TrayAction::TakeBreak) => {
+            let control = app.state::<ReminderControl>();
+            if let Err(error) = control.dispatch(ReminderAction::TakeBreakNow) {
+                eprintln!("tray take-break action failed: {error}");
+            }
+        }
+        Some(TrayAction::Open) => reveal_dashboard(app),
+        Some(TrayAction::Preview) => {
+            let status = app.state::<TrayStatus>();
+            if !ReminderStatus::from_snapshot(status.current()).preview_enabled {
+                eprintln!("tray overlay preview ignored while reminder controls are unavailable");
+                return;
+            }
+            let app = app.clone();
+            let controller = app.state::<OverlayController>().inner().clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                if let Err(error) =
+                    show_overlay_if_idle(&app, &controller, PREVIEW_DURATION_SECONDS)
+                {
+                    eprintln!("overlay preview failed: {error}");
+                }
+            });
+        }
+        Some(TrayAction::Quit) => app.exit(0),
+        None => {}
+    }
+}
+
+fn install_controller(
+    app: &tauri::App,
+    tray_status: &TrayStatus,
+    health: TrayHealth,
+) -> tauri::Result<TrayController> {
+    let initial = ReminderStatus::from_snapshot(tray_status.current());
+    let (menu, mutable_menu) = build_tray_menu(app, initial)?;
 
     // macOS recolours a template image to match the menubar theme; every
     // other platform gets a fixed light glyph for their (dark) panels.
@@ -321,11 +385,32 @@ fn install_controller(
     const TRAY_ICON: &[u8] = include_bytes!("../icons/tray/tray-light.png");
 
     let icon = Image::from_bytes(TRAY_ICON)?;
-
     let builder = TrayIconBuilder::new()
         .icon(icon)
-        .icon_as_template(cfg!(target_os = "macos"))
-        .menu(&menu);
+        .icon_as_template(cfg!(target_os = "macos"));
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.menu(&menu);
+    #[cfg(target_os = "macos")]
+    let builder = if let Err(error) = panel::install(app.handle()) {
+        eprintln!("Tray panel creation failed: {error}; using native menu");
+        builder.menu(&menu)
+    } else {
+        builder.on_tray_icon_event(|tray, event| {
+            if matches!(
+                event,
+                tauri::tray::TrayIconEvent::Click {
+                    button: tauri::tray::MouseButton::Left | tauri::tray::MouseButton::Right,
+                    button_state: tauri::tray::MouseButtonState::Up,
+                    ..
+                }
+            ) {
+                if let Err(error) = panel::toggle(tray) {
+                    eprintln!("Tray panel failed: {error}");
+                    reveal_dashboard(tray.app_handle());
+                }
+            }
+        })
+    };
 
     // The locked Linux tray backend explicitly does not support tooltips or
     // programmable left-click menu behavior. Required information therefore
@@ -334,64 +419,45 @@ fn install_controller(
     #[cfg(not(target_os = "linux"))]
     let builder = builder
         .tooltip("Unfocus eye-break reminder")
-        .show_menu_on_left_click(false);
+        .show_menu_on_left_click(cfg!(target_os = "macos"));
 
     let tray = builder
-        .on_menu_event(|app, event| match tray_action(event.id.as_ref()) {
-            Some(TrayAction::Pause) => {
-                let control = app.state::<ReminderControl>();
-                let status = app.state::<TrayStatus>();
-                let action = if status.current().phase == TrayPhase::Paused {
-                    ReminderAction::Resume
-                } else {
-                    ReminderAction::Pause
-                };
-                if let Err(error) = control.dispatch(action) {
-                    eprintln!("tray pause action failed: {error}");
-                }
-            }
-            Some(TrayAction::TakeBreak) => {
-                let control = app.state::<ReminderControl>();
-                if let Err(error) = control.dispatch(ReminderAction::TakeBreakNow) {
-                    eprintln!("tray take-break action failed: {error}");
-                }
-            }
-            Some(TrayAction::Open) => reveal_dashboard(app),
-            Some(TrayAction::Preview) => {
-                let app = app.clone();
-                let controller = app.state::<OverlayController>().inner().clone();
-                tauri::async_runtime::spawn_blocking(move || {
-                    if let Err(error) =
-                        show_overlay_if_idle(&app, &controller, PREVIEW_DURATION_SECONDS)
-                    {
-                        eprintln!("overlay preview failed: {error}");
-                    }
-                });
-            }
-            Some(TrayAction::Quit) => app.exit(0),
-            None => {}
-        })
+        .on_menu_event(|app, event| handle_tray_menu_event(app, event.id.as_ref()))
         .build(app)?;
+    #[cfg(target_os = "macos")]
+    if let Err(error) = tray.with_inner_tray_icon(|inner| {
+        use tauri_nspanel::{objc2_app_kit::NSAccessibility, objc2_foundation::NSString};
+        if let Some(item) = inner.ns_status_item() {
+            if let Some(button) =
+                tauri_nspanel::objc2::MainThreadMarker::new().and_then(|marker| item.button(marker))
+            {
+                button
+                    .setAccessibilityLabel(Some(&NSString::from_str("Unfocus eye-break reminder")));
+            }
+        }
+    }) {
+        app.remove_tray_by_id(tray.id());
+        return Err(error);
+    }
     health.mark_installed();
 
     let subscription = tray_status.subscribe();
-    let worker_menu = MutableTrayMenu {
-        status: status.clone(),
-        pause: pause.clone(),
-        take_break: take_break.clone(),
-        preview: preview.clone(),
-    };
+    let worker_menu = mutable_menu.clone();
     let worker_health = health.clone();
-    std::thread::Builder::new()
+    if let Err(error) = std::thread::Builder::new()
         .name("unfocus-tray-status".into())
-        .spawn(move || run_status_worker(worker_menu, subscription, worker_health))?;
+        .spawn(move || run_status_worker(worker_menu, subscription, worker_health))
+    {
+        app.remove_tray_by_id(tray.id());
+        return Err(error.into());
+    }
 
     Ok(TrayController {
         _tray: tray,
-        _status: status,
-        _pause: pause,
-        _take_break: take_break,
-        _preview: preview,
+        _status: mutable_menu.status,
+        _pause: mutable_menu.pause,
+        _take_break: mutable_menu.take_break,
+        _preview: mutable_menu.preview,
     })
 }
 

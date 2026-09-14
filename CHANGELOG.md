@@ -1,7 +1,62 @@
+<!-- CHANGELOG.md -->
+
 # Changelog
 
 Notable changes to Unfocus are recorded here. Dates use `YYYY-MM-DD`, and
 released versions link to their GitHub release.
+
+## [Unreleased]
+
+## [0.7.0-beta.1] - 2026-09-14
+
+### Added
+
+- macOS Preview builds now offer a compact menu-bar panel with reminder status,
+  a 30-minute pause, and manual breaks with a cancellable three-second start.
+  Closing the panel leaves a requested break pending; reopening does not restart
+  the countdown. The menu-bar icon remains icon-only. Physical qualification
+  remains limited to the Mac configurations explicitly tested.
+- Scheduled breaks on Ubuntu X11 now offer an optional compact heads-up pill
+  on the primary display, with a countdown ring and skip confirmation. Only the
+  skip target accepts clicks; the cue does not take keyboard focus. It appears
+  briefly one minute before the break, clears out of the way, returns for the final ten seconds, and stays visible
+  until the painted multi-monitor break overlay is ready.
+- macOS Preview builds now offer the same optional scheduled pre-break cue as
+  black wings around the active display’s camera notch, with a
+  compact top-center pill fallback, empty mint progress ring, and soft-white
+  final seconds countdown. A compact skip-forward control briefly confirms a skip,
+  then retracts without moving the next break off schedule. The panel stays
+  nonactivating and accepts clicks only over the skip target. This is early
+  testing only; macOS remains Preview and has not completed physical
+  multi-monitor qualification.
+- Developer mode on macOS and qualified Ubuntu X11 now includes a 17-second
+  pre-break cue preview. It shows the cue's four-second heads-up, two-second
+  quiet interval, ten-second
+  horizon, and one-second handoff without changing reminder timing, probes,
+  overlays, settings, or reflection data. Its skip control dismisses only the preview.
+
+### Changed
+
+- The consumer dashboard now keeps reminder timing and warnings beside the
+  live reminder state, gives new local history a compact first-minute state,
+  separates day context from navigation, and uses clearer break-outcome labels
+  with larger settings targets, visible toggle states, and save/reset feedback
+  that stays in view.
+- History now refreshes whenever it reopens, replaces blank day details with a
+  calm empty state, shows only break outcome types that occurred, and keeps a
+  stationary pointer from obscuring the selected day on entry.
+- Break overlays now reveal the static scene, reflective heading, guidance,
+  timer, and controls in a synchronized 2.4-second sequence. Reduced Motion
+  continues to reveal the content immediately.
+- Space is now the primary keyboard shortcut for ending a break. Escape remains
+  available as a compatibility and safety fallback.
+
+### Fixed
+
+- macOS break overlays wait for their scene and keyboard handler before taking
+  keyboard focus, so Space and Escape can dismiss the screen without a prior
+  click. Closing a break releases its native panel focus, and early dismissal
+  cannot be overwritten by late startup registration.
 
 ## [0.6.0-beta.2] - 2026-08-24
 
@@ -321,7 +376,8 @@ changes are included in and superseded by [0.4.0-alpha.1].
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
-[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.2...HEAD
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.7.0-beta.1...HEAD
+[0.7.0-beta.1]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.2...v0.7.0-beta.1
 [0.6.0-beta.2]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.1...v0.6.0-beta.2
 [0.6.0-beta.1]: https://github.com/abhiksark/unfocus/compare/v0.5.0-alpha.1...v0.6.0-beta.1
 [0.5.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.4.0-alpha.1...v0.5.0-alpha.1

@@ -1,0 +1,6 @@
+{
+  "identifier": "tray-panel",
+  "description": "The macOS tray panel may receive its own lifecycle events.",
+  "windows": ["tray-panel"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "cue",
+  "description": "No-privilege capability for the native-owned pre-break cue",
+  "windows": ["cue-*"],
+  "permissions": []
+}
