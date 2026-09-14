@@ -65,7 +65,7 @@ fn pointer_hits_skip(window: &WebviewWindow, layout: CueLayout) -> Result<bool, 
     let panel = window
         .app_handle()
         .get_webview_panel(window.label())
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| format!("could not find cue panel: {error:?}"))?;
     let native = panel.as_panel();
     let point = native.mouseLocationOutsideOfEventStream();
     Ok(native.isVisible() && hits_skip(point.x, point.y, native.frame().size.width, layout))
