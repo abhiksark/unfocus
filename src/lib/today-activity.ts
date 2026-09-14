@@ -112,9 +112,9 @@ export function deepBlockCaption(count: number, minSeconds: number): string {
 
 /** Privacy and threshold footnote under the strip. */
 export function activityFootnote(afkThresholdSeconds: number): string {
-  return `Keyboard and mouse presence only · gaps under ${formatActivityDuration(
+  return `Keyboard and mouse presence only; nothing is keylogged. Pauses under ${formatActivityDuration(
     afkThresholdSeconds
-  )} stay in continuous work · nothing is keylogged`;
+  )}, including short breaks, remain in activity stretches.`;
 }
 
 /** Loading copy before the first native summary arrives. */

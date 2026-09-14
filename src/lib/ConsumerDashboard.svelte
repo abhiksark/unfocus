@@ -39,29 +39,27 @@
     weekBreakCaption,
     type BreakSummary
   } from "$lib/break-summary";
-  import { refreshDisplayAsOfMs, type RefreshState } from "$lib/refresh-state";
+  import type { RefreshState } from "$lib/refresh-state";
   import { reflectionRecoveryFeedback } from "$lib/reflection-resource";
   import {
     activityFootnote,
     activityStatusCaption,
-    deepBlockCaption,
     formatActivityDuration,
     isActivityWindowEmpty,
     isActivityWindowStarting,
-    stripActiveHeight,
-    stripAfkHeight,
-    stripAriaLabel,
-    stripAxisTicks,
-    stripEndpointLabel,
     todayErrorCaption,
     todayLoadingCaption,
     todayStaleCaption,
     type TodayActivity
   } from "$lib/today-activity";
 
+  import ActivityStrip from "./ActivityStrip.svelte";
+  import { activityWindowLabel } from "./activity-strip";
+
   type SettingsResult = "saved" | "reset" | null;
 
   type Props = {
+    visible?: boolean;
     presentation: ConsumerReminderPresentation;
     warning: ConsumerWarning | null;
     reminderStatus: ReminderStatus | null;
@@ -123,6 +121,7 @@
   };
 
   let {
+    visible = true,
     presentation,
     warning,
     reminderStatus,
@@ -292,21 +291,9 @@
   const activityKind = $derived(
     activityStatusCaption(todayActivity, activityRefresh.status)
   );
-  const activityStripLabel = $derived(
-    todayActivity
-      ? stripAriaLabel(todayActivity, activityRefresh.status)
-      : "Activity strip loading"
-  );
-  const activityStripEndpoint = $derived(stripEndpointLabel(activityRefresh.status));
-  const axisTicks = $derived(
-    todayActivity
-      ? stripAxisTicks(
-          todayActivity.windowSeconds,
-          refreshDisplayAsOfMs(activityRefresh, Date.now()),
-          dayStartHour
-        )
-      : []
-  );
+  const activityEndMs = $derived(activityRefresh.asOfMs ?? 0);
+  const activityRange = $derived(todayActivity && activityEndMs
+    ? activityWindowLabel(todayActivity.windowSeconds, activityEndMs) : "");
   const activityEmpty = $derived(
     todayActivity ? isActivityWindowEmpty(todayActivity) : false
   );
@@ -638,6 +625,9 @@
     </div>
     <div class="section-context">
       <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
+      <details class="display-settings">
+        <summary>Day boundary</summary>
+        <p class="t-micro">Marks the start of your day on this rolling chart and groups days in History. These totals always cover the last 24 hours.</p>
       <label class="day-start t-micro">
         Day starts
         <select
@@ -652,7 +642,9 @@
           {/each}
         </select>
       </label>
+      </details>
     </div>
+    {#if activityRange}<p class="t-micro range-label">{activityRange}{activityRefresh.status === "stale" ? " · Last known" : ""}</p>{/if}
 
     {#if activityRecoveryFeedback}
       <p class="t-micro is-error" role="status">{activityRecoveryFeedback}</p>
@@ -729,62 +721,13 @@
           </div>
           <div class="stat" class:is-zero={todayActivity.longestActiveSeconds <= 0}>
             <span class="num">{formatActivityDuration(todayActivity.longestActiveSeconds)}</span>
-            <span class="t-micro">Longest stretch</span>
-          </div>
-          <div class="stat" class:is-zero={todayActivity.deepBlockCount <= 0}>
-            <span class="num">{todayActivity.deepBlockCount}</span>
-            <span class="t-micro">Deep work</span>
-            <span class="t-micro"
-              >{deepBlockCaption(
-                todayActivity.deepBlockCount,
-                todayActivity.deepBlockMinSeconds
-              )}</span
-            >
+            <span class="t-micro">Longest activity stretch</span>
           </div>
         </div>
 
-        <div class="strip-frame">
-          <div class="strip-lines" aria-hidden="true">
-            {#each axisTicks as tick (tick.timestampMs)}
-              <span
-                class="strip-line"
-                class:is-day-start={tick.isDayStart}
-                style={`left: ${tick.positionPercent}%`}
-              ></span>
-            {/each}
-          </div>
-          <div class="strip" role="img" aria-label={activityStripLabel}>
-            {#each todayActivity.strip as bucket, index (index)}
-              <div class="strip-bucket" aria-hidden="true">
-                <span
-                  class="strip-afk"
-                  style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
-                ></span>
-                <span
-                  class="strip-active"
-                  style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
-                ></span>
-              </div>
-            {/each}
-          </div>
-        </div>
-
-        <div class="strip-axis" data-type-role="mono" aria-hidden="true">
-          {#each axisTicks as tick (tick.timestampMs)}
-            {#if tick.showLabel}
-              <span
-                class="strip-axis-hour"
-                class:is-day-start={tick.isDayStart}
-                style={`left: ${tick.positionPercent}%`}>{tick.label}</span
-              >
-            {/if}
-          {/each}
-          <span class="strip-axis-now">{activityStripEndpoint}</span>
-        </div>
-        <ul class="legend" aria-hidden="true">
-          <li><span class="legend-swatch legend-active"></span> Active</li>
-          <li><span class="legend-swatch legend-afk"></span> Away</li>
-        </ul>
+        <p class="t-micro stretch-note">{todayActivity.deepBlockCount} activity {todayActivity.deepBlockCount === 1 ? "stretch" : "stretches"} of {formatActivityDuration(todayActivity.deepBlockMinSeconds)} or more.</p>
+        <ActivityStrip activity={todayActivity} endMs={activityEndMs} {dayStartHour}
+          stale={activityRefresh.status === "stale"} {visible} {breakRefresh} />
 
         {#if activityRefresh.status === "fresh" && activityEmpty}
           <p class="t-micro" role="status">
@@ -904,7 +847,7 @@
 <style>
   .wrap {
     display: flex;
-    width: min(100%, 780px);
+    width: min(100%, clamp(780px, 80vw, 1280px));
     min-height: 100vh;
     flex-direction: column;
     gap: var(--s4);
@@ -1141,90 +1084,11 @@
     font-weight: 400;
   }
 
-  .strip-frame {
-    position: relative;
-  }
-
-  .strip-lines {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  .strip-line {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background: var(--line);
-  }
-
-  .strip {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    height: 64px;
-    align-items: end;
-    gap: 2px;
-    grid-template-columns: repeat(48, minmax(0, 1fr));
-  }
-
-  .strip-bucket {
-    position: relative;
-    height: 100%;
-  }
-
-  .strip-active,
-  .strip-afk {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    min-height: 0;
-    border-radius: 2px 2px 0 0;
-  }
-
-  .strip-active {
-    background: var(--accent);
-    opacity: 0.85;
-  }
-
-  .strip-afk {
-    background: var(--away);
-    opacity: 0.7;
-  }
-
-  .strip-axis {
-    position: relative;
-    height: 14px;
-    margin-top: var(--s1);
-  }
-
-  .strip-axis-hour,
-  .strip-axis-now {
-    position: absolute;
-    color: var(--ink-3);
-    font-size: 0.72rem;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .strip-axis-hour {
-    transform: translateX(-50%);
-  }
-
-  .strip-axis-now {
-    right: 0;
-  }
-
-  .strip-line.is-day-start {
-    background: var(--line-2);
-  }
-
-  .strip-axis-hour.is-day-start {
-    color: var(--ink-2);
-  }
-
+  .range-label, .stretch-note { color: var(--ink-2); }
+  .display-settings { max-width: 38ch; font-size: 0.75rem; color: var(--ink-2); }
+  .display-settings summary { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .display-settings summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .display-settings p { margin: var(--s2) 0; }
   .section-context {
     display: flex;
     flex-wrap: wrap;
@@ -1293,38 +1157,6 @@
     border-left: 2px solid var(--warn);
     padding-left: var(--s2);
     color: var(--warn);
-  }
-
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s4);
-    margin: 0;
-    padding: 0;
-    color: var(--ink-3);
-    font-size: 0.75rem;
-    list-style: none;
-  }
-
-  .legend li {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .legend-swatch {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-  }
-
-  .legend-active {
-    background: var(--accent);
-  }
-
-  .legend-afk {
-    background: var(--away);
   }
 
   .is-error,

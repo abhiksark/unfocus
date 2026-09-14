@@ -60,7 +60,7 @@ describe("break summary presentation", () => {
     );
     expect(stats.map((stat) => stat.label)).toEqual([
       "Scheduled",
-      "Already away",
+      "Idle at break time",
       "Started by you",
       "Held for fullscreen"
     ]);

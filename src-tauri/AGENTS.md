@@ -108,6 +108,9 @@ orchestration, OS probes, timing, and diagnostics.
 - `get_activity_range` is main-window-only through `authorize_main_caller`.
   The frontend may request at most 1,024 buckets, and the total span must stay
   inside retained history.
+- Restored segments and failed probe intervals never establish continuity.
+  The first healthy observation after restart or probe failure opens a new
+  segment without extending the previous endpoint through unobserved time.
 
 ## Break ledger history
 

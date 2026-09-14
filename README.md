@@ -25,6 +25,14 @@ screen and gives you a calm, observe-only picture of how your day went. Breaks
 cover every monitor, reflection stays on your device, and there are no streaks,
 badges, accounts, or mascots competing for your attention.
 
+<a href="https://peerlist.io/abhiksark/project/unfocus-break-reminder" target="_blank" rel="noreferrer">
+  <img
+    src="https://peerlist.io/api/v1/projects/embed/PRJH7B8Q8NGEANOE6I6NNKRNGG68E7?showUpvote=false&amp;theme=light"
+    alt="Unfocus: break reminder on Peerlist"
+    height="72"
+  >
+</a>
+
 ### Watch Unfocus in 58 seconds
 
 See the gentle notch reminder, a screen break, and reflection across your day
