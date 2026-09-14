@@ -30,9 +30,8 @@ badges, accounts, or mascots competing for your attention.
 See the gentle notch reminder, a screen break, and reflection across your day
 and the past 90 days.
 
-[![Watch the 58-second Unfocus demo: a gentle reminder appears around the Mac notch](.github/media/demo-preview.jpg)](.github/media/how-unfocus-works.mp4)
+https://github.com/user-attachments/assets/051b3e5b-6789-42f9-aa24-262925af3d59
 
-**[▶ Watch the demo](.github/media/how-unfocus-works.mp4)** ·
 Staged macOS preview with illustrative activity data.
 
 [Download](https://github.com/abhiksark/unfocus/releases) ·
