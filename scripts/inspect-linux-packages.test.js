@@ -1,3 +1,5 @@
+// scripts/inspect-linux-packages.test.js
+
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -319,15 +321,21 @@ describe("package metadata parsers", () => {
       architecture: "x86_64",
     });
     const rpmLayout = [
-      "/usr/bin/unfocus\t100775\t200\troot\troot\t(none)",
+      "/usr/bin/unfocus\t100755\t200\troot\troot\t(none)",
       "/usr/lib/Unfocus\t40755\t0\troot\troot\t(none)",
-      "/usr/lib/Unfocus/THIRD_PARTY_NOTICES.txt\t100664\t100\troot\troot\t(none)",
-      "/usr/share/applications/Unfocus.desktop\t100664\t20\troot\troot\t(none)",
-      "/usr/share/icons/hicolor/128x128/apps/unfocus.png\t100664\t20\troot\troot\t(none)",
-      "/usr/share/icons/hicolor/256x256@2/apps/unfocus.png\t100664\t20\troot\troot\t(none)",
-      "/usr/share/icons/hicolor/32x32/apps/unfocus.png\t100664\t20\troot\troot\t(none)",
+      "/usr/lib/Unfocus/THIRD_PARTY_NOTICES.txt\t100644\t100\troot\troot\t(none)",
+      "/usr/share/applications/Unfocus.desktop\t100644\t20\troot\troot\t(none)",
+      "/usr/share/icons/hicolor/128x128/apps/unfocus.png\t100644\t20\troot\troot\t(none)",
+      "/usr/share/icons/hicolor/256x256@2/apps/unfocus.png\t100644\t20\troot\troot\t(none)",
+      "/usr/share/icons/hicolor/32x32/apps/unfocus.png\t100644\t20\troot\troot\t(none)",
     ].join("\n");
     expect(parseRpmLayout(`${rpmLayout}\n`)).toHaveLength(7);
+    for (const mode of ["100775", "100777", "104755", "102755", "100644", "120777"]) {
+      expect(() => parseRpmLayout(rpmLayout.replace("100755", mode)))
+        .toThrow("wrong file type or permissions");
+    }
+    expect(() => parseRpmLayout(rpmLayout.replace("100644", "100664")))
+      .toThrow("wrong file type or permissions");
   });
 
   test("rejects missing, duplicate, and whitespace-bearing metadata", () => {
@@ -338,16 +346,16 @@ describe("package metadata parsers", () => {
     const wrongType = [
       "/usr/bin/unfocus\t120777\t200\troot\troot\t(none)",
       "/usr/lib/Unfocus\t40755\t0\troot\troot\t(none)",
-      "/usr/lib/Unfocus/THIRD_PARTY_NOTICES.txt\t100664\t100\troot\troot\t(none)",
-      "/usr/share/applications/Unfocus.desktop\t100664\t20\troot\troot\t(none)",
-      "/usr/share/icons/hicolor/128x128/apps/unfocus.png\t100664\t20\troot\troot\t(none)",
-      "/usr/share/icons/hicolor/256x256@2/apps/unfocus.png\t100664\t20\troot\troot\t(none)",
-      "/usr/share/icons/hicolor/32x32/apps/unfocus.png\t100664\t20\troot\troot\t(none)",
+      "/usr/lib/Unfocus/THIRD_PARTY_NOTICES.txt\t100644\t100\troot\troot\t(none)",
+      "/usr/share/applications/Unfocus.desktop\t100644\t20\troot\troot\t(none)",
+      "/usr/share/icons/hicolor/128x128/apps/unfocus.png\t100644\t20\troot\troot\t(none)",
+      "/usr/share/icons/hicolor/256x256@2/apps/unfocus.png\t100644\t20\troot\troot\t(none)",
+      "/usr/share/icons/hicolor/32x32/apps/unfocus.png\t100644\t20\troot\troot\t(none)",
     ].join("\n");
     expect(() => parseRpmLayout(`${wrongType}\n`)).toThrow("wrong file type or permissions");
     const privileged = wrongType.replace(
       "/usr/bin/unfocus\t120777\t200\troot\troot\t(none)",
-      "/usr/bin/unfocus\t100775\t200\troot\troot\tcap_net_admin=ep",
+      "/usr/bin/unfocus\t100755\t200\troot\troot\tcap_net_admin=ep",
     );
     expect(() => parseRpmLayout(`${privileged}\n`)).toThrow("root-owned and capability-free");
   });
