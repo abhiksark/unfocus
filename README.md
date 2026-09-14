@@ -25,15 +25,21 @@ screen and gives you a calm, observe-only picture of how your day went. Breaks
 cover every monitor, reflection stays on your device, and there are no streaks,
 badges, accounts, or mascots competing for your attention.
 
+### Watch Unfocus in 58 seconds
+
+See the gentle notch reminder, a screen break, and reflection across your day
+and the past 90 days.
+
+[![Watch the 58-second Unfocus demo: a gentle reminder appears around the Mac notch](.github/media/demo-preview.jpg)](.github/media/how-unfocus-works.mp4)
+
+**[▶ Watch the demo](.github/media/how-unfocus-works.mp4)** ·
+Staged macOS preview with illustrative activity data.
+
 [Download](https://github.com/abhiksark/unfocus/releases) ·
 [Install guide](docs/install.md) ·
 [Changelog](CHANGELOG.md) ·
 [Report a bug](https://github.com/abhiksark/unfocus/issues/new?template=bug_report.yml) ·
 [Request a feature](https://github.com/abhiksark/unfocus/issues/new?template=feature_request.yml)
-
-![The Unfocus dashboard with the live reminder and Your day activity strip](.github/media/dashboard.png)
-
-[Watch how Unfocus works in 45 seconds](.github/media/how-unfocus-works.mp4)
 
 ## Why Unfocus
 
@@ -89,6 +95,8 @@ history to control the reminder timer.
   records which keys you press
 - Reflection is observe-only: it never pauses, skips, or advances the timer
 
+![The Unfocus dashboard with the live reminder and Your day activity strip](.github/media/dashboard.png)
+
 ### Local by design
 
 - No account, telemetry, cloud dependency, or packaged-app runtime network
@@ -98,10 +106,6 @@ history to control the reminder timer.
   downloads
 - Developer mode exposes platform signals, connected displays, and probe
   errors when you need to troubleshoot
-
-Selecting the linked author name is the only action that asks the operating
-system to open a web address (`https://abhik.ai`) in your default browser.
-Unfocus itself does not make that request over the network.
 
 ## Install
 
