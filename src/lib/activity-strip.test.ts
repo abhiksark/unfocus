@@ -1,8 +1,30 @@
 import { describe, expect, test } from "bun:test";
-import { activityIntervals, activityShares, activityWindowLabel, breakEventLabel, createBreakMarkerLoader } from "./activity-strip";
+import { activityIntervals, activityShares, activityWindowLabel, breakEventLabel, createBreakMarkerLoader, visibleAxisLabels } from "./activity-strip";
 import type { BreakHistoryEvent } from "./history";
 
 describe("activity interval presentation", () => {
+  test("reserves measured endpoint space and prioritizes the selected day boundary", () => {
+    const labels = [
+      { left: -3, width: 30, isDayStart: false },
+      { left: 120, width: 40, isDayStart: false },
+      { left: 165, width: 40, isDayStart: true },
+      { left: 727, width: 15, isDayStart: false }
+    ];
+    expect(visibleAxisLabels(labels, 802, 72)).toEqual([false, false, true, false]);
+    expect(visibleAxisLabels(labels, 802, 22)).toEqual([false, false, true, true]);
+    expect(visibleAxisLabels(labels, 100, 72)).toEqual([false, false, false, false]);
+  });
+
+  test("uses label widths after a font or locale change", () => {
+    expect(visibleAxisLabels([
+      { left: 30, width: 20, isDayStart: false },
+      { left: 70, width: 20, isDayStart: false }
+    ], 200, 20)).toEqual([true, true]);
+    expect(visibleAxisLabels([
+      { left: 30, width: 48, isDayStart: false },
+      { left: 70, width: 48, isDayStart: false }
+    ], 200, 20)).toEqual([true, false]);
+  });
   test("preserves equal active and away shares rather than overlapping them", () => {
     expect(activityShares({ activeRatio: 0.5, afkRatio: 0.5 })).toEqual({ active: 0.5, away: 0.5, unknown: 0 });
     expect(activityShares({ activeRatio: 0.25, afkRatio: 0.25 })).toEqual({ active: 0.25, away: 0.25, unknown: 0.5 });

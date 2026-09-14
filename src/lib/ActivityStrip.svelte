@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { tick, untrack } from "svelte";
-  import { activityIntervals, breakEventLabel, breakMarkerRefreshKey, createBreakMarkerLoader } from "./activity-strip";
+  import { activityIntervals, breakEventLabel, breakMarkerRefreshKey, createBreakMarkerLoader, visibleAxisLabels } from "./activity-strip";
   import type { BreakSummary } from "./break-summary";
   import type { BreakHistoryEvent } from "./history";
   import type { RefreshState } from "./refresh-state";
@@ -22,9 +22,15 @@
   let focusedIndex = $state(47);
   let selectedIndex = $state<number | null>(null);
   let stripElement: HTMLDivElement;
+  let readoutElement: HTMLDivElement;
   const intervals = $derived(activityIntervals(activity, endMs, events));
   const selected = $derived(selectedIndex === null ? null : intervals[selectedIndex]);
   const ticks = $derived(stripAxisTicks(activity.windowSeconds, endMs, dayStartHour));
+  $effect(() => {
+    // Reset only for navigation; normal polling must not interrupt reading.
+    selectedIndex;
+    if (readoutElement) readoutElement.scrollTop = 0;
+  });
   const markersUnavailable = $derived(stale || breakRefresh.status !== "fresh" || markersFailed);
   const markerKey = $derived(
     visible && !stale && breakRefresh.status === "fresh"
@@ -49,6 +55,41 @@
     return () => markerLoader.cancel();
   });
 
+  function measureAxis(node: HTMLDivElement, _layout: unknown) {
+    let frame = 0;
+    let disposed = false;
+    function measure() {
+      const bounds = node.getBoundingClientRect();
+      const endpoint = node.querySelector<HTMLElement>(".endpoint");
+      if (!endpoint || bounds.width === 0) return;
+      const labels = [...node.querySelectorAll<HTMLElement>("[data-axis-tick]")];
+      const visible = visibleAxisLabels(labels.map((label) => {
+        const rect = label.getBoundingClientRect();
+        return { left: rect.left - bounds.left, width: rect.width, isDayStart: label.dataset.dayStart === "true" };
+      }), bounds.width, endpoint.getBoundingClientRect().width);
+      labels.forEach((label, index) => { label.style.visibility = visible[index] ? "visible" : "hidden"; });
+    }
+    function schedule() {
+      if (disposed) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    }
+    const observer = new ResizeObserver(schedule);
+    observer.observe(node);
+    document.fonts.addEventListener("loadingdone", schedule);
+    void document.fonts.ready.then(schedule);
+    schedule();
+    return {
+      update(_layout: unknown) { schedule(); },
+      destroy() {
+        disposed = true;
+        cancelAnimationFrame(frame);
+        observer.disconnect();
+        document.fonts.removeEventListener("loadingdone", schedule);
+      }
+    };
+  }
+
   async function navigate(event: KeyboardEvent, index: number) {
     let next = index;
     if (event.key === "ArrowLeft") next = Math.max(0, index - 1);
@@ -64,7 +105,9 @@
   }
 </script>
 
+<div class="activity-chart">
 <div class="chart-note">Each bar represents 30 minutes. Hover or focus a bar for details.</div>
+<div class="plot">
 <div class="strip" bind:this={stripElement} role="group" aria-label={stale ? "Last-known activity, half-hour intervals" : "Activity, half-hour intervals"}>
   {#each intervals as interval, index (index)}
     <button
@@ -87,13 +130,14 @@
     </button>
   {/each}
 </div>
-<div class="axis" aria-hidden="true">
+<div class="axis" aria-hidden="true" use:measureAxis={{ ticks, stale }}>
   {#each ticks as tick (tick.timestampMs)}
     {#if tick.showLabel}
-      <span class:day-start={tick.isDayStart} style={`left:${tick.positionPercent}%`}>{tick.label}</span>
+      <span data-axis-tick data-day-start={tick.isDayStart} class:day-start={tick.isDayStart} style={`left:${tick.positionPercent}%`}>{tick.label}</span>
     {/if}
   {/each}
   <span class="endpoint">{stale ? "last known" : "now"}</span>
+</div>
 </div>
 <ul class="legend" aria-label="Activity legend">
   <li><i class="active"></i>Active</li>
@@ -101,7 +145,8 @@
   <li><i class="unknown"></i>Unclassified</li>
   <li><span>◆</span>Break outcome</li>
 </ul>
-<div class="readout">
+<!-- svelte-ignore a11y_no_noninteractive_tabindex (This scrollable region needs keyboard focus to expose every recorded event.) -->
+<div class="readout" bind:this={readoutElement} tabindex="0" role="region" aria-label="Activity interval details">
   {#if selected}
     <p><strong>{selected.label}</strong> · {selected.details}</p>
     {#if selected.events.length > 0}
@@ -116,10 +161,12 @@
     <p>Loading break details…</p>
   {/if}
 </div>
+</div>
 
 <style>
-  .chart-note, .legend, .readout, .axis { color: var(--ink-2); font-size: 0.75rem; }
-  .chart-note { margin-bottom: var(--s3); }
+  .activity-chart { display: flex; flex-direction: column; gap: var(--s3); margin-top: var(--s3); }
+  .plot { display: flex; flex-direction: column; gap: var(--s1); }
+  .chart-note, .legend, .readout { color: var(--ink-2); font-size: 0.8125rem; line-height: 1.6; }
   .strip { display: grid; grid-template-columns: repeat(48, minmax(0, 1fr)); gap: 2px; }
   .bucket { min-width: 0; padding: 0; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; border-radius: 2px; }
   .bucket:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -130,15 +177,16 @@
   .away { background: var(--away); }
   .unknown { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line) 3px 4px); }
   .marker { display: block; height: 22px; line-height: 22px; font-size: 0.75rem; }
-  .axis { position: relative; height: 20px; font-family: var(--mono); }
+  .axis { position: relative; height: 1.7em; color: var(--ink-2); font: 0.75rem var(--mono); }
   .axis > span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
   .axis .endpoint { right: 0; transform: none; }
   .axis .day-start { font-weight: 700; color: var(--ink); }
-  .legend { display: flex; gap: var(--s4); flex-wrap: wrap; padding: 0; margin: var(--s3) 0; list-style: none; }
+  .legend { display: flex; gap: var(--s4); flex-wrap: wrap; padding: 0; margin: 0; list-style: none; }
   .legend li { display: flex; align-items: center; gap: 6px; }
   .legend i { width: 10px; height: 10px; border-radius: 2px; }
-  .readout { min-height: 38px; line-height: 1.6; }
+  .readout { height: 6.5em; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+  .readout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .readout p { margin: 0; }
   .readout strong { color: var(--ink); font-weight: 500; }
-  .readout ul { padding-left: var(--s4); margin: var(--s1) 0; max-height: 120px; overflow: auto; }
+  .readout ul { padding-left: var(--s4); margin: var(--s1) 0; }
 </style>

@@ -13,6 +13,33 @@ export type ActivityInterval = {
   events: BreakHistoryEvent[];
 };
 
+export type AxisLabelBounds = {
+  left: number;
+  width: number;
+  isDayStart: boolean;
+};
+
+/** Keep the endpoint clear and prefer the chosen day boundary over nearby ticks. */
+export function visibleAxisLabels(
+  labels: AxisLabelBounds[],
+  availableWidth: number,
+  endpointWidth: number,
+  gap = 12
+): boolean[] {
+  const visible = labels.map(() => false);
+  const accepted: AxisLabelBounds[] = [];
+  const ordered = labels.map((label, index) => ({ ...label, index }))
+    .sort((a, b) => Number(b.isDayStart) - Number(a.isDayStart) || a.left - b.left);
+  for (const label of ordered) {
+    const right = label.left + label.width;
+    if (label.left < 0 || right + gap > availableWidth - endpointWidth) continue;
+    if (accepted.some((other) => label.left < other.left + other.width + gap && right + gap > other.left)) continue;
+    visible[label.index] = true;
+    accepted.push(label);
+  }
+  return visible;
+}
+
 function ratio(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
 }

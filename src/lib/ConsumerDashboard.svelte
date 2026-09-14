@@ -57,6 +57,7 @@
   import { activityWindowLabel } from "./activity-strip";
 
   type SettingsResult = "saved" | "reset" | null;
+  let dayBoundaryExpanded = $state(false);
 
   type Props = {
     visible?: boolean;
@@ -314,6 +315,7 @@
 
 <main class="wrap">
   <header class="top">
+    <span class="wordmark-crop">
     <img
       class="consumer-wordmark"
       src="/unfocus-wordmark-mist.svg"
@@ -322,6 +324,7 @@
       alt="Unfocus"
       draggable="false"
     />
+    </span>
   </header>
 
   <section class="state" aria-labelledby="consumer-state-title">
@@ -624,27 +627,30 @@
       </button>
     </div>
     <div class="section-context">
-      <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
-      <details class="display-settings">
-        <summary>Day boundary</summary>
+      <div class="period-context">
+        <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
+        {#if activityRange}<p class="t-micro range-label">{activityRange}{activityRefresh.status === "stale" ? " · Last known" : ""}</p>{/if}
+      </div>
+      <button type="button" class="btn-link day-boundary-toggle"
+        aria-expanded={dayBoundaryExpanded} aria-controls="day-boundary-settings"
+        onclick={() => (dayBoundaryExpanded = !dayBoundaryExpanded)}>Day boundary</button>
+      <div id="day-boundary-settings" class="display-settings" hidden={!dayBoundaryExpanded}>
         <p class="t-micro">Marks the start of your day on this rolling chart and groups days in History. These totals always cover the last 24 hours.</p>
-      <label class="day-start t-micro">
-        Day starts
-        <select
-          class="day-start-select"
-          data-type-role="mono"
-          value={dayStartHour}
-          onchange={(event) =>
-            onDayStartChange(Number((event.currentTarget as HTMLSelectElement).value))}
-        >
-          {#each dayStartOptions() as option (option.hour)}
-            <option value={option.hour}>{option.label}</option>
-          {/each}
-        </select>
-      </label>
-      </details>
+        <label class="day-start t-micro">
+          Day starts
+          <select
+            class="day-start-select"
+            data-type-role="mono"
+            value={dayStartHour}
+            onchange={(event) => onDayStartChange(Number(event.currentTarget.value))}
+          >
+            {#each dayStartOptions() as option (option.hour)}
+              <option value={option.hour}>{option.label}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
     </div>
-    {#if activityRange}<p class="t-micro range-label">{activityRange}{activityRefresh.status === "stale" ? " · Last known" : ""}</p>{/if}
 
     {#if activityRecoveryFeedback}
       <p class="t-micro is-error" role="status">{activityRecoveryFeedback}</p>
@@ -705,7 +711,7 @@
         </p>
       {:else}
         <div
-          class="stats"
+          class="stats activity-stats"
           role="group"
           aria-label={activityRefresh.status === "stale"
             ? "Last-known activity totals for the rolling window"
@@ -863,8 +869,17 @@
   .consumer-wordmark {
     display: block;
     width: 160px;
-    max-width: 100%;
+    max-width: none;
+    margin-left: -18.819px;
     height: auto;
+  }
+
+  /* The SVG artwork spans x=141.144..1058.853 in a 1200-wide viewBox.
+     Crop its side bearings at the existing 160px scale, retaining its height. */
+  .wordmark-crop {
+    display: block;
+    width: 122.362px;
+    overflow: hidden;
   }
 
   .rule {
@@ -1042,7 +1057,8 @@
 
   .num {
     color: var(--ink);
-    font-size: 1.45rem;
+    font-size: clamp(1.625rem, 2vw, 1.75rem);
+    line-height: 1.2;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
@@ -1063,10 +1079,20 @@
   }
 
   .stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s5) var(--s6);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    max-width: 50rem;
+    gap: 2px var(--s6);
   }
+
+  .activity-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-width: 40rem;
+    margin-top: var(--s1);
+  }
+
+  .stat .t-micro { font-size: 0.8125rem; }
 
   .stats.is-empty {
     opacity: 0.72;
@@ -1079,21 +1105,29 @@
     gap: 2px;
   }
 
+  @supports (grid-template-rows: subgrid) {
+    .stat {
+      display: grid;
+      grid-row: span 2;
+      grid-template-rows: subgrid;
+    }
+  }
+
   .stat.is-zero .num {
     color: var(--ink-3);
     font-weight: 400;
   }
 
   .range-label, .stretch-note { color: var(--ink-2); }
-  .display-settings { max-width: 38ch; font-size: 0.75rem; color: var(--ink-2); }
-  .display-settings summary { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-  .display-settings summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-  .display-settings p { margin: var(--s2) 0; }
+  .period-context { display: flex; flex-direction: column; gap: var(--s1); }
+  .period-context .t-micro { font-size: 0.8125rem; }
+  .day-boundary-toggle { align-self: start; font-size: 0.8125rem; }
+  .display-settings { grid-column: 1 / -1; padding: var(--s3) var(--s4); border-block: 1px solid var(--line); color: var(--ink-2); }
+  .display-settings p { max-width: 72ch; margin-bottom: var(--s2); font-size: 0.8125rem; }
   .section-context {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
     gap: var(--s2) var(--s4);
   }
 
