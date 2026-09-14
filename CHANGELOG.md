@@ -7,6 +7,8 @@ released versions link to their GitHub release.
 
 ## [Unreleased]
 
+## [0.7.0-beta.1] - 2026-09-14
+
 ### Added
 
 - macOS Preview builds now offer a compact menu-bar panel with reminder status,
@@ -374,7 +376,8 @@ changes are included in and superseded by [0.4.0-alpha.1].
 - Made unavailable or failing platform probes report their state without
   stopping or changing the break timer.
 
-[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.2...HEAD
+[Unreleased]: https://github.com/abhiksark/unfocus/compare/v0.7.0-beta.1...HEAD
+[0.7.0-beta.1]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.2...v0.7.0-beta.1
 [0.6.0-beta.2]: https://github.com/abhiksark/unfocus/compare/v0.6.0-beta.1...v0.6.0-beta.2
 [0.6.0-beta.1]: https://github.com/abhiksark/unfocus/compare/v0.5.0-alpha.1...v0.6.0-beta.1
 [0.5.0-alpha.1]: https://github.com/abhiksark/unfocus/compare/v0.4.0-alpha.1...v0.5.0-alpha.1
