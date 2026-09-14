@@ -32,7 +32,7 @@ export type PreBreakCueLayout = {
 };
 
 export type PreBreakCueView = {
-  surface: "notch" | "card";
+  surface: "notch" | "pill";
   title: string | null;
   support: string | null;
   countdown: number | null;
@@ -47,23 +47,8 @@ export function preBreakCueViewFromPresentation(
   presentation: PreBreakCuePresentation,
   mode: PreBreakCueMode = "scheduled"
 ): PreBreakCueView {
-  if (platform === "linux") {
-    const isHandoff = presentation.stage === "handoff";
-    return {
-      surface: "card",
-      title:
-        presentation.stage === "horizon"
-          ? "Eye break"
-          : isHandoff
-            ? "Look away"
-            : "Eye break in 1 minute",
-      support: isHandoff ? "Rest your focus beyond the screen." : "Finish your thought.",
-      countdown: presentation.stage === "horizon" ? presentation.secondsLeft : null
-    };
-  }
-
   return {
-    surface: "notch",
+    surface: platform === "macos" ? "notch" : "pill",
     title: presentation.stage === "heads-up" ? "Break in 1m" :
       presentation.stage === "handoff" ? "Look away" : null,
     support: null,

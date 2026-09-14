@@ -14,9 +14,10 @@ released versions link to their GitHub release.
   Closing the panel leaves a requested break pending; reopening does not restart
   the countdown. The menu-bar icon remains icon-only. Physical qualification
   remains limited to the Mac configurations explicitly tested.
-- Scheduled breaks on Ubuntu X11 now offer an optional click-through heads-up
-  on the primary display. It appears briefly one minute before the break,
-  clears out of the way, returns for the final ten seconds, and stays visible
+- Scheduled breaks on Ubuntu X11 now offer an optional compact heads-up pill
+  on the primary display, with a countdown ring and skip confirmation. Only the
+  skip target accepts clicks; the cue does not take keyboard focus. It appears
+  briefly one minute before the break, clears out of the way, returns for the final ten seconds, and stays visible
   until the painted multi-monitor break overlay is ready.
 - macOS Preview builds now offer the same optional scheduled pre-break cue as
   black wings around the active display’s camera notch, with a
@@ -26,8 +27,9 @@ released versions link to their GitHub release.
   nonactivating and accepts clicks only over the skip target. This is early
   testing only; macOS remains Preview and has not completed physical
   multi-monitor qualification.
-- Developer mode on macOS now includes a 17-second notch-cue preview. It
-  shows the cue's four-second heads-up, two-second quiet interval, ten-second
+- Developer mode on macOS and qualified Ubuntu X11 now includes a 17-second
+  pre-break cue preview. It shows the cue's four-second heads-up, two-second
+  quiet interval, ten-second
   horizon, and one-second handoff without changing reminder timing, probes,
   overlays, settings, or reflection data. Its skip control dismisses only the preview.
 

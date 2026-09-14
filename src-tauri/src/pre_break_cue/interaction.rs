@@ -1,6 +1,7 @@
-//! Keep only the small skip target interactive. All coordinates are AppKit
-//! window-local logical points, so negative display origins and backing scale
-//! never enter the hit test. No event monitor or input permission is needed.
+// src-tauri/src/pre_break_cue/interaction.rs
+
+//! Keep only the small skip target interactive. Hit tests use window-local logical
+//! points on both macOS and X11. No event monitor or input permission is needed.
 use super::*;
 
 #[derive(Debug, Default)]
@@ -45,11 +46,46 @@ pub(super) fn set_enabled(window: &WebviewWindow, enabled: bool) -> Result<(), S
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .enabled = enabled;
     if !enabled {
-        window
-            .set_ignore_cursor_events(true)
-            .map_err(|error| error.to_string())?;
+        set_click_through(window, true).map_err(|error| error.to_string())?;
     }
     Ok(())
+}
+
+fn set_click_through(window: &WebviewWindow, ignore: bool) -> Result<(), tauri::Error> {
+    // GTK has no GdkWindow before first map; Tao's input-shape setter unwraps it.
+    // Reveal applies click-through after show, before the next pointer poll.
+    if cfg!(target_os = "macos") || window.is_visible()? {
+        window.set_ignore_cursor_events(ignore)?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn pointer_hits_skip(window: &WebviewWindow, layout: CueLayout) -> Result<bool, String> {
+    let panel = window
+        .app_handle()
+        .get_webview_panel(window.label())
+        .map_err(|error| error.to_string())?;
+    let native = panel.as_panel();
+    let point = native.mouseLocationOutsideOfEventStream();
+    Ok(native.isVisible() && hits_skip(point.x, point.y, native.frame().size.width, layout))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn pointer_hits_skip(window: &WebviewWindow, layout: CueLayout) -> Result<bool, tauri::Error> {
+    if !window.is_visible()? {
+        return Ok(false);
+    }
+    let point = window.cursor_position()?;
+    let origin = window.inner_position()?;
+    let scale = window.scale_factor()?;
+    let width = f64::from(window.inner_size()?.width) / scale;
+    Ok(hits_skip(
+        (point.x - f64::from(origin.x)) / scale,
+        (point.y - f64::from(origin.y)) / scale,
+        width,
+        layout,
+    ))
 }
 
 pub(super) fn start(window: &WebviewWindow, cancelled: Arc<AtomicBool>) -> Result<(), String> {
@@ -72,7 +108,7 @@ pub(super) fn start(window: &WebviewWindow, cancelled: Arc<AtomicBool>) -> Resul
                 let main_cancelled = Arc::clone(&cancelled);
                 if app
                     .run_on_main_thread(move || {
-                        let Ok(panel) = main_app.get_webview_panel(&main_label) else {
+                        let Some(window) = main_app.get_webview_window(&main_label) else {
                             let _ = sender.send(false);
                             return;
                         };
@@ -80,15 +116,21 @@ pub(super) fn start(window: &WebviewWindow, cancelled: Arc<AtomicBool>) -> Resul
                         let state = main_pointer
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        let native = panel.as_panel();
-                        let point = native.mouseLocationOutsideOfEventStream();
                         let interactive = alive
-                            && native.isVisible()
                             && state.enabled
                             && state.layout.is_some_and(|layout| {
-                                hits_skip(point.x, point.y, native.frame().size.width, layout)
+                                pointer_hits_skip(&window, layout).unwrap_or(false)
                             });
-                        panel.set_ignores_mouse_events(!interactive);
+                        if set_click_through(&window, !interactive).is_err() {
+                            let _ = window.hide();
+                            request_cue_window_close(
+                                &main_app,
+                                main_label,
+                                "cue pointer update failed",
+                            );
+                            let _ = sender.send(false);
+                            return;
+                        }
                         let _ = sender.send(alive);
                     })
                     .is_err()

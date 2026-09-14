@@ -3,7 +3,6 @@
 use crate::reminder::{ReminderAction, ReminderControl};
 use crate::tray::{TrayPhase, TraySnapshot};
 use crate::{authorize_main_caller, overlay::OverlayController};
-#[cfg(target_os = "macos")]
 mod interaction;
 use serde::Serialize;
 use std::{
@@ -34,9 +33,9 @@ const MACOS_CUE_TOP_GAP: f64 = 12.0;
 const NOTCH_WING_WIDTH: f64 = 64.0;
 #[cfg(any(target_os = "macos", test))]
 const NOTCH_SHOULDER_WIDTH: f64 = 9.0;
-const X11_CUE_WIDTH: f64 = 456.0;
-const X11_CUE_HEIGHT: f64 = 160.0;
-const X11_CUE_TOP_GAP: f64 = 48.0;
+const X11_CUE_WIDTH: f64 = MACOS_CUE_WIDTH;
+const X11_CUE_HEIGHT: f64 = MACOS_CUE_HEIGHT;
+const X11_CUE_TOP_GAP: f64 = MACOS_CUE_TOP_GAP;
 const CUE_PAGE_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 const PREVIEW_CLOSE_MILLISECONDS: u64 = 17_000;
 const JAVASCRIPT_MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
@@ -197,7 +196,6 @@ fn request_cue_window_close(app: &AppHandle, label: String, reason: &str) {
     }
 }
 
-#[cfg(target_os = "macos")]
 fn request_cue_handoff(app: &AppHandle, label: String) {
     if let Some(window) = app.get_webview_window(&label) {
         // Native-to-local-DOM signal: cue windows need no event capability.
@@ -529,9 +527,6 @@ pub(crate) async fn prepare_pre_break_cue(window: WebviewWindow) -> Result<CueLa
 
 #[tauri::command]
 pub(crate) async fn skip_pre_break_cue(window: WebviewWindow) -> Result<(), String> {
-    if !cfg!(target_os = "macos") {
-        return Err("notch skip is only available on macOS".into());
-    }
     let (run_id, deadline) = cue_parameters_from_label(window.label())
         .ok_or("this command is only available to a valid pre-break cue window")?;
     let now = SystemTime::now()
@@ -578,13 +573,7 @@ pub(crate) fn set_pre_break_cue_interactive(
     if cue_parameters_from_label(window.label()).is_none() {
         return Err("this command is only available to a valid pre-break cue window".into());
     }
-    #[cfg(target_os = "macos")]
-    return interaction::set_enabled(&window, enabled);
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = enabled;
-        Err("notch interaction is only available on macOS".into())
-    }
+    interaction::set_enabled(&window, enabled)
 }
 
 #[tauri::command]
@@ -659,7 +648,6 @@ fn position_cue_window(window: &WebviewWindow) -> Result<CueLayout, String> {
     window
         .set_position(LogicalPosition::new(geometry.x, geometry.y))
         .map_err(|error| format!("could not position pre-break cue: {error}"))?;
-    #[cfg(target_os = "macos")]
     interaction::set_layout(window, layout);
     Ok(layout)
 }
@@ -858,7 +846,6 @@ struct CueRuntimeState {
     lifecycle: CueLifecycle,
     preview: Option<PreviewCueRuntime>,
     retiring: Option<String>,
-    #[cfg(target_os = "macos")]
     pointers: std::collections::HashMap<String, Arc<Mutex<interaction::PointerState>>>,
 }
 
@@ -1026,8 +1013,11 @@ fn show_pre_break_cue_preview(
     overlay_controller: &OverlayController,
     wall_now: SystemTime,
 ) -> Result<PreBreakCuePreview, String> {
-    if !cfg!(target_os = "macos") {
-        return Err("pre-break cue preview is only available on macOS".into());
+    if !pre_break_cue_platform_enabled(
+        crate::probes::qualified_x11_session(),
+        cfg!(target_os = "macos"),
+    ) {
+        return Err("pre-break cue preview requires macOS or an X11 session".into());
     }
     controller.close_retiring(app);
     let deadline_ms = cue_deadline_ms(wall_now, PREVIEW_CLOSE_MILLISECONDS)?;
@@ -1260,7 +1250,6 @@ impl PreBreakCue {
     }
 
     pub(crate) fn close_scheduled(&mut self, app: &AppHandle, reason: &str) {
-        #[cfg(target_os = "macos")]
         if matches!(self.slot, Some(CueSlot::Active { .. })) {
             if let Some(CueSlot::Active { cue, .. }) = self.slot.take() {
                 cue.cancelled.store(true, Ordering::Release);
@@ -1413,7 +1402,7 @@ fn create_cue_window(
             .transparent(true)
             .background_color(tauri::webview::Color(0, 0, 0, 0));
     // GTK otherwise promotes a non-resizable WebKit window to its 200 px natural height.
-    // Equal constraints keep the X11 card fixed, while macOS must remain resizable so a
+    // Equal constraints keep the X11 pill fixed, while macOS must remain resizable so a
     // reveal after a display change can clamp to its new work area.
     #[cfg(not(target_os = "macos"))]
     let window_builder = window_builder
@@ -1433,14 +1422,11 @@ fn create_cue_window(
         })
         .build()
         .map_err(|error| format!("could not build the cue window: {error}"))?;
-    #[cfg(not(target_os = "macos"))]
-    let _ = window;
     #[cfg(target_os = "macos")]
     if let Err(error) = configure_macos_cue_panel(&window) {
         let _ = window.close();
         return Err(error);
     }
-    #[cfg(target_os = "macos")]
     if let Err(error) = interaction::start(&window, Arc::clone(&cancelled)) {
         let _ = close_cue_window_on_main(app, &label);
         return Err(error);
@@ -1905,14 +1891,14 @@ mod tests {
     }
 
     #[test]
-    fn qualified_x11_keeps_the_existing_card_canvas_geometry() {
+    fn qualified_x11_uses_the_compact_pill_below_the_panel() {
         assert_eq!(
             cue_geometry_for_platform(0, 48, 2_560, 1_392, 2.0, false).unwrap(),
             CueGeometry {
-                x: 412.0,
-                y: 72.0,
-                width: 456.0,
-                height: 160.0,
+                x: 540.0,
+                y: 36.0,
+                width: 200.0,
+                height: 36.0,
             }
         );
     }

@@ -1,3 +1,5 @@
+<!-- src-tauri/AGENTS.md -->
+
 # Rust core
 
 This file applies to `src-tauri/**`. Follow the root `AGENTS.md` as well. Read
@@ -190,19 +192,19 @@ orchestration, OS probes, timing, and diagnostics.
 
 - A scheduled cue is eligible only in its one-minute lead window and must not
   alter probe decisions, overlay lifecycle, settings, or reflection data. Only
-  its explicit macOS skip action advances the working deadline to the following
+  its explicit skip action advances the working deadline to the following
   scheduled break. Reminder actions and the scheduled break cancel the cue.
 - Initialize `window.__UNFOCUS_PRE_BREAK_CUE_PLATFORM__` natively when the cue
   window is built. The frontend may use only that trusted `macos`/`linux`
   context to choose its presentation; it must never derive platform behavior
   from a label.
-- On qualified X11, retain the primary-display 456×160 card with the final
-  ten-second countdown. On macOS, derive the camera notch from AppKit safe-area
-  and auxiliary-area geometry on macOS 12+, with 64-point black wings and
+- On qualified X11, use a primary-display 200×36 pill centered 12 logical
+  points below the work-area top, with the final ten-second countdown and skip.
+  On macOS, derive the camera notch from AppKit safe-area and auxiliary-area geometry on macOS 12+, with 64-point black wings and
   9-point transparent margins for their curved shoulders. Use a
   200×36 pill centered 12 points below the work-area top when no notch is usable.
   `prepare_pre_break_cue` authorizes cue labels, hides, positions, and returns
-  layout for painting before reveal. Choose the
+  layout for painting before reveal. On macOS, choose the
   active display from the frontmost-window overlap, falling back to primary on
   unavailable or unusable information. This is implementation behavior, not
   physical multi-monitor, Spaces, or hotplug qualification.
@@ -212,9 +214,11 @@ orchestration, OS probes, timing, and diagnostics.
   material or shadow. Disable AppKit order-in/order-out animations so the
   camera-aligned window stays fixed. Disable background WebKit throttling for
   short-lived cues where supported. Keep the rest click-through and avoid activation.
-  `pre_break_cue/interaction.rs` polls window-local AppKit pointer coordinates
-  only for the cue lifetime, without event monitors or input permissions. It
-  bounds clicks to the fixed target after expansion and disables them on
+  `pre_break_cue/interaction.rs` polls pointer coordinates only for the cue
+  lifetime, without event monitors or input permissions. AppKit supplies local
+  points; X11 converts desktop physical coordinates using window origin and
+  scale. Apply X11 click-through only after mapping because GTK has no native
+  window before first reveal. The hit test bounds clicks to the fixed target after expansion and disables them on
   cancellation, quiet, confirmation, and handoff.
 - `skip_pre_break_cue` authorizes the actual current cue run. Scheduled skips
   run on the reminder scheduler and reject stale revisions, elapsed deadlines,
@@ -223,7 +227,7 @@ orchestration, OS probes, timing, and diagnostics.
   retires only its preview. Native cleanup bounds the confirmation lifetime.
 - Scheduled handoff retracts asynchronously after overlay presentation; never
   delay the overlay or scheduler for this animation. Cancellation closes immediately.
-- The macOS-only `show_pre_break_cue_test` and `close_pre_break_cue_test`
+- The macOS and qualified X11 `show_pre_break_cue_test` and `close_pre_break_cue_test`
   commands authorize only `main`. Preview uses a fixed 17-second
   `4 + 2 + 10 + 1` heads-up/quiet/horizon/handoff lifecycle and closes itself.
   It must not change timer, probes, overlays, saved settings, or reflection.
