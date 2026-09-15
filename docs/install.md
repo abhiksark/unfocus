@@ -449,6 +449,28 @@ Release packages require macOS 11 or later and use the AppKit and WebKit
 frameworks included with macOS. **No Xcode or other developer tools are
 required** to install a release DMG.
 
+### Start at login
+
+On the first visible dashboard launch, choose **Enable start at login** to
+start Unfocus quietly in the menu bar at your next login. **Not now** dismisses
+the prompt; the **Start at login** checkbox below Your rhythm changes the
+setting later. Enabling or disabling it does not restart the app or change
+reminder timing. Quit stays quit until you launch Unfocus or log in again.
+
+Install the app in a permanent location before enabling this setting. Unfocus
+manages only `~/Library/LaunchAgents/com.unfocus.desktop.start-at-login.plist`,
+using the current app bundle's executable and `--autostart`. Registration is
+per-user, needs no administrator access, and uses no shell or network service.
+Moving the app later requires turning the setting off and on from its new
+location. Disk-image and App Translocation paths are rejected.
+
+The checkbox reflects the saved launch configuration. macOS may separately
+require permission for background items in System Settings; an OS-disabled
+item will not run merely because its configuration exists. Actual logout/login
+acceptance remains required on supported macOS versions and architectures.
+Disable the setting before uninstalling; if the app is already removed, remove
+only `~/Library/LaunchAgents/com.unfocus.desktop.start-at-login.plist`.
+
 ### Which DMG
 
 | Mac | File |

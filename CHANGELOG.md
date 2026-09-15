@@ -13,6 +13,13 @@ macOS remains Preview; Windows remains experimental and unsigned.
 Apple Developer ID signing and notarization are deferred until 1.x; pre-1.x
 macOS packages remain ad-hoc signed and not notarized.
 
+### Added
+
+- macOS Preview builds offer an opt-in start-at-login prompt and dashboard
+  checkbox. A per-user LaunchAgent starts Unfocus quietly in the menu bar;
+  manual launches reopen the dashboard and Quit does not trigger a relaunch.
+  Modified launch settings are validated before they can be replaced or removed.
+
 ### Changed
 
 - The day strip distinguishes active, away, and unclassified coverage, gives
