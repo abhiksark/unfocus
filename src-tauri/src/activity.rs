@@ -196,7 +196,8 @@ impl ActivityTracker {
             return;
         }
         self.last_sample_ms = self.segments.last().map(|segment| segment.end_ms);
-        self.last_kind = self.segments.last().map(|segment| segment.kind);
+        // Loaded history is not evidence of presence while this process was closed.
+        self.last_kind = None;
         self.probe_status = ActivityProbeStatus::Pending;
     }
 
@@ -248,7 +249,11 @@ impl ActivityTracker {
     }
 
     fn extend_or_open(&mut self, kind: ActivityKind, now_ms: u64) {
-        if let Some(last) = self.segments.last_mut() {
+        let continuous = matches!(
+            self.last_kind,
+            Some(ActivityKind::Active | ActivityKind::Afk)
+        );
+        if let Some(last) = self.segments.last_mut().filter(|_| continuous) {
             if last.kind == kind {
                 if now_ms >= last.end_ms {
                     last.end_ms = now_ms;
@@ -1300,6 +1305,60 @@ mod tests {
     }
 
     #[test]
+    fn recovered_probe_does_not_bridge_unclassified_time() {
+        let t0 = 1_700_000_000_000_u64;
+        for initial_idle in [0, 400] {
+            for recovered_idle in [0, 400] {
+                let mut tracker = tracker();
+                tracker.observe(t0, Some(initial_idle));
+                tracker.observe(t0 + 60_000, Some(initial_idle));
+                tracker.observe(t0 + 120_000, None);
+                tracker.observe(t0 + 180_000, None);
+                tracker.observe(t0 + 240_000, Some(recovered_idle));
+                tracker.observe(t0 + 300_000, Some(recovered_idle));
+
+                let summary = tracker.summary(t0 + 300_000);
+                assert_eq!(summary.active_seconds + summary.afk_seconds, 120);
+                assert_eq!(summary.unknown_seconds, 24 * 60 * 60 - 120);
+                assert_eq!(
+                    summary.longest_active_seconds,
+                    if initial_idle == 0 || recovered_idle == 0 {
+                        60
+                    } else {
+                        0
+                    }
+                );
+                assert_eq!(tracker.segments.len(), 2);
+                assert_eq!(tracker.segments[0].end_ms, t0 + 60_000);
+                assert_eq!(tracker.segments[1].start_ms, t0 + 240_000);
+            }
+        }
+    }
+
+    #[test]
+    fn restored_history_does_not_bridge_app_downtime() {
+        let t0 = 1_700_000_000_000_u64;
+        for initial_idle in [0, 400] {
+            for recovered_idle in [0, 400] {
+                let mut original = tracker();
+                original.observe(t0, Some(initial_idle));
+                original.observe(t0 + 60_000, Some(initial_idle));
+                let mut restored = tracker();
+                restored.restore_segments(original.segments, t0 + 3_600_000);
+                assert_eq!(restored.summary(t0 + 3_600_000).current_kind, None);
+                restored.observe(t0 + 3_600_000, Some(recovered_idle));
+                restored.observe(t0 + 3_660_000, Some(recovered_idle));
+
+                let summary = restored.summary(t0 + 3_660_000);
+                assert_eq!(summary.active_seconds + summary.afk_seconds, 120);
+                assert_eq!(summary.deep_block_count, 0);
+                assert_eq!(restored.segments[0].end_ms, t0 + 60_000);
+                assert_eq!(restored.segments[1].start_ms, t0 + 3_600_000);
+            }
+        }
+    }
+
+    #[test]
     fn counts_deep_blocks_from_long_active_stretches() {
         let mut tracker = ActivityTracker::new(60, 120, 24 * 60 * 60, 4);
         let t0 = 1_700_000_000_000_u64;
@@ -1919,17 +1978,16 @@ mod tests {
 
         let handle = ActivityTrackerHandle::new_with_path(seeded, dir.path.join(HISTORY_FILE_NAME));
 
-        // Advance far past the 24-hour window so `old_segment` is fully
-        // expired and archivable. The observation itself only ever extends
-        // the buffer segment (still hot); `old_segment` is untouched.
+        // Both restored segments expire. Recovery opens a fresh segment;
+        // it must not extend the old buffer through unobserved downtime.
         let later = t0 + 61_000 + 90_000_000;
         handle.observe(later, Some(400));
 
         let archived = activity_archive::read_range(&dir.path, t0, t0 + 60_000 + 1);
         assert_eq!(
             archived,
-            vec![old_segment],
-            "the expired segment must be archived"
+            vec![old_segment, buffer_segment],
+            "both expired segments must be archived without filling the gap"
         );
 
         let locked = handle.inner.lock().expect("lock tracker state");
@@ -1988,7 +2046,7 @@ mod tests {
                 .tracker
                 .segments
                 .len(),
-            2,
+            3,
             "nothing is lost when the archive write fails"
         );
     }

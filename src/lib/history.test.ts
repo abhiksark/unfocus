@@ -389,7 +389,7 @@ console.log(JSON.stringify({
 
     expect(page.breakCounts).toEqual([
       { kind: "scheduledShown", label: "Scheduled", count: 2 },
-      { kind: "naturalIdle", label: "Already away", count: 1 },
+      { kind: "naturalIdle", label: "Idle at break time", count: 1 },
       { kind: "manualTakeBreak", label: "Started by you", count: 1 },
       { kind: "fullscreenSuppress", label: "Held for fullscreen", count: 1 }
     ]);

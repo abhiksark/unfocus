@@ -39,29 +39,28 @@
     weekBreakCaption,
     type BreakSummary
   } from "$lib/break-summary";
-  import { refreshDisplayAsOfMs, type RefreshState } from "$lib/refresh-state";
+  import type { RefreshState } from "$lib/refresh-state";
   import { reflectionRecoveryFeedback } from "$lib/reflection-resource";
   import {
     activityFootnote,
     activityStatusCaption,
-    deepBlockCaption,
     formatActivityDuration,
     isActivityWindowEmpty,
     isActivityWindowStarting,
-    stripActiveHeight,
-    stripAfkHeight,
-    stripAriaLabel,
-    stripAxisTicks,
-    stripEndpointLabel,
     todayErrorCaption,
     todayLoadingCaption,
     todayStaleCaption,
     type TodayActivity
   } from "$lib/today-activity";
 
+  import ActivityStrip from "./ActivityStrip.svelte";
+  import { activityWindowLabel } from "./activity-strip";
+
   type SettingsResult = "saved" | "reset" | null;
+  let dayBoundaryExpanded = $state(false);
 
   type Props = {
+    visible?: boolean;
     presentation: ConsumerReminderPresentation;
     warning: ConsumerWarning | null;
     reminderStatus: ReminderStatus | null;
@@ -123,6 +122,7 @@
   };
 
   let {
+    visible = true,
     presentation,
     warning,
     reminderStatus,
@@ -292,21 +292,9 @@
   const activityKind = $derived(
     activityStatusCaption(todayActivity, activityRefresh.status)
   );
-  const activityStripLabel = $derived(
-    todayActivity
-      ? stripAriaLabel(todayActivity, activityRefresh.status)
-      : "Activity strip loading"
-  );
-  const activityStripEndpoint = $derived(stripEndpointLabel(activityRefresh.status));
-  const axisTicks = $derived(
-    todayActivity
-      ? stripAxisTicks(
-          todayActivity.windowSeconds,
-          refreshDisplayAsOfMs(activityRefresh, Date.now()),
-          dayStartHour
-        )
-      : []
-  );
+  const activityEndMs = $derived(activityRefresh.asOfMs ?? 0);
+  const activityRange = $derived(todayActivity && activityEndMs
+    ? activityWindowLabel(todayActivity.windowSeconds, activityEndMs) : "");
   const activityEmpty = $derived(
     todayActivity ? isActivityWindowEmpty(todayActivity) : false
   );
@@ -327,6 +315,7 @@
 
 <main class="wrap">
   <header class="top">
+    <span class="wordmark-crop">
     <img
       class="consumer-wordmark"
       src="/unfocus-wordmark-mist.svg"
@@ -335,6 +324,7 @@
       alt="Unfocus"
       draggable="false"
     />
+    </span>
   </header>
 
   <section class="state" aria-labelledby="consumer-state-title">
@@ -637,21 +627,29 @@
       </button>
     </div>
     <div class="section-context">
-      <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
-      <label class="day-start t-micro">
-        Day starts
-        <select
-          class="day-start-select"
-          data-type-role="mono"
-          value={dayStartHour}
-          onchange={(event) =>
-            onDayStartChange(Number((event.currentTarget as HTMLSelectElement).value))}
-        >
-          {#each dayStartOptions() as option (option.hour)}
-            <option value={option.hour}>{option.label}</option>
-          {/each}
-        </select>
-      </label>
+      <div class="period-context">
+        <p class="t-micro">{todayActivity?.windowLabel ?? "Last 24 hours"} · {activityKind}</p>
+        {#if activityRange}<p class="t-micro range-label">{activityRange}{activityRefresh.status === "stale" ? " · Last known" : ""}</p>{/if}
+      </div>
+      <button type="button" class="btn-link day-boundary-toggle"
+        aria-expanded={dayBoundaryExpanded} aria-controls="day-boundary-settings"
+        onclick={() => (dayBoundaryExpanded = !dayBoundaryExpanded)}>Day boundary</button>
+      <div id="day-boundary-settings" class="display-settings" hidden={!dayBoundaryExpanded}>
+        <p class="t-micro">Marks the start of your day on this rolling chart and groups days in History. These totals always cover the last 24 hours.</p>
+        <label class="day-start t-micro">
+          Day starts
+          <select
+            class="day-start-select"
+            data-type-role="mono"
+            value={dayStartHour}
+            onchange={(event) => onDayStartChange(Number(event.currentTarget.value))}
+          >
+            {#each dayStartOptions() as option (option.hour)}
+              <option value={option.hour}>{option.label}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
     </div>
 
     {#if activityRecoveryFeedback}
@@ -713,7 +711,7 @@
         </p>
       {:else}
         <div
-          class="stats"
+          class="stats activity-stats"
           role="group"
           aria-label={activityRefresh.status === "stale"
             ? "Last-known activity totals for the rolling window"
@@ -729,62 +727,13 @@
           </div>
           <div class="stat" class:is-zero={todayActivity.longestActiveSeconds <= 0}>
             <span class="num">{formatActivityDuration(todayActivity.longestActiveSeconds)}</span>
-            <span class="t-micro">Longest stretch</span>
-          </div>
-          <div class="stat" class:is-zero={todayActivity.deepBlockCount <= 0}>
-            <span class="num">{todayActivity.deepBlockCount}</span>
-            <span class="t-micro">Deep work</span>
-            <span class="t-micro"
-              >{deepBlockCaption(
-                todayActivity.deepBlockCount,
-                todayActivity.deepBlockMinSeconds
-              )}</span
-            >
+            <span class="t-micro">Longest activity stretch</span>
           </div>
         </div>
 
-        <div class="strip-frame">
-          <div class="strip-lines" aria-hidden="true">
-            {#each axisTicks as tick (tick.timestampMs)}
-              <span
-                class="strip-line"
-                class:is-day-start={tick.isDayStart}
-                style={`left: ${tick.positionPercent}%`}
-              ></span>
-            {/each}
-          </div>
-          <div class="strip" role="img" aria-label={activityStripLabel}>
-            {#each todayActivity.strip as bucket, index (index)}
-              <div class="strip-bucket" aria-hidden="true">
-                <span
-                  class="strip-afk"
-                  style={`height: ${Math.round(stripAfkHeight(bucket) * 100)}%`}
-                ></span>
-                <span
-                  class="strip-active"
-                  style={`height: ${Math.round(stripActiveHeight(bucket) * 100)}%`}
-                ></span>
-              </div>
-            {/each}
-          </div>
-        </div>
-
-        <div class="strip-axis" data-type-role="mono" aria-hidden="true">
-          {#each axisTicks as tick (tick.timestampMs)}
-            {#if tick.showLabel}
-              <span
-                class="strip-axis-hour"
-                class:is-day-start={tick.isDayStart}
-                style={`left: ${tick.positionPercent}%`}>{tick.label}</span
-              >
-            {/if}
-          {/each}
-          <span class="strip-axis-now">{activityStripEndpoint}</span>
-        </div>
-        <ul class="legend" aria-hidden="true">
-          <li><span class="legend-swatch legend-active"></span> Active</li>
-          <li><span class="legend-swatch legend-afk"></span> Away</li>
-        </ul>
+        <p class="t-micro stretch-note">{todayActivity.deepBlockCount} activity {todayActivity.deepBlockCount === 1 ? "stretch" : "stretches"} of {formatActivityDuration(todayActivity.deepBlockMinSeconds)} or more.</p>
+        <ActivityStrip activity={todayActivity} endMs={activityEndMs} {dayStartHour}
+          stale={activityRefresh.status === "stale"} {visible} {breakRefresh} />
 
         {#if activityRefresh.status === "fresh" && activityEmpty}
           <p class="t-micro" role="status">
@@ -904,7 +853,7 @@
 <style>
   .wrap {
     display: flex;
-    width: min(100%, 780px);
+    width: min(100%, clamp(780px, 80vw, 1280px));
     min-height: 100vh;
     flex-direction: column;
     gap: var(--s4);
@@ -920,8 +869,17 @@
   .consumer-wordmark {
     display: block;
     width: 160px;
-    max-width: 100%;
+    max-width: none;
+    margin-left: -18.819px;
     height: auto;
+  }
+
+  /* The SVG artwork spans x=141.144..1058.853 in a 1200-wide viewBox.
+     Crop its side bearings at the existing 160px scale, retaining its height. */
+  .wordmark-crop {
+    display: block;
+    width: 122.362px;
+    overflow: hidden;
   }
 
   .rule {
@@ -1099,7 +1057,8 @@
 
   .num {
     color: var(--ink);
-    font-size: 1.45rem;
+    font-size: clamp(1.625rem, 2vw, 1.75rem);
+    line-height: 1.2;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
@@ -1120,10 +1079,20 @@
   }
 
   .stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s5) var(--s6);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    max-width: 50rem;
+    gap: 2px var(--s6);
   }
+
+  .activity-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-width: 40rem;
+    margin-top: var(--s1);
+  }
+
+  .stat .t-micro { font-size: 0.8125rem; }
 
   .stats.is-empty {
     opacity: 0.72;
@@ -1136,100 +1105,29 @@
     gap: 2px;
   }
 
+  @supports (grid-template-rows: subgrid) {
+    .stat {
+      display: grid;
+      grid-row: span 2;
+      grid-template-rows: subgrid;
+    }
+  }
+
   .stat.is-zero .num {
     color: var(--ink-3);
     font-weight: 400;
   }
 
-  .strip-frame {
-    position: relative;
-  }
-
-  .strip-lines {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  .strip-line {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background: var(--line);
-  }
-
-  .strip {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    height: 64px;
-    align-items: end;
-    gap: 2px;
-    grid-template-columns: repeat(48, minmax(0, 1fr));
-  }
-
-  .strip-bucket {
-    position: relative;
-    height: 100%;
-  }
-
-  .strip-active,
-  .strip-afk {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    min-height: 0;
-    border-radius: 2px 2px 0 0;
-  }
-
-  .strip-active {
-    background: var(--accent);
-    opacity: 0.85;
-  }
-
-  .strip-afk {
-    background: var(--away);
-    opacity: 0.7;
-  }
-
-  .strip-axis {
-    position: relative;
-    height: 14px;
-    margin-top: var(--s1);
-  }
-
-  .strip-axis-hour,
-  .strip-axis-now {
-    position: absolute;
-    color: var(--ink-3);
-    font-size: 0.72rem;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .strip-axis-hour {
-    transform: translateX(-50%);
-  }
-
-  .strip-axis-now {
-    right: 0;
-  }
-
-  .strip-line.is-day-start {
-    background: var(--line-2);
-  }
-
-  .strip-axis-hour.is-day-start {
-    color: var(--ink-2);
-  }
-
+  .range-label, .stretch-note { color: var(--ink-2); }
+  .period-context { display: flex; flex-direction: column; gap: var(--s1); }
+  .period-context .t-micro { font-size: 0.8125rem; }
+  .day-boundary-toggle { align-self: start; font-size: 0.8125rem; }
+  .display-settings { grid-column: 1 / -1; padding: var(--s3) var(--s4); border-block: 1px solid var(--line); color: var(--ink-2); }
+  .display-settings p { max-width: 72ch; margin-bottom: var(--s2); font-size: 0.8125rem; }
   .section-context {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
     gap: var(--s2) var(--s4);
   }
 
@@ -1293,38 +1191,6 @@
     border-left: 2px solid var(--warn);
     padding-left: var(--s2);
     color: var(--warn);
-  }
-
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s4);
-    margin: 0;
-    padding: 0;
-    color: var(--ink-3);
-    font-size: 0.75rem;
-    list-style: none;
-  }
-
-  .legend li {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .legend-swatch {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-  }
-
-  .legend-active {
-    background: var(--accent);
-  }
-
-  .legend-afk {
-    background: var(--away);
   }
 
   .is-error,
