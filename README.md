@@ -12,10 +12,9 @@
 
 # Unfocus
 
-> **0.7.0 release preparation:** the stable candidate is under validation and
-> has not been published. Existing downloads remain prereleases. macOS stable
-> packages remain ad-hoc signed and not notarized until 1.x; physical
-> acceptance is still required. Windows remains experimental. See the [installation guide](docs/install.md).
+> **macOS:** pre-1.x packages are ad-hoc signed and not notarized; Apple
+> signing is planned for 1.x. macOS remains Preview and Windows experimental.
+> See the [installation guide](docs/install.md) for platform limits.
 
 [![CI](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/abhiksark/unfocus?include_prereleases&sort=semver)](https://github.com/abhiksark/unfocus/releases)

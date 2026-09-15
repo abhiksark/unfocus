@@ -9,10 +9,7 @@ released versions link to their GitHub release.
 
 ## [0.7.0] - 2026-09-15
 
-Unpublished candidate; this is the preparation date, not a publication date.
-Stable release remains blocked on final package validation,
-and the Linux X11/macOS physical acceptance matrix. macOS remains Preview
-until that evidence is complete; Windows remains experimental and unsigned.
+macOS remains Preview; Windows remains experimental and unsigned.
 Apple Developer ID signing and notarization are deferred until 1.x; pre-1.x
 macOS packages remain ad-hoc signed and not notarized.
 
