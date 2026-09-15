@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Minimal capability for the diagnostics dashboard",
   "windows": ["main"],
-  "permissions": []
+  "permissions": ["core:window:allow-is-visible"]
 }

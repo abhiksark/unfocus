@@ -1,4 +1,7 @@
+<!-- src/lib/ConsumerDashboard.svelte -->
+
 <script lang="ts">
+  import type { StartAtLoginState } from "$lib/start-at-login";
   import {
     describeRhythm,
     focusProgress,
@@ -62,6 +65,9 @@
   type SettingsResult = "saved" | "reset" | null;
 
   type Props = {
+    startup: StartAtLoginState;
+    onStartupChange: (enabled: boolean) => void;
+    onStartupRetry: () => void;
     presentation: ConsumerReminderPresentation;
     warning: ConsumerWarning | null;
     reminderStatus: ReminderStatus | null;
@@ -123,6 +129,9 @@
   };
 
   let {
+    startup,
+    onStartupChange,
+    onStartupRetry,
     presentation,
     warning,
     reminderStatus,
@@ -614,6 +623,36 @@
             Open developer mode
           </button>
         </details>
+      </div>
+    {/if}
+    {#if startup.status?.supported || startup.error}
+      <div class="setting-field">
+        <label class="setting-toggle">
+          <input
+            type="checkbox"
+            checked={startup.status?.enabled ?? false}
+            disabled={startup.pending || startup.status === null}
+            aria-describedby="startup-setting-description"
+            onchange={(event) => {
+              const enabled = event.currentTarget.checked;
+              event.currentTarget.checked = startup.status?.enabled ?? false;
+              onStartupChange(enabled);
+            }}
+          />
+          Start at login
+        </label>
+        <p id="startup-setting-description" class="t-micro">
+          Start reminders quietly in the tray after Linux login. Saved immediately.
+        </p>
+        {#if startup.pending}
+          <p class="t-micro" role="status">Updating startup setting…</p>
+        {/if}
+        {#if startup.error}
+          <p class="t-micro form-error" role="alert">Could not confirm start at login: {startup.error}</p>
+          <button class="btn-ghost" type="button" onclick={onStartupRetry} disabled={startup.pending}>
+            Retry reading startup setting
+          </button>
+        {/if}
       </div>
     {/if}
     <div class="settings-confirmation t-micro" aria-live="polite">
