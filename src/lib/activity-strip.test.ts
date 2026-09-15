@@ -49,8 +49,12 @@ describe("activity interval presentation", () => {
     expect(intervals[0].details).toBe("15m active · 15m away · 0m unclassified");
     expect(intervals[1].details).toBe("0m active · 0m away · 30m unclassified");
     expect(intervals[1].endMs).toBe(end);
-    expect(activityWindowLabel(86_400, end)).toContain("13");
-    expect(activityWindowLabel(86_400, end)).toContain("14");
+    const formatter = new Intl.DateTimeFormat([], {
+      month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+    });
+    expect(activityWindowLabel(86_400, end)).toBe(
+      `${formatter.format(end - 86_400_000)} – ${formatter.format(end)}`
+    );
     expect(breakEventLabel(events[1])).toContain("Scheduled break shown");
   });
 });

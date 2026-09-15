@@ -302,7 +302,7 @@ jobs:
           name: unsigned-${{ matrix.name }}
           path: unsigned-macos
 
-      - name: Check immutable tag and draft metadata before Apple credentials
+      - name: Check immutable tag and published releases before Apple credentials
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_SHA: ${{ github.sha }}
@@ -310,17 +310,13 @@ jobs:
           set -euo pipefail
           git fetch --no-tags origin "+refs/tags/$RELEASE_TAG:refs/remotes/origin/unfocus-release-tag"
           test "$(git rev-parse 'refs/remotes/origin/unfocus-release-tag^{commit}')" = "$EVENT_SHA"
-          MATCHES=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            | jq -s -c --arg tag "$RELEASE_TAG" 'flatten(1) | map(select(.tag_name == $tag))')
-          COUNT=$(jq 'length' <<<"$MATCHES")
+          # Contents-read credentials do not establish draft visibility.
+          # The protected publisher validates drafts with its write-scoped token.
+          COUNT=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq -s --arg tag "$RELEASE_TAG" 'flatten(1) | map(select(.tag_name == $tag and .draft == false)) | length')
           if [ "$COUNT" -ne 0 ]; then
-            test "$COUNT" -eq 1
-            RELEASE=$(jq -c '.[0]' <<<"$MATCHES")
-            bun run scripts/release-draft-policy.js release "$RELEASE_VERSION" "$EVENT_SHA" <<<"$RELEASE"
-            ID=$(jq -r .id <<<"$RELEASE")
-            gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$ID/assets?per_page=100" \
-              | jq -s -c 'add' \
-              | bun run scripts/release-draft-policy.js inventory "$RELEASE_VERSION"
+            echo "Refusing to sign for an already published release." >&2
+            exit 1
           fi
 
       - name: Sign notarize and verify stable macOS packages

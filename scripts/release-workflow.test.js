@@ -100,7 +100,9 @@ describe("stable macOS protected signing", () => {
     expect(workflow.replace(signing, "")).not.toContain("secrets.APPLE_");
     expect(signing).toContain("if: ${{ always() }}");
     expect(signing).toContain("release:sign-macos --cleanup");
-    expect(signing.indexOf("Check immutable tag and draft metadata")).toBeLessThan(signing.indexOf("secrets.APPLE_"));
+    expect(signing).toContain(".tag_name == $tag and .draft == false");
+    expect(signing).not.toContain('release-draft-policy.js inventory');
+    expect(signing.indexOf("Check immutable tag and published releases")).toBeLessThan(signing.indexOf("secrets.APPLE_"));
   });
   test("requires successful stable signing before checksums and preserves channel metadata", () => {
     expect(workflow).toContain("needs: [build, release-context, sign-macos]");
