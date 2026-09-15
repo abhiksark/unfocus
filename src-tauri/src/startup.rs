@@ -3,6 +3,8 @@
 use serde::Serialize;
 #[cfg(target_os = "linux")]
 use tauri::Manager;
+#[cfg(target_os = "macos")]
+mod macos;
 use tauri::WebviewWindow;
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -18,7 +20,11 @@ pub(crate) fn get_start_at_login(window: WebviewWindow) -> Result<StartAtLoginSt
     {
         linux::read(&linux::entry_path(&window)?)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        macos::read(&macos::entry_path(&window)?)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     Ok(StartAtLoginStatus {
         supported: false,
         enabled: false,
@@ -45,7 +51,14 @@ pub(crate) fn set_start_at_login(
         linux::write(&path, executable.as_deref()).map_err(|error| error.to_string())?;
         linux::read(&path)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        let path = macos::entry_path(&window)?;
+        let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+        macos::write(&path, enabled.then_some(executable.as_path()))?;
+        macos::read(&path)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = enabled;
         Ok(StartAtLoginStatus {

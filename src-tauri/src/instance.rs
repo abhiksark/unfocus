@@ -140,7 +140,7 @@ pub(crate) fn handle_secondary_launch(app: &AppHandle, arguments: &[String]) {
 }
 
 pub(crate) fn is_automatic_launch(arguments: &[impl AsRef<std::ffi::OsStr>]) -> bool {
-    cfg!(target_os = "linux")
+    cfg!(any(target_os = "linux", target_os = "macos"))
         && arguments
             .iter()
             .skip(1)
@@ -216,7 +216,7 @@ mod tests {
     fn automatic_launches_are_quiet_and_manual_duplicates_reveal() {
         assert_eq!(
             is_automatic_launch(&["unfocus", "--autostart"]),
-            cfg!(target_os = "linux")
+            cfg!(any(target_os = "linux", target_os = "macos"))
         );
         assert!(!is_automatic_launch(&["unfocus"]));
         assert!(!is_automatic_launch(&["unfocus", "--autostart=false"]));
