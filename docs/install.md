@@ -1,3 +1,5 @@
+<!-- docs/install.md -->
+
 # Install Unfocus
 
 This guide covers installing Unfocus prerelease builds on each supported package
@@ -390,6 +392,40 @@ The desktop must provide a **StatusNotifier / AppIndicator** host.
   keep running without a way to open it. Keep the dashboard open until the tray
   host works, then restart Unfocus.
 
+### Start at login on Linux
+
+On the first visible dashboard launch after this feature is installed, Unfocus
+asks whether to **Enable start at login**. This includes existing installations.
+Startup stays off until you accept. Choose **Not now** or press Escape to
+dismiss the prompt; the choice is remembered on this device across upgrades.
+If browser storage is unavailable, dismissal lasts for the current session.
+
+The **Start at login** checkbox below **Your rhythm** lets you enable or disable
+startup later. It saves immediately, independently of **Save settings**, and
+does not restart the reminder timer. Registration failures appear inline so
+you can retry. Startup already enabled on this device skips the prompt.
+
+Enabled login launches run reminders quietly with the dashboard hidden. Use
+the tray or launch Unfocus manually to open it. If tray installation fails,
+the dashboard opens so the process stays reachable. A duplicate automatic
+launch stays quiet and uses the existing process.
+
+Unfocus manages only
+`${XDG_CONFIG_HOME:-$HOME/.config}/autostart/com.unfocus.desktop.desktop`,
+following the [desktop autostart specification](https://specifications.freedesktop.org/autostart/latest/).
+For AppImages, enable startup after placing the executable in its permanent
+location. If you move or rename it, disable and re-enable **Start at login**
+from the new location to update the registered path.
+Executable paths containing `=` or control characters are rejected; move the
+AppImage to a path without those characters before enabling startup.
+
+Disabling startup removes this entry. If you uninstall first, remove the
+leftover entry yourself:
+
+```sh
+rm -f -- "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/com.unfocus.desktop.desktop"
+```
+
 ### Linux troubleshooting
 
 | Symptom | What to try |
@@ -668,8 +704,9 @@ one machine as cross-platform qualification.
 4. Closing the dashboard leaves the reminder in the **tray** when the tray is
    available. If tray setup failed, closing the dashboard **exits** so the
    process cannot keep running without a reachable UI.
-5. A second launch focuses the existing window; it does not start a second tray
-   or timer.
+5. A second manual launch focuses the existing window; it does not start a
+   second tray or timer. Linux login launches stay quiet when
+   [Start at login](#start-at-login-on-linux) is enabled.
 6. Expand **Advanced** in the timing editor and open **developer mode** only if
    you need raw probe and monitor diagnostics. Developer mode is optional and
    remembered on the device.
@@ -743,6 +780,7 @@ if you want a clean slate:
 **Linux:**
 
 ```sh
+rm -f -- "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/com.unfocus.desktop.desktop"
 rm -rf ~/.config/com.unfocus.desktop
 ```
 
