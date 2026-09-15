@@ -333,7 +333,9 @@ impl ActivityTracker {
         let continuous_active_seconds = self
             .segments
             .last()
-            .filter(|segment| segment.kind == ActivityKind::Active)
+            .filter(|segment| {
+                segment.kind == ActivityKind::Active && self.last_kind == Some(ActivityKind::Active)
+            })
             .map(|segment| {
                 let end = now_ms.max(segment.end_ms);
                 end.saturating_sub(segment.start_ms) / MILLIS_PER_SECOND
@@ -2515,6 +2517,35 @@ mod tests {
                 range_bucket.afk_ms
             );
         }
+    }
+
+    #[test]
+    fn presentation_context_does_not_bridge_unobserved_activity() {
+        let mut tracker = tracker();
+        let t0 = 1_700_000_000_000_u64;
+        tracker.observe(t0, Some(0));
+        tracker.observe(t0 + 60_000, Some(0));
+        tracker.observe(t0 + 120_000, None);
+        assert_eq!(
+            tracker
+                .presentation_context(t0 + 180_000)
+                .continuous_active_seconds,
+            0
+        );
+        tracker.last_kind = None; // Restored history has no live observation.
+        assert_eq!(
+            tracker
+                .presentation_context(t0 + 180_000)
+                .continuous_active_seconds,
+            0
+        );
+        tracker.observe(t0 + 180_000, Some(0));
+        assert_eq!(
+            tracker
+                .presentation_context(t0 + 180_000)
+                .continuous_active_seconds,
+            0
+        );
     }
 
     #[test]

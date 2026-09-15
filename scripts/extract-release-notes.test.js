@@ -100,7 +100,7 @@ describe("release-note extraction", () => {
 
 
 test("stable draft notes describe signing gates without claiming completed physical acceptance", () => {
-  const notes = releaseNotes.composeReleaseNotes(changelog.replaceAll("0.2.0-alpha.1", "0.2.0"), "v0.2.0");
+  const notes = releaseNotes.composeReleaseNotes(changelog.replaceAll("0.2.0-alpha.1", "1.0.0"), "v1.0.0");
   expect(notes).toContain("Stable publication requires Developer ID-signed, notarized, and stapled");
   expect(notes).toContain("This draft is not evidence of clean-machine first-launch");
   expect(notes).toContain("before manual publication");
@@ -108,4 +108,11 @@ test("stable draft notes describe signing gates without claiming completed physi
   expect(notes).toContain("SHA256SUMS");
   expect(notes).not.toContain("These prerelease builds");
   expect(notes).not.toContain("ad-hoc signed");
+});
+
+test("pre-1.x stable notes accurately describe ad-hoc packages", () => {
+  const notes = releaseNotes.composeReleaseNotes(changelog.replaceAll("0.2.0-alpha.1", "0.7.0"), "v0.7.0");
+  expect(notes).toContain("ad-hoc signed, not Developer ID-signed or notarized");
+  expect(notes).not.toContain("Stable publication requires");
+  expect(notes).not.toContain("pipeline requires Developer ID");
 });
