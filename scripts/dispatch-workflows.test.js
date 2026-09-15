@@ -14,12 +14,19 @@ function occurrences(contents, value) {
 }
 
 describe("release dispatch workflow immutability", () => {
-  for (const [channel, expected] of [["alpha", 1], ["beta", 1]]) {
+  for (const [channel, expected] of [["alpha", 1], ["beta", 1], ["stable", 1]]) {
     test(`binds the APT ${channel} tag to the release target commit and rechecks it before dispatch`, () => {
       const contents = workflow(`apt-${channel}-dispatch.yml`);
 
       expect(contents).toContain(`event_type: "unfocus-${channel}-published"`);
-      expect(contents).toContain(`TAG_PATTERN='^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-${channel}\\.(0|[1-9][0-9]*)$'`);
+      const pattern = channel === "stable"
+        ? "TAG_PATTERN='^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$'"
+        : `TAG_PATTERN='^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-${channel}\\.(0|[1-9][0-9]*)$'`;
+      expect(contents).toContain(pattern);
+      if (channel === "stable") {
+        expect(contents).toContain('PRERELEASE" != false');
+        expect(contents).toContain('IMMUTABLE" != true');
+      }
       expect(occurrences(contents, "TARGET_COMMITISH=$(jq -r '.target_commitish // empty' <<<\"$RELEASE\")")).toBe(expected);
       expect(occurrences(contents, "Release target_commitish must be an exact lowercase commit SHA.")).toBe(expected);
       expect(occurrences(contents, "[ \"$TAG_COMMIT\" = \"$TARGET_COMMIT\" ] || {")).toBe(2);
@@ -30,13 +37,17 @@ describe("release dispatch workflow immutability", () => {
     });
   }
 
-  for (const [channel, expected] of [["alpha", 2], ["beta", 2]]) {
+  for (const [channel, expected] of [["alpha", 2], ["beta", 2], ["stable", 2]]) {
     test(`binds both Homebrew ${channel} paths to the release target commit and rechecks before each dispatch`, () => {
       const contents = workflow(`homebrew-${channel}-dispatch.yml`);
 
       expect(contents).toContain(`types: [unfocus-homebrew-${channel}-published]`);
       expect(contents).toContain(`event_type: "unfocus-homebrew-${channel}-published"`);
       expect(contents).toContain(`event_type: "unfocus-${channel}-published"`);
+      if (channel === "stable") {
+        expect(contents).toContain('PRERELEASE" != false');
+        expect(contents).toContain('IMMUTABLE" != true');
+      }
       expect(occurrences(contents, "TARGET_COMMITISH=$(jq -r '.target_commitish // empty'")).toBe(expected);
       expect(occurrences(contents, "Release target_commitish must be an exact lowercase commit SHA.")).toBe(expected);
       expect(occurrences(contents, "[ \"$TAG_COMMIT\" = \"$TARGET_COMMIT\" ] || {")).toBe(4);

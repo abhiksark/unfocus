@@ -41,7 +41,7 @@ describe("release workflow signing boundary", () => {
     expect(position("Discover and download a complete reusable draft")).toBeLessThan(
       position("Sign a fresh beta candidate"),
     );
-    expect(position("Verify the complete reusable draft before any signing secret")).toBeLessThan(
+    expect(position("Verify the complete reusable draft before any updater signing secret")).toBeLessThan(
       position("Sign a fresh beta candidate"),
     );
     expect(workflow).toContain("Existing draft has a partial or different immutable asset inventory.");
@@ -81,5 +81,103 @@ describe("release workflow signing boundary", () => {
     expect(workflow).toContain("validated-release/linux-package-evidence.json");
     expect(workflow).toContain("UPDATER_PUBLIC_KEY: src-tauri/update-keys/linux-beta.pub");
     expect(workflow).toContain('release:verify-update-signature --check-public-key "$UPDATER_PUBLIC_KEY"');
+  });
+});
+
+describe("stable macOS protected signing", () => {
+  const signing = workflow.slice(workflow.indexOf("  sign-macos:"), workflow.indexOf("  assemble:"));
+  test("confines Apple secrets to a protected stable-only read-only job", () => {
+    expect(signing).toContain("environment: release");
+    expect(signing).toContain("contents: read");
+    expect(signing).not.toContain("contents: write");
+    expect(signing).not.toContain("id-token:");
+    expect(signing).not.toContain("attestations:");
+    expect(signing).toContain("!inputs.rehearsal");
+    expect(signing).toContain("github.event_name == 'push'");
+    expect(signing).toContain("outputs.channel == 'stable'");
+    expect(signing).toContain("aarch64-apple-darwin");
+    expect(signing).toContain("x86_64-apple-darwin");
+    expect(workflow.replace(signing, "")).not.toContain("secrets.APPLE_");
+    expect(signing).toContain("if: ${{ always() }}");
+    expect(signing).toContain("release:sign-macos --cleanup");
+    expect(signing.indexOf("Check immutable tag and draft metadata")).toBeLessThan(signing.indexOf("secrets.APPLE_"));
+  });
+  test("requires successful stable signing before checksums and preserves channel metadata", () => {
+    expect(workflow).toContain("needs: [build, release-context, sign-macos]");
+    expect(workflow).toContain("needs.sign-macos.result == 'success'");
+    expect(workflow).toContain("inputs.rehearsal || needs.release-context.outputs.channel != 'stable'");
+    expect(signing).toContain("name: unsigned-${{ matrix.name }}");
+    expect(signing).toContain("path: signed-macos/*.dmg");
+    expect(workflow).toContain("RELEASE_PRERELEASE: ${{ needs.release-context.outputs.channel != 'stable' }}");
+    expect(workflow).toContain("draft:true, prerelease:$prerelease");
+    expect(workflow).not.toContain("prerelease:true}");
+    expect(workflow).toContain('release-draft-policy.js release "$RELEASE_VERSION" "$EVENT_SHA"');
+  });
+});
+
+describe("release dependency graph after intentionally skipped macOS signing", () => {
+  const jobs = Bun.YAML.parse(workflow).jobs;
+  function eligible(name, results, { channel = "stable", rehearsal = false, cancelled = false, event = "push", ref = "refs/tags/v0.7.0" } = {}) {
+    const expression = jobs[name].if;
+    // Without an explicit status function, Actions applies implicit success()
+    // and may propagate the skipped signing ancestor through successful jobs.
+    expect(expression).toContain("!cancelled()");
+    const needs = Object.fromEntries(jobs[name].needs.map((id) => [id, {
+      result: results[id] ?? "success", outputs: { channel },
+    }]));
+    const javascript = expression.slice(3, -2).replace(/needs\.([\w-]+)/g, 'needs["$1"]');
+    return new Function("needs", "inputs", "github", "cancelled", "startsWith", `return (${javascript});`)(
+      needs, { rehearsal }, { event_name: event, ref }, () => cancelled, (value, prefix) => value.startsWith(prefix),
+    );
+  }
+  function graph(options, overrides = {}) {
+    const results = { "sign-macos": options.channel === "stable" && !options.rehearsal ? "success" : "skipped", ...overrides };
+    for (const job of ["assemble", "validate-linux-packages", "finalize-rehearsal", "publish"]) {
+      const runs = eligible(job, results, options);
+      results[job] = runs ? (overrides[job] ?? "success") : "skipped";
+    }
+    return results;
+  }
+  test("stable and every prerelease reach validation and draft publication", () => {
+    for (const channel of ["stable", "alpha", "beta", "rc"]) {
+      const results = graph({ channel });
+      expect(results["validate-linux-packages"]).toBe("success");
+      expect(results.publish).toBe("success");
+      expect(results["finalize-rehearsal"]).toBe("skipped");
+    }
+  });
+  test("all promotion rehearsals reach finalization without publication", () => {
+    for (const channel of ["stable", "alpha", "beta", "rc"]) {
+      const results = graph({ channel, rehearsal: true, event: "pull_request", ref: "refs/pull/1/merge" });
+      expect(results["sign-macos"]).toBe("skipped");
+      expect(results["validate-linux-packages"]).toBe("success");
+      expect(results["finalize-rehearsal"]).toBe("success");
+      expect(results.publish).toBe("skipped");
+    }
+  });
+  test("failed or cancelled required jobs never produce a draft", () => {
+    for (const prerequisite of ["build", "release-context", "sign-macos", "assemble", "validate-linux-packages"]) {
+      for (const failure of ["failure", "cancelled"]) {
+        expect(graph({ channel: "stable" }, { [prerequisite]: failure }).publish).toBe("skipped");
+      }
+    }
+    expect(graph({ channel: "stable" }, { "sign-macos": "skipped" }).publish).toBe("skipped");
+    for (const channel of ["stable", "alpha", "beta", "rc"]) {
+      expect(graph({ channel, cancelled: true }).publish).toBe("skipped");
+      expect(graph({ channel, rehearsal: true }, { "validate-linux-packages": "failure" })["finalize-rehearsal"]).toBe("skipped");
+    }
+  });
+  test("each downstream job requires every direct prerequisite to succeed", () => {
+    for (const job of ["validate-linux-packages", "finalize-rehearsal", "publish"]) {
+      for (const prerequisite of jobs[job].needs) {
+        for (const result of ["failure", "cancelled", "skipped"]) {
+          expect(eligible(job, { [prerequisite]: result }, { rehearsal: job === "finalize-rehearsal" })).toBe(false);
+        }
+      }
+    }
+  });
+  test("publication retains tag-push restrictions after the status override", () => {
+    expect(graph({ channel: "stable", event: "workflow_dispatch" }).publish).toBe("skipped");
+    expect(graph({ channel: "stable", ref: "refs/heads/main" }).publish).toBe("skipped");
   });
 });

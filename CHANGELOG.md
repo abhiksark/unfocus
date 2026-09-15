@@ -7,6 +7,31 @@ released versions link to their GitHub release.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-15
+
+Unpublished candidate; this is the preparation date, not a publication date.
+Stable release remains blocked on signing credentials, final package validation,
+and the Linux X11/macOS physical acceptance matrix. macOS remains Preview
+until that evidence is complete; Windows remains experimental and unsigned.
+
+### Changed
+
+- The day strip distinguishes active, away, and unclassified coverage, gives
+  each interval an accessible detail view, and places recorded break outcomes
+  alongside the activity range. Markers describe recorded outcomes rather than
+  proof that a rest was completed.
+- The desktop dashboard aligns its wordmark, reminder heading, and activity
+  metrics; wider windows retain readable spacing, chart labels, and details.
+- Stable release preparation adds channel-aware immutable draft handling and
+  protected macOS signing, with stable APT and Homebrew integration prepared
+  separately. These distribution paths are not live until publication.
+
+### Fixed
+
+- Activity observations no longer extend a saved segment across a restart or
+  a failed-probe interval. Unobserved time stays unclassified.
+
+
 ## [0.7.0-beta.2] - 2026-09-14
 
 ### Added

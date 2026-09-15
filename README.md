@@ -12,6 +12,11 @@
 
 # Unfocus
 
+> **0.7.0 release preparation:** the stable candidate is under validation and
+> has not been published. Existing downloads remain prereleases. macOS stable
+> availability depends on Developer ID signing, notarization, and physical
+> acceptance; Windows remains experimental. See the [installation guide](docs/install.md).
+
 [![CI](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/abhiksark/unfocus?include_prereleases&sort=semver)](https://github.com/abhiksark/unfocus/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)

@@ -189,6 +189,50 @@ desktop.
 
 ### Debian / Ubuntu (APT, preferred)
 
+> Stable channel pending: the regular install and upgrade commands in this
+> section remain beta commands. Only the migration block below switches an
+> installation to stable, and it must not be run until the first immutable
+> stable release and both stable receiver updates are published.
+
+After those releases are published, migrate without purging the application.
+This keeps the existing archive keyring and local application data, and moves
+the beta source to a recoverable backup. It refuses to overwrite an existing
+backup or stable source:
+
+```sh
+(
+  set -eu
+  BETA_SOURCE=/etc/apt/sources.list.d/unfocus-beta.list
+  BETA_BACKUP=/etc/apt/sources.list.d/unfocus-beta.list.disabled-for-stable
+  STABLE_SOURCE=/etc/apt/sources.list.d/unfocus-stable.list
+  KEYRING=/usr/share/keyrings/unfocus-archive-keyring.gpg
+
+  test -f "$KEYRING"
+  test -f "$BETA_SOURCE"
+  test ! -e "$BETA_BACKUP" || {
+    echo "Refusing to overwrite $BETA_BACKUP" >&2
+    exit 1
+  }
+  test ! -e "$STABLE_SOURCE" || {
+    echo "Refusing to overwrite $STABLE_SOURCE" >&2
+    exit 1
+  }
+  sudo mv --no-clobber -- "$BETA_SOURCE" "$BETA_BACKUP"
+  test ! -e "$BETA_SOURCE"
+  STABLE_ENTRY=$(mktemp)
+  trap 'rm -f "$STABLE_ENTRY"' EXIT
+  echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://apt.abhik.ai stable main' \
+    > "$STABLE_ENTRY"
+  sudo mv --no-clobber -- "$STABLE_ENTRY" "$STABLE_SOURCE"
+  test ! -e "$STABLE_ENTRY"
+  sudo chown root:root "$STABLE_SOURCE"
+  sudo chmod 0644 "$STABLE_SOURCE"
+  trap - EXIT
+  sudo apt update
+  sudo apt install unfocus
+)
+```
+
 This is the supported day-to-day install path on Ubuntu and Debian.
 
 Install the beta from the public APT repository at
@@ -408,6 +452,12 @@ focus the dashboard. The tray menu also exposes the reminder controls and quit
 action.
 
 ### Homebrew (beta cask)
+
+> Stable cask pending: after the first immutable stable release and the stable
+> tap receiver are published, migrate with
+> `brew uninstall --cask abhiksark/unfocus/unfocus@beta` (without `--zap`), then
+> `brew install --cask abhiksark/unfocus/unfocus`. This preserves local data.
+> Until then, keep using the beta commands below.
 
 If you use Homebrew:
 
