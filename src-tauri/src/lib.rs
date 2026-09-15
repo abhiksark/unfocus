@@ -13,6 +13,7 @@ mod overlay;
 mod pre_break_cue;
 mod probes;
 mod reminder;
+mod startup;
 mod storage_recovery;
 mod tray;
 
@@ -45,6 +46,7 @@ use reminder::{
     start_scheduler as start_reminder_scheduler, take_break_now, ReminderPresentationControllers,
     ReminderSettingsManager,
 };
+use startup::{get_start_at_login, set_start_at_login};
 use std::io;
 use tauri::Manager;
 use tray::panel::{tray_panel_action, tray_panel_ready, tray_panel_state};
@@ -166,6 +168,13 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         return Err(io::Error::other("reminder control was already managed").into());
     }
     let tray_runtime = TrayRuntime::install(app, &tray_status);
+    #[cfg(desktop)]
+    if instance::reveal_after_tray_install(
+        instance::is_automatic_launch(&app.env().args_os),
+        tray_runtime.can_hide_dashboard(),
+    ) {
+        instance::reveal_dashboard(app.handle());
+    }
     if !app.manage(tray_runtime) {
         return Err(io::Error::other("tray runtime was already managed").into());
     }
@@ -222,12 +231,18 @@ fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let mut context = tauri::generate_context!();
+    #[cfg(desktop)]
+    instance::configure_initial_window(
+        context.config_mut(),
+        instance::is_automatic_launch(&std::env::args_os().collect::<Vec<_>>()),
+    );
     let builder = tauri::Builder::default();
     // Instance coordination must be the first plugin so a secondary process
     // exits before setup can load settings or start any Unfocus worker.
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(
-        |app, _arguments, _working_directory| handle_secondary_launch(app),
+        |app, arguments, _working_directory| handle_secondary_launch(app, &arguments),
     ));
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(tauri_nspanel::init());
@@ -240,6 +255,8 @@ pub fn run() {
             tray_panel_action,
             tray_panel_ready,
             get_diagnostics,
+            get_start_at_login,
+            set_start_at_login,
             get_today_activity,
             get_activity_range,
             retry_activity_history,
@@ -267,7 +284,7 @@ pub fn run() {
             set_pre_break_cue_interactive,
             open_author_website
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running Unfocus");
 }
 
