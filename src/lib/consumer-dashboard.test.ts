@@ -57,7 +57,8 @@ const report: DiagnosticsReport = {
     breakLedger: { status: "available", recovery: "none", category: null, error: null },
     reminderSettings: { status: "available", recovery: "none", category: null, error: null }
   },
-  tray: { available: true, error: null }
+  tray: { available: true, error: null },
+  autostart: { status: "enabled", error: null }
 };
 
 describe("pre-break cue availability", () => {
@@ -214,6 +215,25 @@ describe("consumer warnings", () => {
     expect(consumerWarning(warningInput())).toBeNull();
   });
 
+  test("shows a safe warning only when launch-at-login registration failed", () => {
+    const raw = "registration failed for /private/unfocus";
+    const warning = consumerWarning(
+      warningInput({
+        report: { ...report, autostart: { status: "failed", error: raw } }
+      })
+    );
+
+    expect(warning?.kind).toBe("autostart");
+    expect(warning?.heading).toBe("Launch at login needs attention");
+    expect(warning?.message).toContain("opened manually after your next sign-in");
+    expect(JSON.stringify(warning)).not.toContain(raw);
+    expect(
+      consumerWarning(
+        warningInput({ report: { ...report, autostart: { status: "disabled", error: null } } })
+      )
+    ).toBeNull();
+  });
+
   test("gives tray failure priority and never exposes raw native errors", () => {
     const raw = "indicator construction failed at /secret/path";
     const warning = consumerWarning(
@@ -285,13 +305,27 @@ describe("consumer warnings", () => {
   });
 
   test("prioritizes direct reminder and settings failures ahead of background health", () => {
+    const failedAutostart = { ...report, autostart: { status: "failed" as const, error: "raw" } };
     expect(
       consumerWarning(
-        warningInput({ reminderActionError: "raw", diagnosticsError: "diagnostics raw" })
+        warningInput({
+          report: failedAutostart,
+          reminderActionError: "raw",
+          diagnosticsError: "diagnostics raw"
+        })
       )?.kind
     ).toBe("reminder-action");
+    expect(
+      consumerWarning(
+        warningInput({
+          report: failedAutostart,
+          settingsStorageHealth: { status: "unavailable", recovery: "retry" }
+        })
+      )?.kind
+    ).toBe("settings");
     const settingsWarning = consumerWarning(
       warningInput({
+        report: failedAutostart,
         settingsError: "raw",
         settingsErrorContext: "save",
         diagnosticsError: "diagnostics raw"

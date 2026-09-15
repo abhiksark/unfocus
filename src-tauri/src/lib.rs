@@ -2,6 +2,7 @@
 
 mod activity;
 mod activity_archive;
+mod autostart;
 mod break_ledger;
 mod diagnostics;
 #[cfg(desktop)]
@@ -20,13 +21,14 @@ use activity::{
     get_activity_range, get_today_activity, retry_activity_history, start_new_activity_history,
     ActivityTrackerHandle,
 };
+use autostart::{primary_launch_is_autostart, AutostartRuntime};
 use break_ledger::{
     get_break_range, get_break_summary, retry_break_ledger, start_new_break_ledger,
     BreakLedgerHandle,
 };
 use diagnostics::get_diagnostics;
 #[cfg(desktop)]
-use instance::handle_secondary_launch;
+use instance::{apply_initial_window_policy, handle_secondary_launch};
 #[cfg(debug_assertions)]
 use overlay::schedule_automatic_overlay_test;
 use overlay::{
@@ -129,6 +131,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let probe_cache = ProbeCache::start()?;
     let activity_tracker = ActivityTrackerHandle::initialize(&config_dir);
     let break_ledger = BreakLedgerHandle::initialize(&config_dir);
+    let autostart_runtime = AutostartRuntime::initialize(app, &config_dir);
     let overlay_controller = OverlayController::start(app.handle().clone())?;
     let pre_break_cue_controller = PreBreakCueController::default();
     let tray_status = TrayStatus::default();
@@ -153,6 +156,9 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if !app.manage(tray_status.clone()) {
         return Err(io::Error::other("tray status was already managed").into());
     }
+    if !app.manage(autostart_runtime) {
+        return Err(io::Error::other("autostart runtime was already managed").into());
+    }
     let reminder_control = start_reminder_scheduler(
         app.handle().clone(),
         probe_cache,
@@ -166,9 +172,15 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         return Err(io::Error::other("reminder control was already managed").into());
     }
     let tray_runtime = TrayRuntime::install(app, &tray_status);
+    let tray_can_hide_dashboard = tray_runtime.can_hide_dashboard();
     if !app.manage(tray_runtime) {
         return Err(io::Error::other("tray runtime was already managed").into());
     }
+    apply_initial_window_policy(
+        app.handle(),
+        primary_launch_is_autostart(),
+        tray_can_hide_dashboard,
+    );
     #[cfg(debug_assertions)]
     schedule_automatic_overlay_test(app, overlay_controller, tray_status);
     Ok(())
@@ -227,7 +239,7 @@ pub fn run() {
     // exits before setup can load settings or start any Unfocus worker.
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(
-        |app, _arguments, _working_directory| handle_secondary_launch(app),
+        |app, arguments, _working_directory| handle_secondary_launch(app, &arguments),
     ));
     #[cfg(target_os = "macos")]
     let builder = builder.plugin(tauri_nspanel::init());

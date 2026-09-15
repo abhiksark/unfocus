@@ -19,6 +19,8 @@ export type ProbeBackend =
 
 export type ProbeDiagnosticStatus = "pending" | "available" | "failed";
 
+export type AutostartStatus = "enabled" | "disabled" | "skippedDevelopment" | "failed";
+
 export type DiagnosticsReport = {
   operatingSystem: string;
   sessionType: string | null;
@@ -43,6 +45,10 @@ export type DiagnosticsReport = {
     available: boolean;
     error: string | null;
   };
+  autostart: {
+    status: AutostartStatus;
+    error: string | null;
+  };
 };
 
 export type DiagnosticsHealth = "connecting" | "healthy" | "degraded" | "unavailable";
@@ -61,7 +67,8 @@ export function diagnosticsHealth(
     report.storage.activityHistory.status === "unavailable" ||
     report.storage.breakLedger.status === "unavailable" ||
     report.storage.reminderSettings.status === "unavailable" ||
-    report.tray.error
+    report.tray.error ||
+    report.autostart.status === "failed"
   ) {
     return "degraded";
   }
@@ -78,6 +85,21 @@ export function diagnosticsHealthLabel(health: DiagnosticsHealth): string {
       return "Unavailable";
     default:
       return "Connecting";
+  }
+}
+
+export function autostartStatusLabel(status: AutostartStatus | null | undefined): string {
+  switch (status) {
+    case "enabled":
+      return "Enabled";
+    case "disabled":
+      return "Disabled in system settings";
+    case "skippedDevelopment":
+      return "Not registered in development builds";
+    case "failed":
+      return "Failed";
+    default:
+      return "Connecting…";
   }
 }
 

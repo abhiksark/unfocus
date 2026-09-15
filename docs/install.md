@@ -619,9 +619,32 @@ one machine as cross-platform qualification.
    process cannot keep running without a reachable UI.
 5. A second launch focuses the existing window; it does not start a second tray
    or timer.
-6. Expand **Advanced** in the timing editor and open **developer mode** only if
+6. On its first manual launch, a release build enrolls Unfocus with the
+   operating system's login startup. A later login launch stays hidden while the
+   tray is usable; an ordinary launch still shows the dashboard. If tray setup
+   fails, the login launch shows the dashboard so the app remains reachable.
+7. Expand **Advanced** in the timing editor and open **developer mode** only if
    you need raw probe and monitor diagnostics. Developer mode is optional and
    remembered on the device.
+
+### Launch at login
+
+Release builds enroll once after their first manual launch. A later
+OS-level disablement or removal is respected on subsequent launches; it is not
+silently re-enabled.
+
+- **Linux:** Disable **Unfocus** in **Startup Applications**, or set
+  `Hidden=true` in `$XDG_CONFIG_HOME/autostart/Unfocus.desktop` when
+  `XDG_CONFIG_HOME` is a nonempty absolute path. Otherwise the entry is at
+  `~/.config/autostart/Unfocus.desktop`.
+- **Windows:** Disable **Unfocus** in **Settings → Apps → Startup**.
+- **macOS:** Disable with `launchctl disable gui/$(id -u)/com.unfocus.desktop`;
+  reverse that choice with
+  `launchctl enable gui/$(id -u)/com.unfocus.desktop`.
+
+`autostart-state.json` is an enrollment record, not the operating-system
+switch. Deleting it explicitly resets enrollment so the next manual launch can
+retry registration; use the system settings above for ordinary disablement.
 
 ### Day-to-day controls
 
@@ -669,6 +692,7 @@ Files written there include:
 | File | Purpose |
 | --- | --- |
 | `reminder-settings.json` | Work and break timing, pause state |
+| `autostart-state.json` | One-time release enrollment record; deleting it explicitly resets enrollment for a retry, not ordinary disablement |
 | `activity-history.json` | Hot local presence / AFK segments for the last 24 hours, feeding **Your day** |
 | `activity-archive-<key>.json` | Older presence / AFK segments in fixed 30-day epoch chunks, kept at least 90 days |
 | `break-events.json` | Local break outcome ledger, kept at least 90 days |

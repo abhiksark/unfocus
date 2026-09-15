@@ -50,6 +50,9 @@ released versions link to their GitHub release.
   continues to reveal the content immediately.
 - Space is now the primary keyboard shortcut for ending a break. Escape remains
   available as a compatibility and safety fallback.
+- Release builds now enroll Unfocus for launch at login after their first manual
+  launch. Login launches stay hidden behind a usable tray, normal launches show
+  the dashboard, and later operating-system startup disablement is preserved.
 
 ### Fixed
 

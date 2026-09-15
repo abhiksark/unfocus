@@ -1,6 +1,7 @@
 use crate::{
     activity::ActivityTrackerHandle,
     authorize_main_caller,
+    autostart::{AutostartDiagnostics, AutostartRuntime},
     break_ledger::BreakLedgerHandle,
     probes::{probe_backend, ProbeBackend, ProbeCache, ProbeReading},
     reminder::ReminderSettingsManager,
@@ -58,6 +59,7 @@ pub(crate) struct DiagnosticsReport {
     probe_backend: ProbeBackend,
     storage: StorageDiagnostics,
     tray: TrayDiagnostics,
+    autostart: AutostartDiagnostics,
 }
 
 fn diagnostic_probe<T>(
@@ -136,6 +138,7 @@ pub(crate) fn get_diagnostics(
     break_ledger: State<'_, BreakLedgerHandle>,
     reminder_settings: State<'_, ReminderSettingsManager>,
     tray_runtime: State<'_, TrayRuntime>,
+    autostart_runtime: State<'_, AutostartRuntime>,
 ) -> Result<DiagnosticsReport, String> {
     authorize_main_caller(window.label())?;
     let app = window.app_handle();
@@ -191,6 +194,7 @@ pub(crate) fn get_diagnostics(
             reminder_settings: reminder_settings.diagnostics(),
         },
         tray: tray_runtime.diagnostics(),
+        autostart: autostart_runtime.diagnostics(),
     })
 }
 
