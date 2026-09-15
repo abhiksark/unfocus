@@ -97,3 +97,15 @@ describe("release-note extraction", () => {
     expect(extractReleaseNotes(changelog, "v0.1.0-alpha.1")).toBe("### Added\n\n- First alpha.\n");
   });
 });
+
+
+test("stable draft notes describe signing gates without claiming completed physical acceptance", () => {
+  const notes = releaseNotes.composeReleaseNotes(changelog.replaceAll("0.2.0-alpha.1", "0.2.0"), "v0.2.0");
+  expect(notes).toContain("Stable publication requires Developer ID-signed, notarized, and stapled");
+  expect(notes).toContain("This draft is not evidence of clean-machine first-launch");
+  expect(notes).toContain("before manual publication");
+  expect(notes).toContain("Windows installers are not code-signed");
+  expect(notes).toContain("SHA256SUMS");
+  expect(notes).not.toContain("These prerelease builds");
+  expect(notes).not.toContain("ad-hoc signed");
+});

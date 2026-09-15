@@ -178,6 +178,30 @@ mod native {
         }
         hide(app);
     }
+    fn schedule_readiness_fallback(app: &tauri::AppHandle, generation: u64) {
+        // A failed webview must never strand the only entry point to the app.
+        let handle = app.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            let next = handle.clone();
+            let _ = handle.run_on_main_thread(move || {
+                let fallback = {
+                    let runtime = next.state::<Runtime>();
+                    let s = runtime
+                        .0
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    s.visible && s.generation == generation && !s.ready
+                };
+                if fallback {
+                    hide(&next);
+                    eprintln!("Tray panel did not become ready; opening dashboard");
+                    crate::instance::reveal_dashboard(&next);
+                }
+            });
+        });
+    }
+
     pub(crate) fn toggle(tray: &tauri::tray::TrayIcon) -> Result<(), String> {
         let app = tray.app_handle();
         if app
@@ -275,27 +299,7 @@ mod native {
             generation,
         )
         .map_err(|e| e.to_string())?;
-        // A failed webview must never strand the only entry point to the app.
-        let handle = app.clone();
-        tauri::async_runtime::spawn_blocking(move || {
-            std::thread::sleep(std::time::Duration::from_secs(5));
-            let next = handle.clone();
-            let _ = handle.run_on_main_thread(move || {
-                let fallback = {
-                    let runtime = next.state::<Runtime>();
-                    let s = runtime
-                        .0
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    s.visible && s.generation == generation && !s.ready
-                };
-                if fallback {
-                    hide(&next);
-                    eprintln!("Tray panel did not become ready; opening dashboard");
-                    crate::instance::reveal_dashboard(&next);
-                }
-            });
-        });
+        schedule_readiness_fallback(app, generation);
         Ok(())
     }
     pub(crate) fn ready(
