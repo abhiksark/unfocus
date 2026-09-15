@@ -43,7 +43,7 @@ badges, accounts, or mascots competing for your attention.
 See the gentle notch reminder, a screen break, and reflection across your day
 and the past 90 days.
 
-https://github.com/user-attachments/assets/051b3e5b-6789-42f9-aa24-262925af3d59
+https://github.com/user-attachments/assets/af076ded-2c5c-46b5-b9e6-c1c1baa240b3
 
 Staged macOS preview with illustrative activity data.
 
