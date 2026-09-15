@@ -56,6 +56,15 @@ as `export let` or `$:` reactive statements.
   the hour and flags exactly one matching tick per local day, so a day start
   already on the four-hour grid is marked rather than duplicated.
 - The strip is presence-only (OS idle). Never request or display keylogging.
+- `ActivityStrip.svelte` and `activity-strip.ts` present the 48 half-hour bins
+  as stacked active, away, and unclassified shares. Unclassified coverage must
+  never be labeled as away or attributed to a specific cause. Interval details
+  support pointer and roving keyboard focus. The range and bars share the
+  activity refresh capture time, including retained stale summaries.
+- Dashboard break markers use the existing bounded `get_break_range` read,
+  refreshed on outcome-count changes or every thirty seconds while this view
+  has fresh data. Fence late responses on view changes and unmount. Markers
+  describe recorded outcomes, not completed rest or the earlier pre-break cue.
 - `break-summary.ts` formats calm counts from `get_break_summary`. Day captions
   must not re-list the grid counts; mute zeros in the UI rather than inventing
   scores, streaks, or competitive framing.

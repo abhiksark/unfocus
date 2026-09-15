@@ -68,9 +68,9 @@ export function breakOutcomeStats(summary: BreakSummary): BreakOutcomeStat[] {
     },
     {
       kind: "naturalIdle",
-      label: "Already away",
+      label: "Idle at break time",
       count: summary.naturalIdle,
-      hint: "You were already away when a break was due"
+      hint: "You were already idle when a break was due"
     },
     {
       kind: "manualTakeBreak",

@@ -1103,6 +1103,7 @@
 {:else}
   <div class="view-shell" hidden={dashboardView !== "dashboard"}>
     <ConsumerDashboard
+      visible={dashboardView === "dashboard"}
       operatingSystem={report?.operatingSystem ?? null}
       presentation={reminderPresentation}
       {warning}

@@ -12,6 +12,10 @@
 
 # Unfocus
 
+> **macOS:** pre-1.x packages are ad-hoc signed and not notarized; Apple
+> signing is planned for 1.x. macOS remains Preview and Windows experimental.
+> See the [installation guide](docs/install.md) for platform limits.
+
 [![CI](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/abhiksark/unfocus/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/abhiksark/unfocus?include_prereleases&sort=semver)](https://github.com/abhiksark/unfocus/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -38,7 +42,7 @@ badges, accounts, or mascots competing for your attention.
 See the gentle notch reminder, a screen break, and reflection across your day
 and the past 90 days.
 
-https://github.com/user-attachments/assets/051b3e5b-6789-42f9-aa24-262925af3d59
+https://github.com/user-attachments/assets/198b057d-1cc5-4b7f-be9d-0faa2dddd8c3
 
 Staged macOS preview with illustrative activity data.
 
@@ -90,7 +94,9 @@ history to control the reminder timer.
   while you are already away or presenting
 - Keeps the timer running if a platform probe is unavailable or fails
 
-![The bundled Unfocus break scene: a calm illustrated mountain valley](static/break-scene.jpg)
+![Unfocus break screen with a distant landscape, a rest reminder, and the remaining break time](.github/media/break.png)
+
+*A moment to look beyond the screen. Captured from the current break-screen component.*
 
 ### Reflection without judgment
 
@@ -103,7 +109,13 @@ history to control the reminder timer.
   records which keys you press
 - Reflection is observe-only: it never pauses, skips, or advances the timer
 
-![The Unfocus dashboard with the live reminder and Your day activity strip](.github/media/dashboard.png)
+![Unfocus dashboard showing seven active hours, two hours away, and recorded break outcomes](.github/media/dashboard.png)
+
+*See active time, time away, and recorded breaks together. Current UI with illustrative activity data.*
+
+![Unfocus history showing a 90-day activity calendar and hourly detail for a selected day](.github/media/history.png)
+
+*Look back across 90 days, then select a day for its hourly activity and break outcomes. Illustrative data.*
 
 ### Local by design
 

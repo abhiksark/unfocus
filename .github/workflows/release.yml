@@ -259,14 +259,97 @@ jobs:
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-${{ matrix.name }}
+          name: ${{ needs.release-context.outputs.channel == 'stable' && !startsWith(needs.release-context.outputs.version, '0.') && !inputs.rehearsal && startsWith(matrix.name, 'macos-') && 'unsigned' || 'release' }}-${{ matrix.name }}
           path: release-artifacts/*
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
 
-  assemble:
+  sign-macos:
     needs: [build, release-context]
+    if: ${{ !inputs.rehearsal && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.release-context.outputs.channel == 'stable' && !startsWith(needs.release-context.outputs.version, '0.') }}
+    environment: release
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-aarch64
+            platform: macos-15
+            target: aarch64-apple-darwin
+          - name: macos-x86_64
+            platform: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 90
+    env:
+      RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
+      RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
+      REHEARSAL: ${{ inputs.rehearsal }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+          no-cache: true
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: unsigned-${{ matrix.name }}
+          path: unsigned-macos
+
+      - name: Check immutable tag and draft metadata before Apple credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/tags/$RELEASE_TAG:refs/remotes/origin/unfocus-release-tag"
+          test "$(git rev-parse 'refs/remotes/origin/unfocus-release-tag^{commit}')" = "$EVENT_SHA"
+          MATCHES=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq -s -c --arg tag "$RELEASE_TAG" 'flatten(1) | map(select(.tag_name == $tag))')
+          COUNT=$(jq 'length' <<<"$MATCHES")
+          if [ "$COUNT" -ne 0 ]; then
+            test "$COUNT" -eq 1
+            RELEASE=$(jq -c '.[0]' <<<"$MATCHES")
+            bun run scripts/release-draft-policy.js release "$RELEASE_VERSION" "$EVENT_SHA" <<<"$RELEASE"
+            ID=$(jq -r .id <<<"$RELEASE")
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$ID/assets?per_page=100" \
+              | jq -s -c 'add' \
+              | bun run scripts/release-draft-policy.js inventory "$RELEASE_VERSION"
+          fi
+
+      - name: Sign notarize and verify stable macOS packages
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ vars.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          MACOS_TARGET: ${{ matrix.target }}
+        run: bun run release:sign-macos unsigned-macos signed-macos "$MACOS_TARGET"
+
+      - name: Always remove Apple credentials and temporary signing files
+        if: ${{ always() }}
+        run: bun run release:sign-macos --cleanup
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ matrix.name }}
+          path: signed-macos/*.dmg
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  assemble:
+    needs: [build, release-context, sign-macos]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.release-context.result == 'success' && (needs.sign-macos.result == 'success' || (needs.sign-macos.result == 'skipped' && (inputs.rehearsal || needs.release-context.outputs.channel != 'stable' || startsWith(needs.release-context.outputs.version, '0.')))) }}
     runs-on: ubuntu-24.04
     env:
       RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
@@ -302,6 +385,7 @@ jobs:
 
   validate-linux-packages:
     needs: [assemble, release-context]
+    if: ${{ !cancelled() && needs.assemble.result == 'success' && needs.release-context.result == 'success' }}
     runs-on: ubuntu-24.04
     env:
       RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
@@ -344,7 +428,7 @@ jobs:
 
   finalize-rehearsal:
     needs: [release-context, validate-linux-packages]
-    if: ${{ inputs.rehearsal }}
+    if: ${{ !cancelled() && needs.release-context.result == 'success' && needs.validate-linux-packages.result == 'success' && inputs.rehearsal }}
     runs-on: ubuntu-22.04
     env:
       RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
@@ -403,7 +487,7 @@ jobs:
 
   publish:
     needs: [release-context, validate-linux-packages]
-    if: ${{ !inputs.rehearsal && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !cancelled() && needs.release-context.result == 'success' && needs.validate-linux-packages.result == 'success' && !inputs.rehearsal && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-22.04
     environment: release
     env:
@@ -411,6 +495,7 @@ jobs:
       RELEASE_TAG: ${{ needs.release-context.outputs.tag }}
       RELEASE_VERSION: ${{ needs.release-context.outputs.version }}
       UPDATER_PUBLIC_KEY: src-tauri/update-keys/linux-beta.pub
+      RELEASE_PRERELEASE: ${{ needs.release-context.outputs.channel != 'stable' }}
     permissions:
       contents: write
       id-token: write
@@ -476,14 +561,15 @@ jobs:
           fi
           [ "$COUNT" -eq 1 ] || { echo "Multiple releases claim $RELEASE_TAG." >&2; exit 1; }
           RELEASE=$(jq -c '.[0]' <<<"$MATCHES")
-          if [ "$(jq -r .draft <<<"$RELEASE")" != true ] || [ "$(jq -r .prerelease <<<"$RELEASE")" != true ]; then
-            echo "Refusing to alter a published or non-prerelease release for $RELEASE_TAG." >&2
+          if [ "$(jq -r .draft <<<"$RELEASE")" != true ] || [ "$(jq -r .prerelease <<<"$RELEASE")" != "$RELEASE_PRERELEASE" ]; then
+            echo "Refusing to alter a published or wrong-channel release for $RELEASE_TAG." >&2
             exit 1
           fi
           if [ "$(jq -r .target_commitish <<<"$RELEASE")" != "$EVENT_SHA" ]; then
             echo "Existing draft targets a different commit." >&2
             exit 1
           fi
+          bun run scripts/release-draft-policy.js release "$RELEASE_VERSION" "$EVENT_SHA" <<<"$RELEASE"
           ID=$(jq -r .id <<<"$RELEASE")
           [[ "$ID" =~ ^[0-9]+$ ]] || { echo "GitHub returned an invalid draft release id." >&2; exit 1; }
 
@@ -562,7 +648,7 @@ jobs:
           test ! -L "$UPDATER_PUBLIC_KEY"
           bun run release:verify-update-signature --check-public-key "$UPDATER_PUBLIC_KEY"
 
-      - name: Verify the complete reusable draft before any signing secret
+      - name: Verify the complete reusable draft before any updater signing secret
         if: ${{ steps.draft.outputs.reuse == 'true' }}
         run: |
           PUBLIC_KEY=-
@@ -643,7 +729,8 @@ jobs:
           verify_remote_tag
           if [ "$REUSE_DRAFT" = true ]; then
             RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/$REUSED_RELEASE_ID")
-            [ "$(jq -r .draft <<<"$RELEASE")" = true ] && [ "$(jq -r .prerelease <<<"$RELEASE")" = true ] || {
+            bun run scripts/release-draft-policy.js release "$RELEASE_VERSION" "$EVENT_SHA" <<<"$RELEASE"
+            [ "$(jq -r .draft <<<"$RELEASE")" = true ] && [ "$(jq -r .prerelease <<<"$RELEASE")" = "$RELEASE_PRERELEASE" ] || {
               echo "Reusable draft was published or changed during verification." >&2
               exit 1
             }
@@ -665,9 +752,10 @@ jobs:
             exit 1
           fi
           RELEASE=$(jq -n --arg tag "$RELEASE_TAG" --arg sha "$EVENT_SHA" \
-            --arg name "Unfocus $RELEASE_TAG" --rawfile body notes.md \
-            '{tag_name:$tag, target_commitish:$sha, name:$name, body:$body, draft:true, prerelease:true}' \
+            --arg name "Unfocus $RELEASE_TAG" --rawfile body notes.md --argjson prerelease "$RELEASE_PRERELEASE" \
+            '{tag_name:$tag, target_commitish:$sha, name:$name, body:$body, draft:true, prerelease:$prerelease}' \
             | gh api "repos/$GITHUB_REPOSITORY/releases" -X POST --input -)
+          bun run scripts/release-draft-policy.js release "$RELEASE_VERSION" "$EVENT_SHA" <<<"$RELEASE"
           ID=$(jq -r .id <<<"$RELEASE")
           [ "$(jq -r .draft <<<"$RELEASE")" = true ] && [[ "$ID" =~ ^[0-9]+$ ]] || {
             echo "GitHub did not create the expected draft release." >&2
@@ -713,7 +801,8 @@ jobs:
           }
 
           RELEASE=$(gh api "repos/$GITHUB_REPOSITORY/releases/$ID")
-          [ "$(jq -r .draft <<<"$RELEASE")" = true ] && [ "$(jq -r .prerelease <<<"$RELEASE")" = true ] || {
+          bun run scripts/release-draft-policy.js release "$RELEASE_VERSION" "$EVENT_SHA" <<<"$RELEASE"
+          [ "$(jq -r .draft <<<"$RELEASE")" = true ] && [ "$(jq -r .prerelease <<<"$RELEASE")" = "$RELEASE_PRERELEASE" ] || {
             echo "Fresh draft was published or changed during upload." >&2
             exit 1
           }
