@@ -49,10 +49,19 @@ export function extractReleaseNotes(changelog, tag) {
 }
 
 export function composeReleaseNotes(changelog, tag) {
-  return "These prerelease builds are not notarized. macOS app bundles are ad-hoc signed rather than Developer ID-signed, and Windows installers are not code-signed. Verify downloads with SHA256SUMS and the GitHub build-provenance attestations.\n" +
+  const stable = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(tag);
+  const appleSigned = stable && !tag.startsWith("v0.");
+  const signing = appleSigned
+    ? "Stable publication requires Developer ID-signed, notarized, and stapled macOS DMGs for both architectures. This draft is not evidence of clean-machine first-launch or multi-monitor qualification; review the final signed bytes and record that acceptance before manual publication. Windows installers are not code-signed. Verify downloads with SHA256SUMS and the GitHub build-provenance attestations.\n"
+    : stable
+      ? "These pre-1.x stable packages are ad-hoc signed, not Developer ID-signed or notarized. Apple signing is deferred until 1.x. Windows installers are not code-signed. Verify downloads with SHA256SUMS and the GitHub build-provenance attestations.\n"
+      : "These prerelease builds are not notarized. macOS app bundles are ad-hoc signed rather than Developer ID-signed, and Windows installers are not code-signed. Verify downloads with SHA256SUMS and the GitHub build-provenance attestations.\n";
+  return signing +
     "The release also includes a CycloneDX SBOM and the bundled third-party notices.\n\n" +
     "- **Linux**: X11 is qualified. APT archive metadata is signed; application binaries are unsigned. Wayland is unsupported.\n" +
-    "- **macOS 11+**: Preview, ad-hoc signed, and not notarized. Uses the system-provided AppKit and WebKit frameworks; multi-monitor behavior is not yet qualified.\n" +
+    (appleSigned
+      ? "- **macOS 11+**: Preview; the stable release pipeline requires Developer ID signing and notarization. Uses system AppKit and WebKit; clean-machine first-launch and multi-monitor qualification remain separate acceptance checks.\n"
+      : "- **macOS 11+**: Preview, ad-hoc signed, and not notarized. Uses the system-provided AppKit and WebKit frameworks; multi-monitor behavior is not yet qualified.\n") +
     "- **Windows**: Idle and fullscreen probes are implemented, but interactive multi-monitor qualification is pending.\n\n" +
     `## Changes\n\n${extractReleaseNotes(changelog, tag)}`;
 }

@@ -1,3 +1,5 @@
+// src-tauri/src/instance.rs
+
 use std::fmt;
 
 use tauri::{AppHandle, Manager, UserAttentionType, WebviewWindow};
@@ -130,10 +132,37 @@ pub(crate) fn reveal_dashboard(app: &AppHandle) {
 }
 
 /// Handles a notification from an already-terminated secondary process.
-/// Arguments and the secondary working directory are deliberately discarded
-/// by the plugin callback before this function is reached.
-pub(crate) fn handle_secondary_launch(app: &AppHandle) {
-    reveal_dashboard(app);
+/// Automatic login duplicates stay quiet; a manual launch reveals the dashboard.
+pub(crate) fn handle_secondary_launch(app: &AppHandle, arguments: &[String]) {
+    if !is_automatic_launch(arguments) {
+        reveal_dashboard(app);
+    }
+}
+
+pub(crate) fn is_automatic_launch(arguments: &[impl AsRef<std::ffi::OsStr>]) -> bool {
+    cfg!(any(target_os = "linux", target_os = "macos"))
+        && arguments
+            .iter()
+            .skip(1)
+            .any(|argument| argument.as_ref() == "--autostart")
+}
+
+pub(crate) fn configure_initial_window(config: &mut tauri::utils::config::Config, automatic: bool) {
+    if automatic {
+        if let Some(main) = config
+            .app
+            .windows
+            .iter_mut()
+            .find(|window| window.label == "main")
+        {
+            main.visible = false;
+            main.focus = false;
+        }
+    }
+}
+
+pub(crate) fn reveal_after_tray_install(automatic: bool, tray_available: bool) -> bool {
+    automatic && !tray_available
 }
 
 #[cfg(test)]
@@ -181,6 +210,35 @@ mod tests {
         fn request_attention(&self) -> Result<(), String> {
             self.perform(ActivationStep::RequestAttention)
         }
+    }
+
+    #[test]
+    fn automatic_launches_are_quiet_and_manual_duplicates_reveal() {
+        assert_eq!(
+            is_automatic_launch(&["unfocus", "--autostart"]),
+            cfg!(any(target_os = "linux", target_os = "macos"))
+        );
+        assert!(!is_automatic_launch(&["unfocus"]));
+        assert!(!is_automatic_launch(&["unfocus", "--autostart=false"]));
+        assert!(!is_automatic_launch(&["--autostart"]));
+    }
+
+    #[test]
+    fn automatic_window_is_hidden_before_creation_and_tray_failure_requires_reveal() {
+        let mut config = tauri::utils::config::Config::default();
+        config
+            .app
+            .windows
+            .push(tauri::utils::config::WindowConfig::default());
+        config.app.windows[0].label = "main".into();
+        configure_initial_window(&mut config, false);
+        assert!(config.app.windows[0].visible);
+        configure_initial_window(&mut config, true);
+        assert!(!config.app.windows[0].visible);
+        assert!(!config.app.windows[0].focus);
+        assert!(reveal_after_tray_install(true, false));
+        assert!(!reveal_after_tray_install(true, true));
+        assert!(!reveal_after_tray_install(false, false));
     }
 
     #[test]

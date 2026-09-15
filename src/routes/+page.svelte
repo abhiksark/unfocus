@@ -7,6 +7,12 @@
   import DeveloperDashboard from "$lib/DeveloperDashboard.svelte";
   import HistoryView from "$lib/HistoryView.svelte";
   import PreBreakCue from "$lib/PreBreakCue.svelte";
+  import StartAtLoginPrompt from "$lib/StartAtLoginPrompt.svelte";
+  import {
+    createStartAtLoginController,
+    initialStartAtLoginState,
+    type StartAtLoginStatus
+  } from "$lib/start-at-login";
   import { deviceGridOffsetMinutes } from "$lib/break-grid";
   import {
     consumerReminderPresentation,
@@ -97,6 +103,16 @@
   document.documentElement.classList.toggle("tray-panel-window", windowRoute.kind === "tray-panel");
 
   let dashboardMode = $state<DashboardMode>("consumer");
+  let dashboardVisible = $state(false);
+  let startup = $state(initialStartAtLoginState());
+  const startupController = createStartAtLoginController(
+    {
+      get: () => invoke<StartAtLoginStatus>("get_start_at_login"),
+      set: (enabled) => invoke<StartAtLoginStatus>("set_start_at_login", { enabled })
+    },
+    browserStorage,
+    (state) => { startup = state; }
+  );
   let dashboardView = $state<"dashboard" | "history">("dashboard");
   let historyMounted = $state(false);
   let dashboardScrollY = 0;
@@ -307,7 +323,7 @@
     const activityGeneration = activityRefreshGeneration.capture();
     const breakGeneration = breakRefreshGeneration.capture();
     const settingsGeneration = settingsRefreshGeneration.capture();
-    const [diagnostics, reminder, activity, breaks] = await Promise.all([
+    const [diagnostics, reminder, activity, breaks, visible] = await Promise.all([
       requestDiagnostics(),
       settleLatestRequest(reminderRequests, () =>
         invoke<ReminderStatus>("get_reminder_status")
@@ -317,8 +333,10 @@
       ),
       settleLatestRequest(breakRequests, () =>
         invoke<LocalSnapshot<BreakSummary>>("get_break_summary")
-      )
+      ),
+      getCurrentWindow().isVisible().catch(() => false)
     ]);
+    dashboardVisible = visible && document.visibilityState === "visible";
 
     const diagnosticsCurrent =
       diagnostics.latest &&
@@ -959,6 +977,7 @@
 
     dashboardMode = readDashboardMode(browserStorage());
     dayStartHour = readDayStartHour(browserStorage());
+    void startupController.load();
     let timer: number | undefined;
     const stopPolling = () => {
       if (timer !== undefined) window.clearInterval(timer);
@@ -966,7 +985,10 @@
     };
     const updatePolling = () => {
       stopPolling();
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible") {
+        dashboardVisible = false;
+        return;
+      }
       void refresh();
       timer = window.setInterval(refresh, 2_000);
     };
@@ -974,6 +996,8 @@
     updatePolling();
     void loadReminderSettings();
     document.addEventListener("visibilitychange", updatePolling);
+    const refreshStartup = () => { void startupController.load(); };
+    window.addEventListener("focus", refreshStartup);
     const cueEnded = (event: Event) => {
       const runId = developerCuePreviewEndedRunId(event, cuePreviewState.runId);
       if (runId !== null) cuePreviewController.nativeEnded(runId);
@@ -984,6 +1008,7 @@
       cuePreviewController.destroy();
       window.removeEventListener(DEVELOPER_CUE_PREVIEW_ENDED_EVENT, cueEnded);
       document.removeEventListener("visibilitychange", updatePolling);
+      window.removeEventListener("focus", refreshStartup);
     };
   });
 </script>
@@ -1078,6 +1103,7 @@
 {:else}
   <div class="view-shell" hidden={dashboardView !== "dashboard"}>
     <ConsumerDashboard
+      visible={dashboardView === "dashboard"}
       operatingSystem={report?.operatingSystem ?? null}
       presentation={reminderPresentation}
       {warning}
@@ -1117,6 +1143,9 @@
       {settingsError}
       {settingsErrorContext}
       {settingsResult}
+      {startup}
+      onStartupChange={(enabled) => void startupController.set(enabled)}
+      onStartupRetry={() => void startupController.load()}
       onTakeBreak={() => void runReminderAction("take_break_now")}
       onPauseAction={runPauseAction}
       onPreview={() => void runOverlayTest()}
@@ -1147,6 +1176,17 @@
       />
     </div>
   {/if}
+{/if}
+
+{#if windowRoute.kind === "dashboard"}
+  <StartAtLoginPrompt
+    state={startup}
+    available={dashboardVisible && reminderStatus !== null && reminderStatusError === null &&
+      !reminderStatus.overlayActive && reminderStatus.phase !== "break" && !overlayRunning &&
+      reminderActionPending === null}
+    onEnable={() => void startupController.set(true)}
+    onDismiss={startupController.dismiss}
+  />
 {/if}
 
 <style>

@@ -1,3 +1,5 @@
+<!-- docs/install.md -->
+
 # Install Unfocus
 
 This guide covers installing Unfocus prerelease builds on each supported package
@@ -189,6 +191,50 @@ desktop.
 
 ### Debian / Ubuntu (APT, preferred)
 
+> Stable channel pending: the regular install and upgrade commands in this
+> section remain beta commands. Only the migration block below switches an
+> installation to stable, and it must not be run until the first immutable
+> stable release and both stable receiver updates are published.
+
+After those releases are published, migrate without purging the application.
+This keeps the existing archive keyring and local application data, and moves
+the beta source to a recoverable backup. It refuses to overwrite an existing
+backup or stable source:
+
+```sh
+(
+  set -eu
+  BETA_SOURCE=/etc/apt/sources.list.d/unfocus-beta.list
+  BETA_BACKUP=/etc/apt/sources.list.d/unfocus-beta.list.disabled-for-stable
+  STABLE_SOURCE=/etc/apt/sources.list.d/unfocus-stable.list
+  KEYRING=/usr/share/keyrings/unfocus-archive-keyring.gpg
+
+  test -f "$KEYRING"
+  test -f "$BETA_SOURCE"
+  test ! -e "$BETA_BACKUP" || {
+    echo "Refusing to overwrite $BETA_BACKUP" >&2
+    exit 1
+  }
+  test ! -e "$STABLE_SOURCE" || {
+    echo "Refusing to overwrite $STABLE_SOURCE" >&2
+    exit 1
+  }
+  sudo mv --no-clobber -- "$BETA_SOURCE" "$BETA_BACKUP"
+  test ! -e "$BETA_SOURCE"
+  STABLE_ENTRY=$(mktemp)
+  trap 'rm -f "$STABLE_ENTRY"' EXIT
+  echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/unfocus-archive-keyring.gpg] https://apt.abhik.ai stable main' \
+    > "$STABLE_ENTRY"
+  sudo mv --no-clobber -- "$STABLE_ENTRY" "$STABLE_SOURCE"
+  test ! -e "$STABLE_ENTRY"
+  sudo chown root:root "$STABLE_SOURCE"
+  sudo chmod 0644 "$STABLE_SOURCE"
+  trap - EXIT
+  sudo apt update
+  sudo apt install unfocus
+)
+```
+
 This is the supported day-to-day install path on Ubuntu and Debian.
 
 Install the beta from the public APT repository at
@@ -261,7 +307,7 @@ sudo apt remove unfocus
 To remove the APT source as well:
 
 ```sh
-sudo rm -f /etc/apt/sources.list.d/unfocus-beta.list
+sudo rm -f /etc/apt/sources.list.d/unfocus-beta.list /etc/apt/sources.list.d/unfocus-stable.list
 sudo rm -f /usr/share/keyrings/unfocus-archive-keyring.gpg
 sudo apt update
 ```
@@ -346,6 +392,40 @@ The desktop must provide a **StatusNotifier / AppIndicator** host.
   keep running without a way to open it. Keep the dashboard open until the tray
   host works, then restart Unfocus.
 
+### Start at login on Linux
+
+On the first visible dashboard launch after this feature is installed, Unfocus
+asks whether to **Enable start at login**. This includes existing installations.
+Startup stays off until you accept. Choose **Not now** or press Escape to
+dismiss the prompt; the choice is remembered on this device across upgrades.
+If browser storage is unavailable, dismissal lasts for the current session.
+
+The **Start at login** checkbox below **Your rhythm** lets you enable or disable
+startup later. It saves immediately, independently of **Save settings**, and
+does not restart the reminder timer. Registration failures appear inline so
+you can retry. Startup already enabled on this device skips the prompt.
+
+Enabled login launches run reminders quietly with the dashboard hidden. Use
+the tray or launch Unfocus manually to open it. If tray installation fails,
+the dashboard opens so the process stays reachable. A duplicate automatic
+launch stays quiet and uses the existing process.
+
+Unfocus manages only
+`${XDG_CONFIG_HOME:-$HOME/.config}/autostart/com.unfocus.desktop.desktop`,
+following the [desktop autostart specification](https://specifications.freedesktop.org/autostart/latest/).
+For AppImages, enable startup after placing the executable in its permanent
+location. If you move or rename it, disable and re-enable **Start at login**
+from the new location to update the registered path.
+Executable paths containing `=` or control characters are rejected; move the
+AppImage to a path without those characters before enabling startup.
+
+Disabling startup removes this entry. If you uninstall first, remove the
+leftover entry yourself:
+
+```sh
+rm -f -- "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/com.unfocus.desktop.desktop"
+```
+
 ### Linux troubleshooting
 
 | Symptom | What to try |
@@ -369,6 +449,28 @@ Release packages require macOS 11 or later and use the AppKit and WebKit
 frameworks included with macOS. **No Xcode or other developer tools are
 required** to install a release DMG.
 
+### Start at login
+
+On the first visible dashboard launch, choose **Enable start at login** to
+start Unfocus quietly in the menu bar at your next login. **Not now** dismisses
+the prompt; the **Start at login** checkbox below Your rhythm changes the
+setting later. Enabling or disabling it does not restart the app or change
+reminder timing. Quit stays quit until you launch Unfocus or log in again.
+
+Install the app in a permanent location before enabling this setting. Unfocus
+manages only `~/Library/LaunchAgents/com.unfocus.desktop.start-at-login.plist`,
+using the current app bundle's executable and `--autostart`. Registration is
+per-user, needs no administrator access, and uses no shell or network service.
+Moving the app later requires turning the setting off and on from its new
+location. Disk-image and App Translocation paths are rejected.
+
+The checkbox reflects the saved launch configuration. macOS may separately
+require permission for background items in System Settings; an OS-disabled
+item will not run merely because its configuration exists. Actual logout/login
+acceptance remains required on supported macOS versions and architectures.
+Disable the setting before uninstalling; if the app is already removed, remove
+only `~/Library/LaunchAgents/com.unfocus.desktop.start-at-login.plist`.
+
 ### Which DMG
 
 | Mac | File |
@@ -387,8 +489,9 @@ Check **Apple menu → About This Mac** if you are unsure.
 
 ### First launch (ad-hoc signed / not notarized)
 
-Prerelease builds are ad-hoc signed so the app bundle passes local codesign
+Pre-1.x builds, including 0.7.0 stable, are ad-hoc signed so the app bundle passes local codesign
 verification, but they are **not** Developer ID-signed or notarized.
+Apple Developer enrollment and notarization are deferred until 1.x.
 Gatekeeper will still block a normal double-click the first time.
 
 1. In **Finder**, open **Applications**.
@@ -408,6 +511,12 @@ focus the dashboard. The tray menu also exposes the reminder controls and quit
 action.
 
 ### Homebrew (beta cask)
+
+> Stable cask pending: after the first immutable stable release and the stable
+> tap receiver are published, migrate with
+> `brew uninstall --cask abhiksark/unfocus/unfocus@beta` (without `--zap`), then
+> `brew install --cask abhiksark/unfocus/unfocus`. This preserves local data.
+> Until then, keep using the beta commands below.
 
 If you use Homebrew:
 
@@ -444,7 +553,8 @@ explicitly.
 ### Remove on macOS
 
 - Drag **Unfocus** from Applications to the Trash, or
-- If installed via Homebrew: `brew uninstall --cask abhiksark/unfocus/unfocus@beta`
+- Stable Homebrew installation: `brew uninstall --cask abhiksark/unfocus/unfocus`
+- Beta Homebrew installation: `brew uninstall --cask abhiksark/unfocus/unfocus@beta`
 
 Removing the app does not always delete local settings. See
 [Local data and clean uninstall](#local-data-and-clean-uninstall).
@@ -454,7 +564,7 @@ Removing the app does not always delete local settings. See
 | Symptom | What to try |
 | --- | --- |
 | Checksum mismatch | Do not install; re-download and re-verify |
-| “App can’t be opened because it is from an unidentified developer” | Control-click → Open (ad-hoc-signed, unnotarized prerelease) |
+| “App can’t be opened because it is from an unidentified developer” | Control-click → Open (ad-hoc-signed, unnotarized pre-1.x build) |
 | Wrong architecture | Use `aarch64` vs `x64` DMG for your Mac |
 | Tray or multi-monitor oddities | Expected gaps while status is Preview; report with the platform report form |
 
@@ -617,8 +727,9 @@ one machine as cross-platform qualification.
 4. Closing the dashboard leaves the reminder in the **tray** when the tray is
    available. If tray setup failed, closing the dashboard **exits** so the
    process cannot keep running without a reachable UI.
-5. A second launch focuses the existing window; it does not start a second tray
-   or timer.
+5. A second manual launch focuses the existing window; it does not start a
+   second tray or timer. Linux login launches stay quiet when
+   [Start at login](#start-at-login-on-linux) is enabled.
 6. Expand **Advanced** in the timing editor and open **developer mode** only if
    you need raw probe and monitor diagnostics. Developer mode is optional and
    remembered on the device.
@@ -692,6 +803,7 @@ if you want a clean slate:
 **Linux:**
 
 ```sh
+rm -f -- "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/com.unfocus.desktop.desktop"
 rm -rf ~/.config/com.unfocus.desktop
 ```
 

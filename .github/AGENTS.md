@@ -78,11 +78,14 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
 - The quality job runs before packaging. Build, assembly, package inspection,
   and promotion-rehearsal jobs never receive production release credentials.
   The publisher alone receives narrowly scoped write, provenance, and
-  attestation permissions through the `release` environment, and updater-key
-  secrets are mapped only for a fresh beta signing step.
+  attestation permissions through the `release` environment. A dedicated
+  1.x-and-later stable macOS signing job is the sole additional production-credential
+  recipient, also protected by `release`, with only Contents read permission.
+  Apple secrets are mapped only to its signing step; updater-key secrets are
+  mapped only for a fresh beta signing step in the publisher.
 - Collect platform artifacts separately and reject filename collisions before
   staging. Deeply inspect Linux packages and bind their evidence to the base
-  checksums before protected signing. For exact beta releases, cryptographically
+  checksums before protected updater signing. For exact beta releases, cryptographically
   verify all package and payload signatures against the committed updater
   public key, generate the 14-file final inventory, and only then checksum and
   attest the final bytes. Alpha and stable inventories remain updater-free.
@@ -93,12 +96,45 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
   to make a retry pass.
 - Verify the remote tag still resolves to the workflow's event commit before
   release writes and again before uploads. Never tolerate a moved tag.
-- Create or reuse only a draft prerelease. Published releases are immutable:
+- Create or reuse only an immutable draft with `prerelease: false` for stable
+  versions and `prerelease: true` for every prerelease. Published releases are immutable:
   never replace their assets, reuse their tag, or overwrite their notes.
-- Current macOS app bundles are ad-hoc signed but not Developer ID-signed or
-  notarized, and current Windows installers are not code-signed. Release notes
-  must preserve those distinctions and retain checksum and build-provenance
-  verification guidance.
+- Stable macOS candidates at version 1.0.0 or later must pass the protected Developer ID, notarization,
+  stapling, Team ID and Gatekeeper gates on both native architectures before
+  assembly, final checksums and provenance. For those versions, unsigned build outputs use separate
+  artifact names and must never enter stable publication. Pre-1.x stable releases
+  deliberately use ad-hoc macOS packages without Apple credentials; preserve
+  quarantine warnings, final-byte checksums and provenance. A failed signing
+  job must still block publication; never silently fall back. Alpha/beta/rc and
+  promotion rehearsals retain ad-hoc credential-free macOS builds.
+- Signing infrastructure is not proof of a production signing run or physical
+  acceptance. For 1.x and later stable releases, Apple enrollment and credential
+  setup remain operator prerequisites. Clean-machine first launch on each
+  architecture remains required for every version under its documented policy. No automation publishes
+  the draft; review final bytes and acceptance evidence before manual publication.
+  Windows installers remain not code-signed. Retain checksum and build-provenance
+  guidance, and do not remove public macOS warnings until production evidence
+  supports that change.
+- Before enabling Apple secrets, the maintainer must review certificate custody,
+  App Store Connect team API key ownership/least privilege, renewal and revocation,
+  protected-environment tag restrictions/reviewers, and recovery. Configure
+  `APPLE_CERTIFICATE_BASE64` (Developer ID Application PKCS#12),
+  `APPLE_CERTIFICATE_PASSWORD`, and `APPLE_API_KEY_BASE64` only in `release`;
+  public environment variables are `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`,
+  `APPLE_TEAM_ID` and `APPLE_SIGNING_IDENTITY`. Do not configure them in build/PR
+  jobs or repository-wide secrets. The maintainer owns certificate/key renewal;
+  rotate before expiry, revoke compromised keys, and re-review the identity.
+- Signing uses an ephemeral keychain, secure timestamps, bottom-up nested-code
+  signing and hardened runtime with an empty entitlement dictionary (no runtime
+  exceptions). Notarization uses the team API key and a temporary keychain
+  profile. Always-run cleanup removes credentials and intermediate packages.
+  Only verified final DMGs are uploaded from signing. Never log authentication
+  responses. A failed signing run cannot upload or publish unsigned substitutes.
+- Draft retries require exactly matching final bytes. Timestamped signing and
+  fresh builds can differ across full reruns: fail closed rather than replacing
+  draft assets. Reuse successful job artifacts within the original run where
+  possible; partial/different drafts require an explicitly reviewed operator
+  recovery or a new version, never automatic deletion, tag movement or overwrite.
 
 ## Homebrew tap automation boundary
 
@@ -107,9 +143,11 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
   default-branch-restricted `homebrew-tap-automation` environment and mint a
   token scoped only to that tap.
 - The source repository may use that token only to send the channel-specific
-  `unfocus-alpha-published` or `unfocus-beta-published` repository dispatch.
-  Alpha workflows accept only alpha tags and beta workflows accept only beta
-  tags. The tap may use the dispatch only to
+  `unfocus-alpha-published`, `unfocus-beta-published`, or
+  `unfocus-stable-published` repository dispatch. Alpha workflows accept only
+  alpha tags, beta workflows accept only beta tags, and stable workflows accept
+  only exact `vX.Y.Z` tags for published immutable non-prereleases. The tap may
+  use the dispatch only to
   push an automation branch and open a reviewable cask pull request.
 - The App has only Contents and Pull Requests read/write permissions on the
   tap. It must never be installed on Unfocus or receive Administration,
@@ -120,9 +158,10 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
 
 ## APT repository automation boundary
 
-- The APT archive for prerelease packages lives in `abhiksark/unfocus-apt` and
+- The APT archive lives in `abhiksark/unfocus-apt` and
   is served from GitHub Pages at `https://apt.abhik.ai/`. Alpha and beta use
-  isolated `alpha` and `beta` suites and pool paths; package name is `unfocus`;
+  isolated `alpha` and `beta` suites and pool paths. Stable uses suite `stable`,
+  `pool/stable/u/unfocus`, and Debian version `X.Y.Z-1`; package name is `unfocus`;
   architecture is `amd64` only. A channel workflow must accept only its exact
   channel tag form.
 - Credentials live in the `apt-repo-automation` environment on both
@@ -132,7 +171,8 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
   `APT_SIGNING_KEY_PASSPHRASE`.
 - The source repository must never push apt tree files, hold the archive
   private key, or sign indexes. It dispatches only the channel-specific
-  `unfocus-alpha-published` or `unfocus-beta-published` event.
+  `unfocus-alpha-published`, `unfocus-beta-published`, or
+  `unfocus-stable-published` event.
 - The apt repository rebuilds `pool/`, `dists/`, and `public-key.asc` and
   pushes to `main` with `GITHUB_TOKEN`. It must never alter Unfocus releases.
 - Archive GPG signing authenticates **repository metadata** only. Prerelease
