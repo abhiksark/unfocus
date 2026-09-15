@@ -54,8 +54,11 @@ pub(crate) fn set_start_at_login(
     #[cfg(target_os = "macos")]
     {
         let path = macos::entry_path(&window)?;
-        let executable = std::env::current_exe().map_err(|error| error.to_string())?;
-        macos::write(&path, enabled.then_some(executable.as_path()))?;
+        let executable = enabled
+            .then(std::env::current_exe)
+            .transpose()
+            .map_err(|error| error.to_string())?;
+        macos::write(&path, executable.as_deref())?;
         macos::read(&path)
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -145,6 +148,9 @@ mod linux {
             }
             if line.starts_with('[') && line.ends_with(']') {
                 in_entry = line == "[Desktop Entry]";
+                if !in_entry {
+                    return Err(invalid("unsupported startup entry group; review manually"));
+                }
                 if in_entry && found_entry {
                     return Err(invalid("duplicate Desktop Entry group"));
                 }
@@ -181,7 +187,7 @@ mod linux {
         }
     }
 
-    fn try_exec_exists(value: &str, search_path: &OsStr) -> io::Result<bool> {
+    fn decode_value(value: &str) -> io::Result<String> {
         let mut decoded = String::new();
         let mut characters = value.chars();
         while let Some(character) = characters.next() {
@@ -198,6 +204,11 @@ mod linux {
                 character
             });
         }
+        Ok(decoded)
+    }
+
+    fn try_exec_exists(value: &str, search_path: &OsStr) -> io::Result<bool> {
+        let decoded = decode_value(value)?;
         let path = Path::new(&decoded);
         if path.is_absolute() {
             return executable_exists(path);
@@ -253,17 +264,57 @@ mod linux {
         Ok(true)
     }
 
+    fn validate_owned(contents: &str) -> io::Result<()> {
+        let values = entry_values(contents)?;
+        let executable = decode_value(values.get("TryExec").ok_or_else(|| {
+            invalid("startup entry has no owned executable; preserve it and review manually")
+        })?)?;
+        let generated = desktop_entry(Path::new(&executable))?;
+        let expected = entry_values(&generated)?;
+        if expected
+            .iter()
+            .any(|(key, value)| values.get(key) != Some(value))
+            || values.keys().any(|key| {
+                !expected.contains_key(key)
+                    && !matches!(*key, "Hidden" | "X-GNOME-Autostart-enabled")
+            })
+        {
+            return Err(invalid(
+                "startup entry was customized; preserve it and review manually",
+            ));
+        }
+        boolean(&values, "Hidden", false)?;
+        boolean(&values, "X-GNOME-Autostart-enabled", true)?;
+        Ok(())
+    }
+
+    fn existing(path: &Path) -> io::Result<Option<String>> {
+        match fs::symlink_metadata(path) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+            Ok(metadata) if !metadata.is_file() => {
+                return Err(invalid(
+                    "startup entry is not a regular file; review manually",
+                ));
+            }
+            Ok(_) => {}
+        }
+        let contents = fs::read_to_string(path)?;
+        validate_owned(&contents)?;
+        Ok(Some(contents))
+    }
+
     pub(super) fn read(path: &Path) -> Result<StartAtLoginStatus, String> {
-        let enabled = match fs::read_to_string(path) {
-            Ok(contents) => entry_enabled(
-                &contents,
-                &std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default(),
-                &std::env::var_os("PATH").unwrap_or_default(),
-            )
-            .map_err(|error| format!("could not read startup registration: {error}"))?,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => false,
-            Err(error) => return Err(format!("could not read startup registration: {error}")),
-        };
+        let enabled = existing(path)
+            .and_then(|contents| match contents {
+                Some(contents) => entry_enabled(
+                    &contents,
+                    &std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default(),
+                    &std::env::var_os("PATH").unwrap_or_default(),
+                ),
+                None => Ok(false),
+            })
+            .map_err(|error| format!("could not read startup registration: {error}"))?;
         Ok(StartAtLoginStatus {
             supported: true,
             enabled,
@@ -271,6 +322,7 @@ mod linux {
     }
 
     pub(super) fn write(path: &Path, executable: Option<&Path>) -> io::Result<()> {
+        existing(path)?;
         let Some(executable) = executable else {
             return match fs::remove_file(path) {
                 Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
@@ -398,6 +450,57 @@ mod linux {
             write(&path, None).unwrap();
             assert!(!read(&path).unwrap().enabled);
             assert_eq!(fs::read_to_string(other).unwrap(), "unrelated");
+            fs::remove_dir_all(directory).unwrap();
+        }
+
+        #[test]
+        fn customized_entries_and_symlinks_are_preserved() {
+            let directory = test_directory();
+            let path = directory.join(ENTRY_NAME);
+            let executable = std::env::current_exe().unwrap();
+            let owned = desktop_entry(&executable).unwrap();
+            for contents in [
+                owned.replace("Name=Unfocus", "Name=Other"),
+                owned.replace("Exec=/usr/bin/env", "Exec=/bin/echo"),
+                owned.replace("Terminal=false", "Terminal=true"),
+                format!("{owned}Path=/tmp\n"),
+                format!("{owned}OnlyShowIn=KDE;\n"),
+                format!("{owned}[Desktop Action other]\nExec=other\n"),
+                "[Desktop Entry]\nHidden=true\n".into(),
+                "unreadable entry".into(),
+            ] {
+                fs::write(&path, &contents).unwrap();
+                assert!(read(&path).is_err());
+                assert!(write(&path, None).is_err());
+                assert!(write(&path, Some(&executable)).is_err());
+                assert_eq!(fs::read_to_string(&path).unwrap(), contents);
+            }
+            fs::remove_file(&path).unwrap();
+            let target = directory.join("other.desktop");
+            fs::write(&target, &owned).unwrap();
+            std::os::unix::fs::symlink(&target, &path).unwrap();
+            assert!(read(&path).is_err());
+            assert!(write(&path, None).is_err());
+            assert!(write(&path, Some(&executable)).is_err());
+            assert!(fs::symlink_metadata(&path)
+                .unwrap()
+                .file_type()
+                .is_symlink());
+            assert_eq!(fs::read_to_string(&target).unwrap(), owned);
+            fs::remove_dir_all(directory).unwrap();
+        }
+
+        #[test]
+        fn disabled_owned_and_missing_executable_entries_can_be_removed() {
+            let directory = test_directory();
+            let path = directory.join(ENTRY_NAME);
+            let contents = desktop_entry(&directory.join("removed-unfocus")).unwrap();
+            for flag in ["", "Hidden=true\n", "X-GNOME-Autostart-enabled=false\n"] {
+                fs::write(&path, format!("{contents}{flag}")).unwrap();
+                assert!(!read(&path).unwrap().enabled);
+                write(&path, None).unwrap();
+                assert!(!path.exists());
+            }
             fs::remove_dir_all(directory).unwrap();
         }
 

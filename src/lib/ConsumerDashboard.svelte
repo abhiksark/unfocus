@@ -632,7 +632,7 @@
           Start at login
         </label>
         <p id="startup-setting-description" class="t-micro">
-          Start reminders quietly in the tray after Linux login. Saved immediately.
+          Start reminders quietly in the tray after you log in. Saved immediately.
         </p>
         {#if startup.pending}
           <p class="t-micro" role="status">Updating startup setting…</p>
