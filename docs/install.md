@@ -307,7 +307,7 @@ sudo apt remove unfocus
 To remove the APT source as well:
 
 ```sh
-sudo rm -f /etc/apt/sources.list.d/unfocus-beta.list
+sudo rm -f /etc/apt/sources.list.d/unfocus-beta.list /etc/apt/sources.list.d/unfocus-stable.list
 sudo rm -f /usr/share/keyrings/unfocus-archive-keyring.gpg
 sudo apt update
 ```
@@ -553,7 +553,8 @@ explicitly.
 ### Remove on macOS
 
 - Drag **Unfocus** from Applications to the Trash, or
-- If installed via Homebrew: `brew uninstall --cask abhiksark/unfocus/unfocus@beta`
+- Stable Homebrew installation: `brew uninstall --cask abhiksark/unfocus/unfocus`
+- Beta Homebrew installation: `brew uninstall --cask abhiksark/unfocus/unfocus@beta`
 
 Removing the app does not always delete local settings. See
 [Local data and clean uninstall](#local-data-and-clean-uninstall).
