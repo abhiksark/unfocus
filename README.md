@@ -95,7 +95,9 @@ history to control the reminder timer.
   while you are already away or presenting
 - Keeps the timer running if a platform probe is unavailable or fails
 
-![The bundled Unfocus break scene: a calm illustrated mountain valley](static/break-scene.jpg)
+![Unfocus break screen with a distant landscape, a rest reminder, and the remaining break time](.github/media/break.png)
+
+*A moment to look beyond the screen. Captured from the current break-screen component.*
 
 ### Reflection without judgment
 
@@ -108,7 +110,13 @@ history to control the reminder timer.
   records which keys you press
 - Reflection is observe-only: it never pauses, skips, or advances the timer
 
-![The Unfocus dashboard with the live reminder and Your day activity strip](.github/media/dashboard.png)
+![Unfocus dashboard showing seven active hours, two hours away, and recorded break outcomes](.github/media/dashboard.png)
+
+*See active time, time away, and recorded breaks together. Current UI with illustrative activity data.*
+
+![Unfocus history showing a 90-day activity calendar and hourly detail for a selected day](.github/media/history.png)
+
+*Look back across 90 days, then select a day for its hourly activity and break outcomes. Illustrative data.*
 
 ### Local by design
 
