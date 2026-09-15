@@ -431,8 +431,9 @@ Check **Apple menu → About This Mac** if you are unsure.
 
 ### First launch (ad-hoc signed / not notarized)
 
-Prerelease builds are ad-hoc signed so the app bundle passes local codesign
+Pre-1.x builds, including 0.7.0 stable, are ad-hoc signed so the app bundle passes local codesign
 verification, but they are **not** Developer ID-signed or notarized.
+Apple Developer enrollment and notarization are deferred until 1.x.
 Gatekeeper will still block a normal double-click the first time.
 
 1. In **Finder**, open **Applications**.
@@ -504,7 +505,7 @@ Removing the app does not always delete local settings. See
 | Symptom | What to try |
 | --- | --- |
 | Checksum mismatch | Do not install; re-download and re-verify |
-| “App can’t be opened because it is from an unidentified developer” | Control-click → Open (ad-hoc-signed, unnotarized prerelease) |
+| “App can’t be opened because it is from an unidentified developer” | Control-click → Open (ad-hoc-signed, unnotarized pre-1.x build) |
 | Wrong architecture | Use `aarch64` vs `x64` DMG for your Mac |
 | Tray or multi-monitor oddities | Expected gaps while status is Preview; report with the platform report form |
 

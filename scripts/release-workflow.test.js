@@ -117,13 +117,13 @@ describe("stable macOS protected signing", () => {
 
 describe("release dependency graph after intentionally skipped macOS signing", () => {
   const jobs = Bun.YAML.parse(workflow).jobs;
-  function eligible(name, results, { channel = "stable", rehearsal = false, cancelled = false, event = "push", ref = "refs/tags/v0.7.0" } = {}) {
+  function eligible(name, results, { channel = "stable", version = "1.0.0", rehearsal = false, cancelled = false, event = "push", ref = "refs/tags/v0.7.0" } = {}) {
     const expression = jobs[name].if;
     // Without an explicit status function, Actions applies implicit success()
     // and may propagate the skipped signing ancestor through successful jobs.
     expect(expression).toContain("!cancelled()");
     const needs = Object.fromEntries(jobs[name].needs.map((id) => [id, {
-      result: results[id] ?? "success", outputs: { channel },
+      result: results[id] ?? "success", outputs: { channel, version },
     }]));
     const javascript = expression.slice(3, -2).replace(/needs\.([\w-]+)/g, 'needs["$1"]');
     return new Function("needs", "inputs", "github", "cancelled", "startsWith", `return (${javascript});`)(
@@ -131,7 +131,7 @@ describe("release dependency graph after intentionally skipped macOS signing", (
     );
   }
   function graph(options, overrides = {}) {
-    const results = { "sign-macos": options.channel === "stable" && !options.rehearsal ? "success" : "skipped", ...overrides };
+    const results = { "sign-macos": options.channel === "stable" && !(options.version ?? "1.0.0").startsWith("0.") && !options.rehearsal ? "success" : "skipped", ...overrides };
     for (const job of ["assemble", "validate-linux-packages", "finalize-rehearsal", "publish"]) {
       const runs = eligible(job, results, options);
       results[job] = runs ? (overrides[job] ?? "success") : "skipped";
@@ -145,6 +145,20 @@ describe("release dependency graph after intentionally skipped macOS signing", (
       expect(results.publish).toBe("success");
       expect(results["finalize-rehearsal"]).toBe("skipped");
     }
+  });
+  test("pre-1.x stable deliberately skips signing but failures still block publication", () => {
+    for (const version of ["0.7.0", "0.99.0"]) {
+      const results = graph({ channel: "stable", version });
+      expect(results["sign-macos"]).toBe("skipped");
+      expect(results.publish).toBe("success");
+      expect(graph({ channel: "stable", version }, { "sign-macos": "failure" }).publish).toBe("skipped");
+    }
+    for (const version of ["1.0.0", "2.0.0", "10.0.0"]) {
+      expect(graph({ channel: "stable", version }, { "sign-macos": "skipped" }).publish).toBe("skipped");
+    }
+    const gate = "needs.release-context.outputs.channel == 'stable' && !startsWith(needs.release-context.outputs.version, '0.')";
+    expect(jobs["sign-macos"].if).toContain(gate);
+    expect(JSON.stringify(jobs.build)).toContain(gate);
   });
   test("all promotion rehearsals reach finalization without publication", () => {
     for (const channel of ["stable", "alpha", "beta", "rc"]) {

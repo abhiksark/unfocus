@@ -10,9 +10,11 @@ released versions link to their GitHub release.
 ## [0.7.0] - 2026-09-15
 
 Unpublished candidate; this is the preparation date, not a publication date.
-Stable release remains blocked on signing credentials, final package validation,
+Stable release remains blocked on final package validation,
 and the Linux X11/macOS physical acceptance matrix. macOS remains Preview
 until that evidence is complete; Windows remains experimental and unsigned.
+Apple Developer ID signing and notarization are deferred until 1.x; pre-1.x
+macOS packages remain ad-hoc signed and not notarized.
 
 ### Changed
 
@@ -23,7 +25,7 @@ until that evidence is complete; Windows remains experimental and unsigned.
 - The desktop dashboard aligns its wordmark, reminder heading, and activity
   metrics; wider windows retain readable spacing, chart labels, and details.
 - Stable release preparation adds channel-aware immutable draft handling and
-  protected macOS signing, with stable APT and Homebrew integration prepared
+  protected macOS signing for 1.x and later stable releases, with stable APT and Homebrew integration prepared
   separately. These distribution paths are not live until publication.
 
 ### Fixed

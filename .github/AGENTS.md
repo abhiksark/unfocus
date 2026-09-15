@@ -79,7 +79,7 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
   and promotion-rehearsal jobs never receive production release credentials.
   The publisher alone receives narrowly scoped write, provenance, and
   attestation permissions through the `release` environment. A dedicated
-  stable-only macOS signing job is the sole additional production-credential
+  1.x-and-later stable macOS signing job is the sole additional production-credential
   recipient, also protected by `release`, with only Contents read permission.
   Apple secrets are mapped only to its signing step; updater-key secrets are
   mapped only for a fresh beta signing step in the publisher.
@@ -99,14 +99,18 @@ dependency metadata, version/toolchain pins, and release-artifact collection.
 - Create or reuse only an immutable draft with `prerelease: false` for stable
   versions and `prerelease: true` for every prerelease. Published releases are immutable:
   never replace their assets, reuse their tag, or overwrite their notes.
-- Stable macOS candidates must pass the protected Developer ID, notarization,
+- Stable macOS candidates at version 1.0.0 or later must pass the protected Developer ID, notarization,
   stapling, Team ID and Gatekeeper gates on both native architectures before
-  assembly, final checksums and provenance. Unsigned build outputs use separate
-  artifact names and must never enter stable publication. Alpha/beta/rc and
+  assembly, final checksums and provenance. For those versions, unsigned build outputs use separate
+  artifact names and must never enter stable publication. Pre-1.x stable releases
+  deliberately use ad-hoc macOS packages without Apple credentials; preserve
+  quarantine warnings, final-byte checksums and provenance. A failed signing
+  job must still block publication; never silently fall back. Alpha/beta/rc and
   promotion rehearsals retain ad-hoc credential-free macOS builds.
 - Signing infrastructure is not proof of a production signing run or physical
-  acceptance. Apple enrollment, credential setup and clean-machine first launch
-  on each architecture remain operator prerequisites. No automation publishes
+  acceptance. For 1.x and later stable releases, Apple enrollment and credential
+  setup remain operator prerequisites. Clean-machine first launch on each
+  architecture remains required for every version under its documented policy. No automation publishes
   the draft; review final bytes and acceptance evidence before manual publication.
   Windows installers remain not code-signed. Retain checksum and build-provenance
   guidance, and do not remove public macOS warnings until production evidence
