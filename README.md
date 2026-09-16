@@ -257,6 +257,11 @@ promotions.
 Please report suspected vulnerabilities privately through the
 [security policy](.github/SECURITY.md), not in a public issue.
 
+## Support Unfocus
+
+If Unfocus helps you take a break, you can [buy me a coffee](https://buymeacoffee.com/abhiksark)
+to support its development. Support is optional; Unfocus is free and open source.
+
 ## License
 
 - Unfocus source code and first-party break-scene artwork: [MIT](LICENSE)
