@@ -1,1 +1,9 @@
 static/fonts/OFL.txt text eol=lf
+
+# Authenticated third-party bytes must survive every platform's checkout.
+src-tauri/vendor/glib-0.18.5/** -text
+scripts/vendor-sources/** -text
+# Unified-diff blank context lines intentionally contain one space.
+scripts/vendor-sources/glib-variant-str-iter.patch whitespace=-blank-at-eol
+# Preserve the published license's final blank line exactly.
+src-tauri/vendor/glib-0.18.5/LICENSE whitespace=-blank-at-eof

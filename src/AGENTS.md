@@ -6,7 +6,7 @@ This file applies to `src/**` and frontend assets in `static/fonts/**`. Follow
 the root `AGENTS.md` as well. Read `src-tauri/AGENTS.md` for native-interface
 changes and `scripts/AGENTS.md` before changing generated assets.
 
-SvelteKit 2 uses the static adapter and Svelte 5 runes. Write runes syntax
+SvelteKit 3 uses the static adapter and Svelte 5 runes. Write runes syntax
 (`$props()`, `$state()`, `$derived()`); do not introduce Svelte 4 patterns such
 as `export let` or `$:` reactive statements.
 

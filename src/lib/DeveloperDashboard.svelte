@@ -1,13 +1,13 @@
 <!-- src/lib/DeveloperDashboard.svelte -->
 
 <script lang="ts">
-  import { developerTimerHeading } from "$lib/consumer-dashboard";
+  import { developerTimerHeading } from "#lib/consumer-dashboard.ts";
   import {
     diagnosticsHealth,
     diagnosticsHealthLabel,
     probeBackend,
     type DiagnosticsReport
-  } from "$lib/diagnostics";
+  } from "#lib/diagnostics.ts";
   import {
     MAX_BREAK_SECONDS,
     MAX_WORK_MINUTES,
@@ -17,28 +17,28 @@
     type ReminderSettings,
     type ReminderSettingsValidation,
     type ReminderSettingsView
-  } from "$lib/reminder-settings";
+  } from "#lib/reminder-settings.ts";
   import {
     developerCuePreviewVisible,
     type DeveloperCuePreviewState
-  } from "$lib/developer-cue-preview";
+  } from "#lib/developer-cue-preview.ts";
   import {
     developerOverlayTestLabel,
     reminderCapabilityAvailable,
     type ReminderActionCommand,
     type ReminderStatus
-  } from "$lib/reminder-status";
-  import type { BreakSummary } from "$lib/break-summary";
-  import type { ReflectionResource } from "$lib/reflection-resource";
-  import type { RefreshState } from "$lib/refresh-state";
+  } from "#lib/reminder-status.ts";
+  import type { BreakSummary } from "#lib/break-summary.ts";
+  import type { ReflectionResource } from "#lib/reflection-resource.ts";
+  import type { RefreshState } from "#lib/refresh-state.ts";
   import {
     developerStoragePresentation,
     type StorageLoadHealth
-  } from "$lib/storage-health";
+  } from "#lib/storage-health.ts";
   import {
     developerActivityRefreshPresentation,
     type TodayActivity
-  } from "$lib/today-activity";
+  } from "#lib/today-activity.ts";
 
   type SettingsResult = "saved" | "reset" | null;
 

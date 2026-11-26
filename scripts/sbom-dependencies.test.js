@@ -1,6 +1,6 @@
 // scripts/sbom-dependencies.test.js
 import { describe, expect, test } from "bun:test";
-import { resolveBunDependency } from "./sbom-dependencies.js";
+import { mergeSbomDependencies, registerSbomComponent, resolveBunDependency } from "./sbom-dependencies.js";
 
 function index(entries) {
   const byLockKey = new Map();
@@ -14,6 +14,10 @@ function index(entries) {
 }
 
 describe("resolveBunDependency", () => {
+  test("resolves aliases with repeated copies of the same package identity", () => {
+    const packages = index([["a/dep", "dep", "1.0.0"], ["b/dep", "dep", "1.0.0"]]);
+    expect(resolveBunDependency(packages, "c", "dep", "*", false)).toBe("pkg:npm/dep@1.0.0");
+  });
   test("resolves a single locked version", () => {
     const packages = index([["vite", "vite", "8.2.1"]]);
     expect(resolveBunDependency(packages, "root workspace", "vite", "^8.2.0", false))
@@ -100,5 +104,29 @@ describe("resolveBunDependency", () => {
     const packages = index([["vite", "vite", "8.2.1"]]);
     expect(() => resolveBunDependency(packages, "root workspace", "vite", "", false))
       .toThrow("invalid dependency range");
+  });
+});
+
+describe("SBOM package identities", () => {
+  test("emits one component for identical packages installed under different owners", () => {
+    const components = new Map();
+    const component = { "bom-ref": "pkg:npm/dep@1.0.0", hashes: [{ alg: "SHA-512", content: "abc" }] };
+    registerSbomComponent(components, component);
+    registerSbomComponent(components, structuredClone(component));
+    expect([...components.values()]).toEqual([component]);
+  });
+
+  test("rejects conflicting metadata for one identity", () => {
+    const components = new Map();
+    registerSbomComponent(components, { "bom-ref": "pkg:npm/dep@1.0.0", hashes: ["abc"] });
+    expect(() => registerSbomComponent(components, { "bom-ref": "pkg:npm/dep@1.0.0", hashes: ["xyz"] }))
+      .toThrow("conflicting component metadata");
+  });
+
+  test("keeps dependencies from every installation context", () => {
+    const graph = new Map();
+    mergeSbomDependencies(graph, "dep", new Set(["a", "b"]));
+    mergeSbomDependencies(graph, "dep", new Set(["b", "c"]));
+    expect([...graph.get("dep")].sort()).toEqual(["a", "b", "c"]);
   });
 });
