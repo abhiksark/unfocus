@@ -1,7 +1,7 @@
 <!-- src/lib/ConsumerDashboard.svelte -->
 
 <script lang="ts">
-  import type { StartAtLoginState } from "$lib/start-at-login";
+  import type { StartAtLoginState } from "#lib/start-at-login.ts";
   import {
     describeRhythm,
     focusProgress,
@@ -10,9 +10,9 @@
     syncPreviewWorkMinutes,
     type ConsumerReminderPresentation,
     type ConsumerWarning
-  } from "$lib/consumer-dashboard";
-  import { gridPreview } from "$lib/break-grid";
-  import { DASHBOARD_REMINDER_ACTIONS_LABEL } from "$lib/dashboard-a11y";
+  } from "#lib/consumer-dashboard.ts";
+  import { gridPreview } from "#lib/break-grid.ts";
+  import { DASHBOARD_REMINDER_ACTIONS_LABEL } from "#lib/dashboard-a11y.ts";
   import {
     MAX_BREAK_SECONDS,
     MAX_WORK_MINUTES,
@@ -22,28 +22,28 @@
     type ReminderSettings,
     type ReminderSettingsErrorContext,
     type ReminderSettingsValidation
-  } from "$lib/reminder-settings";
+  } from "#lib/reminder-settings.ts";
   import {
     reminderCapabilityAvailable,
     reminderPreviewLabel,
     type ReminderActionCommand,
     type ReminderStatus
-  } from "$lib/reminder-status";
-  import { dayStartOptions } from "$lib/day-start";
+  } from "#lib/reminder-status.ts";
+  import { dayStartOptions } from "#lib/day-start.ts";
   import {
     storageUnavailable,
     storageUnavailableCopy,
     type StorageLoadHealth
-  } from "$lib/storage-health";
+  } from "#lib/storage-health.ts";
   import {
     breakOutcomeStats,
     breakRefreshCaption,
     isBreakDayEmpty,
     weekBreakCaption,
     type BreakSummary
-  } from "$lib/break-summary";
-  import type { RefreshState } from "$lib/refresh-state";
-  import { reflectionRecoveryFeedback } from "$lib/reflection-resource";
+  } from "#lib/break-summary.ts";
+  import type { RefreshState } from "#lib/refresh-state.ts";
+  import { reflectionRecoveryFeedback } from "#lib/reflection-resource.ts";
   import {
     activityFootnote,
     activityStatusCaption,
@@ -54,7 +54,7 @@
     todayLoadingCaption,
     todayStaleCaption,
     type TodayActivity
-  } from "$lib/today-activity";
+  } from "#lib/today-activity.ts";
 
   import ActivityStrip from "./ActivityStrip.svelte";
   import { activityWindowLabel } from "./activity-strip";

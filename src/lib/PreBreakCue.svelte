@@ -10,11 +10,11 @@
     type PreBreakCueLayout,
     type PreBreakCueMode,
     type PreBreakCuePlatform
-  } from "$lib/pre-break-cue";
-  import { createCueSkipController, type CueSkipState } from "$lib/pre-break-cue-skip";
+  } from "#lib/pre-break-cue.ts";
+  import { createCueSkipController, type CueSkipState } from "#lib/pre-break-cue-skip.ts";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, tick, untrack } from "svelte";
-  import { createCueVisibilityController } from "$lib/pre-break-cue-native";
+  import { createCueVisibilityController } from "#lib/pre-break-cue-native.ts";
 
   type Props = {
     deadlineMs: number;

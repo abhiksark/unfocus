@@ -17,12 +17,12 @@
     type HistoryCalendarDay,
     type HistoryDay,
     type HistoryHourSlot
-  } from "$lib/history";
+  } from "#lib/history.ts";
   import {
     createHistoryCalendarLoader,
     createHistoryDayLoader
-  } from "$lib/history-loader";
-  import { breakOutcomeStats } from "$lib/break-summary";
+  } from "#lib/history-loader.ts";
+  import { breakOutcomeStats } from "#lib/break-summary.ts";
   import { invoke } from "@tauri-apps/api/core";
   import { tick, untrack } from "svelte";
 

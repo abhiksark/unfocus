@@ -1,29 +1,29 @@
 <!-- src/routes/+page.svelte -->
 
 <script lang="ts">
-  import TrayPanel from "$lib/TrayPanel.svelte";
-  import BreakOverlay from "$lib/BreakOverlay.svelte";
-  import ConsumerDashboard from "$lib/ConsumerDashboard.svelte";
-  import DeveloperDashboard from "$lib/DeveloperDashboard.svelte";
-  import HistoryView from "$lib/HistoryView.svelte";
-  import PreBreakCue from "$lib/PreBreakCue.svelte";
-  import StartAtLoginPrompt from "$lib/StartAtLoginPrompt.svelte";
+  import TrayPanel from "../lib/TrayPanel.svelte";
+  import BreakOverlay from "../lib/BreakOverlay.svelte";
+  import ConsumerDashboard from "../lib/ConsumerDashboard.svelte";
+  import DeveloperDashboard from "../lib/DeveloperDashboard.svelte";
+  import HistoryView from "../lib/HistoryView.svelte";
+  import PreBreakCue from "../lib/PreBreakCue.svelte";
+  import StartAtLoginPrompt from "../lib/StartAtLoginPrompt.svelte";
   import {
     createStartAtLoginController,
     initialStartAtLoginState,
     type StartAtLoginStatus
-  } from "$lib/start-at-login";
-  import { deviceGridOffsetMinutes } from "$lib/break-grid";
+  } from "#lib/start-at-login.ts";
+  import { deviceGridOffsetMinutes } from "#lib/break-grid.ts";
   import {
     consumerReminderPresentation,
     consumerWarning,
     preBreakCueAvailable as isPreBreakCueAvailable
-  } from "$lib/consumer-dashboard";
+  } from "#lib/consumer-dashboard.ts";
   import {
     readDashboardMode,
     writeDashboardMode,
     type DashboardMode
-  } from "$lib/dashboard-mode";
+  } from "#lib/dashboard-mode.ts";
   import {
     createDeveloperCuePreviewController,
     DEVELOPER_CUE_PREVIEW_ENDED_EVENT,
@@ -31,16 +31,16 @@
     initialDeveloperCuePreviewState,
     type DeveloperCuePreviewResponse,
     type DeveloperCuePreviewState
-  } from "$lib/developer-cue-preview";
+  } from "#lib/developer-cue-preview.ts";
   import {
     DEFAULT_DAY_START_HOUR,
     readDayStartHour,
     writeDayStartHour
-  } from "$lib/day-start";
-  import type { DiagnosticsReport } from "$lib/diagnostics";
-  import { historyActivationUsesKeyboard } from "$lib/history";
-  import { parseWindowLabel } from "$lib/overlay-label";
-  import { preBreakCuePlatformFromNativeContext } from "$lib/pre-break-cue";
+  } from "#lib/day-start.ts";
+  import type { DiagnosticsReport } from "#lib/diagnostics.ts";
+  import { historyActivationUsesKeyboard } from "#lib/history.ts";
+  import { parseWindowLabel } from "#lib/overlay-label.ts";
+  import { preBreakCuePlatformFromNativeContext } from "#lib/pre-break-cue.ts";
   import {
     loadAuthoritativeReminderSettings,
     reminderSettingsRecovery,
@@ -50,21 +50,21 @@
     type ReminderSettingsSnapshotFollowUp,
     type ReminderSettingsView,
     validateReminderSettings
-  } from "$lib/reminder-settings";
+  } from "#lib/reminder-settings.ts";
   import {
     createReminderOperationGate,
     pauseActionCommand,
     reminderCapabilityAvailable,
     type ReminderActionCommand,
     type ReminderStatus
-  } from "$lib/reminder-status";
-  import type { BreakSummary } from "$lib/break-summary";
+  } from "#lib/reminder-status.ts";
+  import type { BreakSummary } from "#lib/break-summary.ts";
   import {
     createRefreshGenerationGuard,
     createRequestSequence,
     settleLatestRequest,
     type LatestRequestResult
-  } from "$lib/refresh-generation";
+  } from "#lib/refresh-generation.ts";
   import {
     applyReflectionFailure,
     applyReflectionRecoveryRejection,
@@ -74,15 +74,15 @@
     recoveryErrorAfterReflectionPoll,
     type ReflectionRecoveryError,
     type ReflectionResource
-  } from "$lib/reflection-resource";
+  } from "#lib/reflection-resource.ts";
   import {
     refreshFailed,
     refreshLoading,
     refreshSucceeded,
     type RefreshState
-  } from "$lib/refresh-state";
-  import type { LocalSnapshot, StorageLoadHealth } from "$lib/storage-health";
-  import type { TodayActivity } from "$lib/today-activity";
+  } from "#lib/refresh-state.ts";
+  import type { LocalSnapshot, StorageLoadHealth } from "#lib/storage-health.ts";
+  import type { TodayActivity } from "#lib/today-activity.ts";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount, tick } from "svelte";

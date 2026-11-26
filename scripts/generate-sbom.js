@@ -3,9 +3,11 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveCargoPackageMetadata } from "./cargo-package-metadata.js";
-import { resolveBunDependency } from "./sbom-dependencies.js";
+import { verifyResolvedGlib, verifyVendoredGlib } from "./check-vendored-glib.js";
+import { mergeSbomDependencies, registerSbomComponent, resolveBunDependency } from "./sbom-dependencies.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const verifiedGlib = verifyVendoredGlib(root);
 const output = process.argv[2] ? resolve(root, process.argv[2]) : resolve(root, "unfocus.cdx.json");
 const decoder = new TextDecoder();
 const compareText = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
@@ -16,6 +18,7 @@ const cargo = Bun.spawnSync(
 );
 if (cargo.exitCode !== 0) throw new Error(`cargo metadata failed:\n${decoder.decode(cargo.stderr)}`);
 const cargoMetadata = JSON.parse(decoder.decode(cargo.stdout));
+verifyResolvedGlib(cargoMetadata, verifiedGlib);
 const application = cargoMetadata.packages.find(
   (pkg) => pkg.name === "unfocus" && pkg.source === null
 );
@@ -62,9 +65,11 @@ const components = [];
 const cargoRefsById = new Map([[application.id, rootRef]]);
 for (const pkg of cargoMetadata.packages) {
   if (pkg.id === application.id) continue;
-  const metadata = resolveCargoPackageMetadata(pkg);
+  const metadata = resolveCargoPackageMetadata(pkg, verifiedGlib);
   const sourceQualifier = metadata.lockedSource?.startsWith("git+")
     ? `?vcs_url=${encodeURIComponent(metadata.lockedSource)}`
+    : metadata.backport
+      ? `?unfocus_backport=${metadata.backport.advisory.toLowerCase()}&unfocus_tree_sha256=${metadata.backport.treeSha256}`
     : "";
   const purl =
     `pkg:cargo/${encodeURIComponent(pkg.name)}@${encodeURIComponent(pkg.version)}` +
@@ -77,6 +82,13 @@ for (const pkg of cargoMetadata.packages) {
     version: pkg.version,
     purl,
     licenses: licenseEntry(metadata.declaredLicense),
+    ...(metadata.backport ? {
+      hashes: [{ alg: "SHA-256", content: metadata.backport.treeSha256 }],
+      pedigree: {
+        notes: `GLib 0.18.5 with verified ${metadata.backport.advisory} source backport`,
+        patches: [{ type: "backport", diff: { url: metadata.backport.upstreamUrl + ".patch" } }]
+      }
+    } : {}),
     externalReferences: metadata.repository
       ? [{ type: "vcs", url: metadata.repository }]
       : undefined,
@@ -84,7 +96,12 @@ for (const pkg of cargoMetadata.packages) {
       { name: "unfocus:lockfile", value: "src-tauri/Cargo.lock" },
       ...(metadata.lockedSource
         ? [{ name: "unfocus:cargo-source", value: metadata.lockedSource }]
-        : [])
+        : []),
+      ...(metadata.backport ? [
+        { name: "unfocus:upstream-archive-url", value: metadata.backport.archiveUrl },
+        { name: "unfocus:upstream-archive-sha256", value: metadata.backport.archiveSha256 },
+        { name: "unfocus:source-tree-hash-format", value: metadata.backport.treeDigestFormat }
+      ] : [])
     ]
   });
 }
@@ -93,6 +110,7 @@ const bunLock = (await import(pathToFileURL(join(root, "bun.lock")).href)).defau
 const bunPackages = [];
 const bunPackagesByName = new Map();
 const bunPackagesByLockKey = new Map();
+const bunComponents = new Map();
 for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
   if (!Array.isArray(entry) || typeof entry[0] !== "string") {
     throw new Error("bun.lock contains an invalid package entry");
@@ -132,7 +150,7 @@ for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
     );
   }
 
-  components.push({
+  registerSbomComponent(bunComponents, {
     type: "library",
     "bom-ref": purl,
     name,
@@ -154,6 +172,7 @@ for (const [lockKey, entry] of Object.entries(bunLock.packages)) {
   versions.push(record);
   bunPackagesByName.set(name, versions);
 }
+components.push(...bunComponents.values());
 
 const fontRef = "pkg:generic/Newsreader@1.003";
 const fontPath = join(root, "static/fonts/newsreader.woff2");
@@ -246,8 +265,7 @@ function collectBunDependencies(owner, manifest, includeDevDependencies = false)
 }
 
 for (const pkg of bunPackages) {
-  if (dependencyGraph.has(pkg.ref)) throw new Error(`duplicate dependency graph ref: ${pkg.ref}`);
-  dependencyGraph.set(pkg.ref, collectBunDependencies(pkg.lockKey, pkg.metadata));
+  mergeSbomDependencies(dependencyGraph, pkg.ref, collectBunDependencies(pkg.lockKey, pkg.metadata));
 }
 
 const rootWorkspace = bunLock.workspaces?.[""];

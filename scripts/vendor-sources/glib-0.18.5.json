@@ -1,0 +1,16 @@
+{
+  "name": "glib",
+  "version": "0.18.5",
+  "advisory": "RUSTSEC-2024-0429",
+  "archive": "scripts/vendor-sources/glib-0.18.5.crate",
+  "archiveUrl": "https://static.crates.io/crates/glib/glib-0.18.5.crate",
+  "archiveSha256": "233daaf6e83ae6a12a52055f568f9d7cf4671dabb78ff9560ab6da230ce00ee5",
+  "patch": "scripts/vendor-sources/glib-variant-str-iter.patch",
+  "patchSha256": "a742bf59f1b00af0f434623b34e2fd969dc8697d37c796efdf909dd9eb19b854",
+  "upstreamCommit": "b5a4071e439bef2b5eea76c3aa25e5ae84839e34",
+  "upstreamUrl": "https://github.com/gtk-rs/gtk-rs-core/commit/b5a4071e439bef2b5eea76c3aa25e5ae84839e34",
+  "vendor": "src-tauri/vendor/glib-0.18.5",
+  "treeDigestFormat": "sha256-json-sorted-path-file-sha256-v1",
+  "treeSha256": "1c322364fdee570f45a8885fe8bbc39e32c3dcc75fc73e582958b5bd5540baa0",
+  "files": 121
+}

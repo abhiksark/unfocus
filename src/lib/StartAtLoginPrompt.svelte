@@ -1,7 +1,7 @@
 <!-- src/lib/StartAtLoginPrompt.svelte -->
 
 <script lang="ts">
-  import type { StartAtLoginState } from "$lib/start-at-login";
+  import type { StartAtLoginState } from "#lib/start-at-login.ts";
 
   let { state, available, onEnable, onDismiss }: {
     state: StartAtLoginState;

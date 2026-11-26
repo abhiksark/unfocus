@@ -8,18 +8,18 @@
     presentationOffset,
     remainingAt,
     type OverlayClockAnchor
-  } from "$lib/overlay-clock";
+  } from "#lib/overlay-clock.ts";
   import {
     OVERLAY_REGION_LABEL,
     overlayAnnouncement,
     overlayCountdownLabel
-  } from "$lib/overlay-a11y";
+  } from "#lib/overlay-a11y.ts";
   import {
     BREAK_SCENE_IMAGE_URL,
     breakScenePeriodForRun,
     breakScenePhase
-  } from "$lib/break-scene";
-  import { isOverlayDismissShortcut } from "$lib/overlay-shortcut";
+  } from "#lib/break-scene.ts";
+  import { isOverlayDismissShortcut } from "#lib/overlay-shortcut.ts";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";

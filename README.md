@@ -218,9 +218,13 @@ and closing it exits the app so no unreachable process is left running.
 ## Build from source
 
 Install the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
-for your platform, Bun `1.3.5`, and Rust `1.98.0`. The repository pins both
+for your platform, Bun `1.4.5`, and Rust `1.98.0`. The repository pins both
 toolchains in `.bun-version` and `rust-toolchain.toml`. The app is built with
-Tauri 2, Rust, SvelteKit 2, and Svelte 5.
+Tauri 2, Rust, SvelteKit 3, and Svelte 5.
+
+The frontend build runs Vite with Bun and requires a fresh, non-empty
+`build/index.html`. Bun 1.3.5 cannot complete SvelteKit 3's build; use the
+repository pin even if Node is also installed.
 
 ```sh
 git clone https://github.com/abhiksark/unfocus.git
@@ -242,6 +246,29 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features --l
 
 Version, dependency, release, and generated-asset changes have additional
 named checks in `package.json`.
+
+Linux builds use a source backport of [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429.html)
+in `src-tauri/vendor/glib-0.18.5`. The version stays `0.18.5` for GTK3
+compatibility. Only the two pointer lines from the
+[upstream fix](https://github.com/gtk-rs/gtk-rs-core/commit/b5a4071e439bef2b5eea76c3aa25e5ae84839e34)
+differ from the original crate. Its archive, patch and provenance are retained
+in `scripts/vendor-sources/`; `bun run dependencies:check-glib` authenticates
+every file and the Cargo selection. Notices and SBOM generation require that
+verification and identify the modified source explicitly.
+
+`bun run dependencies:audit-rust` also scans the original registry GLib identity
+using `scripts/vendor-sources/glib-0.18.5.audit.lock`, a Cargo-generated scanner
+input, so new GLib advisories still fail. This does not require an advisory
+exception for the verified backport. Run its optimized regression on Linux:
+
+```sh
+cargo test --manifest-path src-tauri/Cargo.toml --release --all-features --locked --test glib_variant_str_iter
+```
+
+Keep the vendored crate unchanged. Review the backport when updating Tauri's
+GTK stack; remove it only after a compatible fixed dependency replaces it.
+That removal must update the Cargo patch and lock, verifier and audit input,
+regression dependency, CI, notices and SBOM metadata together.
 
 ## Contributing
 

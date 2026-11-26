@@ -8,24 +8,16 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveCargoPackageMetadata } from "./cargo-package-metadata.js";
+import { normalizeLicenseText } from "./license-text.js";
+import { verifyResolvedGlib, verifyVendoredGlib } from "./check-vendored-glib.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const verifiedGlib = verifyVendoredGlib(root);
 const outputPath = resolve(root, "THIRD_PARTY_NOTICES.txt");
 const checkOnly = process.argv.slice(2).includes("--check");
 const licenseName = /^(licen[cs]e|copying|notice|copyright)([._-].*)?$/i;
 const decoder = new TextDecoder();
 const compareText = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
-
-function normalizeText(text) {
-  let normalized = text.replaceAll("\r\n", "\n");
-  if (normalized.startsWith("Apache License\n\nVersion 2.0")) {
-    normalized = normalized
-      .split("\n")
-      .map((line) => line.trimEnd())
-      .join("\n");
-  }
-  return normalized.trim() + "\n";
-}
 
 function licenseFiles(directory, declaredFile) {
   const paths = new Set();
@@ -53,6 +45,7 @@ if (cargo.exitCode !== 0) {
   throw new Error(`cargo metadata failed:\n${decoder.decode(cargo.stderr)}`);
 }
 const cargoMetadata = JSON.parse(decoder.decode(cargo.stdout));
+verifyResolvedGlib(cargoMetadata, verifiedGlib);
 
 const components = [];
 const cargoPackages = cargoMetadata.packages
@@ -85,7 +78,7 @@ const repositoryMitFallbacks = new Map([
 
 for (const record of cargoPackages) {
   const { pkg } = record;
-  const metadata = resolveCargoPackageMetadata(pkg);
+  const metadata = resolveCargoPackageMetadata(pkg, verifiedGlib);
   let { files } = record;
   if (files.length === 0 && pkg.repository) {
     const sibling = cargoPackages
@@ -112,6 +105,7 @@ for (const record of cargoPackages) {
     version: pkg.version,
     declared: metadata.declaredLicense,
     source: metadata.lockedSource,
+    backport: metadata.backport,
     authors: pkg.authors,
     files
   });
@@ -163,6 +157,7 @@ function collectNodePackage(directory) {
 collectNodeModules(join(root, "node_modules"));
 
 const bunLock = (await import(pathToFileURL(join(root, "bun.lock")).href)).default;
+const nodeIdentifiers = new Set();
 for (const entry of Object.values(bunLock.packages)) {
   if (!Array.isArray(entry) || typeof entry[0] !== "string") {
     throw new Error("bun.lock contains an invalid package entry");
@@ -174,6 +169,8 @@ for (const entry of Object.values(bunLock.packages)) {
   const name = entry[0].slice(0, separator);
   const version = entry[0].slice(separator + 1);
   const identifier = `${name}@${version}`;
+  if (nodeIdentifiers.has(identifier)) continue;
+  nodeIdentifiers.add(identifier);
   const installed = installedNodePackages.get(identifier);
   const manifest = installed?.manifest;
   let files = installed ? licenseFiles(installed.directory, manifest.licenseFile) : [];
@@ -248,7 +245,7 @@ const texts = new Map();
 for (const component of components) {
   component.hashes = [];
   for (const path of component.files) {
-    const text = normalizeText(readFileSync(path, "utf8"));
+    const text = normalizeLicenseText(readFileSync(path, "utf8"));
     const hash = new Bun.CryptoHasher("sha256").update(text).digest("hex");
     component.hashes.push(hash);
     const record = texts.get(hash) ?? { text, usedBy: new Set() };
@@ -272,7 +269,11 @@ PACKAGE INVENTORY
 for (const component of components) {
   output += `${component.ecosystem}: ${component.name}@${component.version}\n`;
   output += `Declared license: ${component.declared}\n`;
-  if (component.source?.startsWith("git+")) output += `Locked source: ${component.source}\n`;
+  if (component.source?.startsWith("git+") || component.backport) output += `Locked source: ${component.source}\n`;
+  if (component.backport) {
+    output += `Source backport: ${component.backport.advisory}; ${component.backport.upstreamUrl}\n`;
+    output += `Original crate SHA-256: ${component.backport.archiveSha256}\n`;
+  }
   if (component.authors?.length) output += `Upstream authors: ${component.authors.join(", ")}\n`;
   output += `License text IDs: ${component.hashes.join(", ")}\n\n`;
 }

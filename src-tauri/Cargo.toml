@@ -47,6 +47,10 @@ wayland-protocols = { version = "0.32", default-features = false, features = [
   "staging",
 ], optional = true }
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# Exercise the same patched transitive crate in optimized regression tests.
+glib = "=0.18.5"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-graphics = "0.3"
 objc2-core-foundation = { version = "0.3", features = [
@@ -66,3 +70,7 @@ windows-sys = { version = "0.61", features = [
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",
 ] }
+
+[patch.crates-io]
+# RUSTSEC-2024-0429; exact upstream backport verified by dependencies:check-glib.
+glib = { path = "vendor/glib-0.18.5" }

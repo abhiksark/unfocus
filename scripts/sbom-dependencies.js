@@ -4,6 +4,20 @@
 // generate-sbom.js so it can be tested without that script's start-up work,
 // which shells out to cargo and reads the real lockfile on import.
 
+export function registerSbomComponent(components, component) {
+  const ref = component["bom-ref"];
+  // Multiple install paths can describe the same locked package bytes.
+  // Collapse only identical records; inconsistent identities still fail closed.
+  if (components.has(ref) && JSON.stringify(components.get(ref)) !== JSON.stringify(component)) {
+    throw new Error(`conflicting component metadata: ${ref}`);
+  }
+  components.set(ref, component);
+}
+
+export function mergeSbomDependencies(graph, ref, dependencies) {
+  graph.set(ref, new Set([...(graph.get(ref) ?? []), ...dependencies]));
+}
+
 /**
  * Lock keys a dependency could resolve to, nearest first.
  *
@@ -52,7 +66,8 @@ export function resolveBunDependency(packages, owner, name, range, optional) {
   const candidates = packages.byName.get(name) ??
     (packages.byLockKey.has(name) ? [packages.byLockKey.get(name)] : []);
   const matches = candidates.filter((candidate) => Bun.semver.satisfies(candidate.version, range));
-  if (matches.length === 1) return matches[0].ref;
+  const refs = new Set(matches.map((candidate) => candidate.ref));
+  if (refs.size === 1) return matches[0].ref;
   if (matches.length === 0 && optional && candidates.length === 0) return null;
   const detail = matches.length === 0 ? "no matching locked package" : "multiple matching locked packages";
   throw new Error(`${owner} dependency ${name}@${range} has ${detail}`);
